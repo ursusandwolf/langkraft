@@ -3,7 +3,9 @@
 ## [Unreleased]
 
 ### Added
-- Ktor backend implementation in `:backend` module.
+- Comprehensive Code Review of backend and shared modules.
+- Identified improvements for Ingestion Service, SRS Engine, and AI Integration.
+
 - `Application.kt` as the entry point for the backend server.
 - `YouTubeIngestionService` refinement: added real metadata retrieval (title, duration) and Opus audio extraction.
 - `SrtParser` improvements: added support for WEBVTT and improved robustness.

@@ -38,3 +38,11 @@ The app implements the **Ilis Immersion Method**:
 - **SRS Engine:** SM-2 algorithm focusing on sentences as learning units.
 - **Repeat Loop:** Player feature for rhythmic immersion.
 - **Memorization Tool:** Interactive UI for memorizing prose by hiding words.
+
+## Quality Standards
+
+A comprehensive code review was conducted on May 10, 2026. Key identified standards:
+- **Type Safety:** Prefer typed JSON parsing over Regex.
+- **DIP:** Inject dependencies (like `LinguisticAssistant`) into ViewModels.
+- **SRS Constants:** Business logic coefficients should be named constants.
+- **Explicit Imports:** Avoid wildcard imports as per project preferences.
