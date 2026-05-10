@@ -11,6 +11,7 @@ import com.langkraft.ui.content.ContentSelectionViewModel
 import com.langkraft.ui.player.PlayerViewModel
 import com.langkraft.ui.srs.SrsTrainingViewModel
 import io.ktor.client.HttpClient
+import com.langkraft.ui.writing.WritingViewModel
 import org.koin.core.context.startKoin
 import org.koin.core.module.Module
 import org.koin.dsl.KoinAppDeclaration
@@ -40,4 +41,5 @@ val commonModule = module {
     factory { ContentSelectionViewModel(get(), get()) }
     factory { PlayerViewModel(get(), get(), get()) }
     factory { SrsTrainingViewModel(get()) }
+    factory { WritingViewModel(get()) }
 }

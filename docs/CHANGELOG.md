@@ -11,6 +11,9 @@
 - Implemented `BaseViewModel` to standardize `CoroutineScope` management.
 - Provided `SqlDelightContentRepository` and `SqlDelightVocabularyRepository` implementations.
 
+### Added
+- **AI Active Writing:** Feature to write and get corrections with grammatical explanations.
+- `WritingView` and `WritingViewModel` for the new active output feature.
 - `Application.kt` as the entry point for the backend server.
 - `YouTubeIngestionService` refinement: added real metadata retrieval (title, duration) and Opus audio extraction.
 - `SrtParser` improvements: added support for WEBVTT and improved robustness.
