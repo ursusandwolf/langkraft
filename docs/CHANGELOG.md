@@ -9,9 +9,12 @@
 - `SrtParser` improvements: added support for WEBVTT and improved robustness.
 - Added JitPack repository to support `YtdlpJava`.
 - Configured `:backend` module dependencies for Ktor and serialization.
-- **Phase 3 Infrastructure:** 
-    - Expanded `LinguisticAssistant` interface in `:shared` with translation, deep analysis, and correction methods.
-    - Implemented `GeminiLinguisticAssistant` in `:backend` using Google Gemini REST API.
-    - Added AI endpoints to Ktor server: `/api/ai/translate-word`, `/api/ai/analyze-sentence`, `/api/ai/correct-text`.
-    - Integrated Ktor Client in backend for external API calls.
+- **Phase 4 & 5 Implementation:**
+    - Implemented SRS Engine (SM-2 algorithm) for sentence-based learning.
+    - Created `SrsTrainingView` and `SrsTrainingViewModel` for review sessions.
+    - Implemented `ContentSelectionView` for YouTube import and library management.
+    - Added **Repeat Loop Mode** to the immersion player.
+    - Created **Prose Memorization Tool** for active recall practice.
+    - Updated `VocabularyWord` model with SRS metadata.
+    - Added `kotlinx-datetime` for KMP time management.
 

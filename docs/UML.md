@@ -46,8 +46,19 @@ classDiagram
         +String word
         +String translation
         +String contextSentence
+        +Long nextReviewMs
+        +Double easeFactor
+    }
+    class SrsEngine {
+        +calculateNextReview(word, quality) VocabularyWord
+    }
+    class GeminiLinguisticAssistant {
+        +analyzeSentence(text) DeepAnalysisResult
+        +translateWord(word, context) TranslationResult
     }
 
     ImmersionContent "1" *-- "many" SubtitleLine
     VocabularyWord ..> SubtitleLine : context
+    SrsEngine ..> VocabularyWord : updates
+    GeminiLinguisticAssistant ..> VocabularyWord : provides info
 ```

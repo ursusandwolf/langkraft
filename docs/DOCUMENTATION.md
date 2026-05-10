@@ -24,3 +24,17 @@ The backend is built with **Ktor** and is responsible for content ingestion and 
 
 Requires `yt-dlp` to be installed and available in the system PATH.
 The `downloads` directory is used for temporary storage of media files.
+
+## AI Integration
+
+Uses **Google Gemini 1.5 Flash** for linguistic tasks:
+- **Contextual Translation:** Translates words based on the sentence they appear in.
+- **Deep Analysis:** Dissects grammar and syntax of complex German sentences.
+- **Text Correction:** Corrects user's active writing with pedagogical explanations.
+
+## Learning Methodology
+
+The app implements the **Ilis Immersion Method**:
+- **SRS Engine:** SM-2 algorithm focusing on sentences as learning units.
+- **Repeat Loop:** Player feature for rhythmic immersion.
+- **Memorization Tool:** Interactive UI for memorizing prose by hiding words.
