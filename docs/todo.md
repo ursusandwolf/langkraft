@@ -15,13 +15,16 @@
 
 ## Phase 3: AI & Intelligence
 - [ ] Integrate Google Gemini API for translations
-- [ ] Add grammatical analysis (gender, cases, verb forms)
-- [ ] Context-aware lemmatization
+- [ ] **Deep Analysis Mode:** Grammatical breakdown of a specific subtitle line (cases, verb forms, syntax)
+- [ ] **Contextual Lemmatization:** Link words to their base forms while keeping the sentence context
+- [ ] **AI Correction:** Feature to correct user's "Active Writing" (diaries/summaries) based on content
 
 ## Phase 4: Learning Experience
-- [ ] Spaced Repetition System (SRS) algorithm implementation
-- [ ] Vocabulary review screen (flashcards)
-- [ ] Progress tracking dashboard
+- [ ] **Spaced Repetition (SRS):** Algorithm for vocabulary (sentences, not isolated words)
+- [ ] **Repeat Loop Mode:** Easy toggle to loop a specific audio/subtitle segment for "Deep Listening"
+- [ ] **Prose Memorization Tool:** Hidden-text mode for practicing memorized fragments
+- [ ] **Active Output:** Simple text editor to write summaries of listened content
+- [ ] Progress tracking dashboard (listening hours, sentences mastered)
 - [ ] Offline synchronization for Android
 
 ## Phase 5: UI/UX Polishing
