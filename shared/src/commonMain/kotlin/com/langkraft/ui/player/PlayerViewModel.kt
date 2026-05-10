@@ -34,24 +34,71 @@ class PlayerViewModel(
             is PlayerEvent.WordClicked -> {
                 handleWordClicked(event.word, event.line)
             }
+            is PlayerEvent.DeepAnalysisClicked -> {
+                handleDeepAnalysis(event.line)
+            }
+            is PlayerEvent.ToggleTranslation -> {
+                handleToggleTranslation(event.line)
+            }
             is PlayerEvent.DismissWordDetails -> {
-                _state.update { it.copy(selectedWord = null, translation = null) }
+                _state.update { it.copy(selectedWord = null, wordTranslation = null) }
+            }
+            is PlayerEvent.DismissDeepAnalysis -> {
+                _state.update { it.copy(deepAnalysis = null) }
             }
         }
     }
 
     private fun handleWordClicked(word: String, line: SubtitleLine) {
-        _state.update { it.copy(selectedWord = word, selectedWordContext = line, isTranslating = true) }
+        _state.update { it.copy(selectedWord = word, selectedWordContext = line, isTranslatingWord = true) }
         viewModelScope.launch {
-            val translation = linguisticAssistant.translateWithContext(word, line.textDe)
-            _state.update { it.copy(translation = translation, isTranslating = false) }
+            try {
+                val result = linguisticAssistant.translateWord(word, line.textDe)
+                _state.update { it.copy(wordTranslation = result, isTranslatingWord = false) }
+            } catch (e: Exception) {
+                _state.update { it.copy(isTranslatingWord = false, error = e.message) }
+            }
+        }
+    }
+
+    private fun handleDeepAnalysis(line: SubtitleLine) {
+        _state.update { it.copy(isAnalyzing = true) }
+        viewModelScope.launch {
+            try {
+                val result = linguisticAssistant.analyzeSentence(line.textDe)
+                _state.update { it.copy(deepAnalysis = result, isAnalyzing = false) }
+            } catch (e: Exception) {
+                _state.update { it.copy(isAnalyzing = false, error = e.message) }
+            }
+        }
+    }
+
+    private fun handleToggleTranslation(line: SubtitleLine) {
+        val current = _state.value.sentenceTranslations[line.id]
+        if (current != null) {
+            _state.update { it.copy(sentenceTranslations = it.sentenceTranslations - line.id) }
+        } else {
+            _state.update { it.copy(analyzingSentenceId = line.id) }
+            viewModelScope.launch {
+                try {
+                    val translation = linguisticAssistant.translateSentence(line.textDe)
+                    _state.update { 
+                        it.copy(
+                            sentenceTranslations = it.sentenceTranslations + (line.id to translation),
+                            analyzingSentenceId = null
+                        ) 
+                    }
+                } catch (e: Exception) {
+                    _state.update { it.copy(analyzingSentenceId = null, error = e.message) }
+                }
+            }
         }
     }
 
     fun saveWord(word: VocabularyWord) {
         viewModelScope.launch {
             vocabularyRepository.saveWord(word)
-            _state.update { it.copy(selectedWord = null, translation = null) }
+            _state.update { it.copy(selectedWord = null, wordTranslation = null) }
         }
     }
 

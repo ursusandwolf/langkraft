@@ -1,5 +1,7 @@
 package com.langkraft.ui.player
 
+import com.langkraft.domain.ai.DeepAnalysisResult
+import com.langkraft.domain.ai.TranslationResult
 import com.langkraft.domain.model.ImmersionContent
 import com.langkraft.domain.model.SubtitleLine
 
@@ -10,8 +12,12 @@ data class PlayerState(
     val isPlaying: Boolean = false,
     val selectedWord: String? = null,
     val selectedWordContext: SubtitleLine? = null,
-    val translation: String? = null,
-    val isTranslating: Boolean = false,
+    val wordTranslation: TranslationResult? = null,
+    val isTranslatingWord: Boolean = false,
+    val deepAnalysis: DeepAnalysisResult? = null,
+    val isAnalyzing: Boolean = false,
+    val sentenceTranslations: Map<String, String> = emptyMap(), // subtitle line id -> translation
+    val analyzingSentenceId: String? = null,
     val error: String? = null
 )
 
@@ -20,5 +26,8 @@ sealed class PlayerEvent {
     object PlayPause : PlayerEvent()
     data class SeekTo(val timeMs: Long) : PlayerEvent()
     data class WordClicked(val word: String, val line: SubtitleLine) : PlayerEvent()
+    data class DeepAnalysisClicked(val line: SubtitleLine) : PlayerEvent()
+    data class ToggleTranslation(val line: SubtitleLine) : PlayerEvent()
     object DismissWordDetails : PlayerEvent()
+    object DismissDeepAnalysis : PlayerEvent()
 }
