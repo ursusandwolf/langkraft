@@ -32,6 +32,17 @@ Uses **Google Gemini 1.5 Flash** for linguistic tasks:
 - **Deep Analysis:** Dissects grammar and syntax of complex German sentences.
 - **Text Correction:** Corrects user's active writing with pedagogical explanations.
 
+## UI & ViewModel Architecture
+
+The project uses **Compose Multiplatform** for the UI and a custom `BaseViewModel` for state management.
+- **`BaseViewModel`**: Manages a `CoroutineScope` tied to the lifecycle of the ViewModel.
+- **Koin DI**: Used for dependency injection in the shared module. Initialized via `initKoin`.
+
+### Data Layer
+
+- **SQLDelight**: Used for local persistence.
+- **Repositories**: `SqlDelightContentRepository` and `SqlDelightVocabularyRepository` implement the domain interfaces, providing a clean separation between data and domain layers.
+
 ## Learning Methodology
 
 The app implements the **Ilis Immersion Method**:
@@ -43,6 +54,6 @@ The app implements the **Ilis Immersion Method**:
 
 A comprehensive code review was conducted on May 10, 2026. Key identified standards:
 - **Type Safety:** Prefer typed JSON parsing over Regex.
-- **DIP:** Inject dependencies (like `LinguisticAssistant`) into ViewModels.
+- **DIP:** Inject dependencies (like `LinguisticAssistant`) into ViewModels using Koin.
 - **SRS Constants:** Business logic coefficients should be named constants.
 - **Explicit Imports:** Avoid wildcard imports as per project preferences.

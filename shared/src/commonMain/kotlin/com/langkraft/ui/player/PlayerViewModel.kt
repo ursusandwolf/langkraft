@@ -9,16 +9,18 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 
+import com.langkraft.ui.BaseViewModel
+
 import com.langkraft.domain.repository.VocabularyRepository
 import com.langkraft.domain.ai.LinguisticAssistant
 import com.langkraft.domain.model.VocabularyWord
+import com.langkraft.domain.model.SubtitleLine
 
 class PlayerViewModel(
     private val contentRepository: ContentRepository,
     private val vocabularyRepository: VocabularyRepository,
-    private val linguisticAssistant: LinguisticAssistant,
-    private val viewModelScope: CoroutineScope
-) {
+    private val linguisticAssistant: LinguisticAssistant
+) : BaseViewModel() {
     private val _state = MutableStateFlow(PlayerState())
     val state: StateFlow<PlayerState> = _state.asStateFlow()
 
@@ -60,7 +62,7 @@ class PlayerViewModel(
 
     private fun handleWordClicked(word: String, line: SubtitleLine) {
         _state.update { it.copy(selectedWord = word, selectedWordContext = line, isTranslatingWord = true) }
-        viewModelScope.launch {
+        scope.launch {
             try {
                 val result = linguisticAssistant.translateWord(word, line.textDe)
                 _state.update { it.copy(wordTranslation = result, isTranslatingWord = false) }
@@ -72,7 +74,7 @@ class PlayerViewModel(
 
     private fun handleDeepAnalysis(line: SubtitleLine) {
         _state.update { it.copy(isAnalyzing = true) }
-        viewModelScope.launch {
+        scope.launch {
             try {
                 val result = linguisticAssistant.analyzeSentence(line.textDe)
                 _state.update { it.copy(deepAnalysis = result, isAnalyzing = false) }
@@ -88,7 +90,7 @@ class PlayerViewModel(
             _state.update { it.copy(sentenceTranslations = it.sentenceTranslations - line.id) }
         } else {
             _state.update { it.copy(analyzingSentenceId = line.id) }
-            viewModelScope.launch {
+            scope.launch {
                 try {
                     val translation = linguisticAssistant.translateSentence(line.textDe)
                     _state.update { 
@@ -105,7 +107,7 @@ class PlayerViewModel(
     }
 
     fun saveWord(word: VocabularyWord) {
-        viewModelScope.launch {
+        scope.launch {
             vocabularyRepository.saveWord(word)
             _state.update { it.copy(selectedWord = null, wordTranslation = null) }
         }
@@ -113,7 +115,7 @@ class PlayerViewModel(
 
 
     private fun loadContent(id: String) {
-        viewModelScope.launch {
+        scope.launch {
             _state.update { it.copy(isLoading = true) }
             val content = contentRepository.getContentById(id)
             _state.update { it.copy(isLoading = false, content = content) }

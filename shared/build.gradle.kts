@@ -21,7 +21,13 @@ kotlin {
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
                 implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.4.1")
                 implementation("app.cash.sqldelight:runtime:2.0.0")
+                implementation("app.cash.sqldelight:coroutines-extensions:2.0.0")
                 implementation("io.ktor:ktor-client-core:2.3.5")
+                
+                // Koin DI
+                val koinVersion = "3.5.0"
+                implementation("io.insert-koin:koin-core:$koinVersion")
+                implementation("io.insert-koin:koin-compose:1.1.0")
             }
         }
         val androidMain by getting {

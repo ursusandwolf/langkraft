@@ -47,23 +47,36 @@ object SrtParser {
         val cleaned = timestamp.replace(",", ".").replace(" ", "").trim()
         val parts = cleaned.split(":")
         
-        return when (parts.size) {
-            3 -> { // HH:MM:SS.mmm
-                val hours = parts[0].toLong()
-                val minutes = parts[1].toLong()
-                val secondsParts = parts[2].split(".")
-                val seconds = secondsParts[0].toLong()
-                val millis = secondsParts.getOrNull(1)?.padEnd(3, '0')?.take(3)?.toLong() ?: 0L
-                hours * 3600000 + minutes * 60000 + seconds * 1000 + millis
+        return try {
+            when (parts.size) {
+                3 -> { // HH:MM:SS.mmm
+                    val hours = parts[0].toLong()
+                    val minutes = parts[1].toLong()
+                    val secondsWithMillis = parts[2].split(".")
+                    val seconds = secondsWithMillis[0].toLong()
+                    val millis = parseMillis(secondsWithMillis.getOrNull(1))
+                    
+                    hours * 3_600_000 + minutes * 60_000 + seconds * 1_000 + millis
+                }
+                2 -> { // MM:SS.mmm
+                    val minutes = parts[0].toLong()
+                    val secondsWithMillis = parts[1].split(".")
+                    val seconds = secondsWithMillis[0].toLong()
+                    val millis = parseMillis(secondsWithMillis.getOrNull(1))
+                    
+                    minutes * 60_000 + seconds * 1_000 + millis
+                }
+                else -> 0L
             }
-            2 -> { // MM:SS.mmm
-                val minutes = parts[0].toLong()
-                val secondsParts = parts[1].split(".")
-                val seconds = secondsParts[0].toLong()
-                val millis = secondsParts.getOrNull(1)?.padEnd(3, '0')?.take(3)?.toLong() ?: 0L
-                minutes * 60000 + seconds * 1000 + millis
-            }
-            else -> 0L
+        } catch (e: Exception) {
+            0L
         }
+    }
+
+    private fun parseMillis(millisStr: String?): Long {
+        if (millisStr == null) return 0L
+        // Pad or truncate to exactly 3 digits for milliseconds
+        val normalized = millisStr.padEnd(3, '0').take(3)
+        return normalized.toLong()
     }
 }

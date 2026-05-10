@@ -3,7 +3,7 @@ package com.langkraft.ui.content
 import com.langkraft.domain.model.ImmersionContent
 import com.langkraft.domain.repository.ContentRepository
 import com.langkraft.domain.usecase.IngestContentUseCase
-import kotlinx.coroutines.CoroutineScope
+import com.langkraft.ui.BaseViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,9 +19,8 @@ data class ContentSelectionState(
 
 class ContentSelectionViewModel(
     private val contentRepository: ContentRepository,
-    private val ingestContentUseCase: IngestContentUseCase,
-    private val scope: CoroutineScope
-) {
+    private val ingestContentUseCase: IngestContentUseCase
+) : BaseViewModel() {
     private val _state = MutableStateFlow(ContentSelectionState())
     val state: StateFlow<ContentSelectionState> = _state.asStateFlow()
 

@@ -1,0 +1,62 @@
+package com.langkraft.data.repository
+
+import com.langkraft.db.AppDatabase
+import com.langkraft.domain.model.VocabularyWord
+import com.langkraft.domain.model.WordStatus
+import com.langkraft.domain.repository.VocabularyRepository
+import app.cash.sqldelight.coroutines.asFlow
+import app.cash.sqldelight.coroutines.mapToList
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+import kotlinx.datetime.Clock
+
+class SqlDelightVocabularyRepository(
+    private val db: AppDatabase
+) : VocabularyRepository {
+
+    override fun getWordsToReview(): Flow<List<VocabularyWord>> {
+        val now = Clock.System.now().toEpochMilliseconds()
+        return db.appDatabaseQueries.selectVocabularyToReview(now)
+            .asFlow()
+            .mapToList(Dispatchers.Default)
+            .map { list ->
+                list.map { it.toDomain() }
+            }
+    }
+
+    override suspend fun saveWord(word: VocabularyWord) {
+        db.appDatabaseQueries.upsertWord(
+            id = word.id,
+            word = word.word,
+            lemma = word.lemma,
+            translation = word.translation,
+            contextSentence = word.contextSentence,
+            contentId = word.contentId,
+            subtitleLineId = word.subtitleLineId,
+            addedAt = word.addedAt,
+            status = word.status.name
+        )
+    }
+
+    override suspend fun deleteWord(id: String) {
+        // Implementation for deletion query would be needed in .sq
+    }
+
+    private fun com.langkraft.db.Vocabulary.toDomain(): VocabularyWord {
+        return VocabularyWord(
+            id = id,
+            word = word,
+            lemma = lemma,
+            translation = translation,
+            contextSentence = contextSentence,
+            contentId = contentId,
+            subtitleLineId = subtitleLineId,
+            addedAt = addedAt,
+            nextReviewMs = nextReviewAt,
+            intervalDays = intervalDays.toInt(),
+            easeFactor = easeFactor,
+            status = WordStatus.valueOf(status)
+        )
+    }
+}

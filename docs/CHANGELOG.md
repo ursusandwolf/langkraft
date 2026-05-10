@@ -6,6 +6,10 @@
 - Refactored `YouTubeIngestionService` to use `kotlinx-serialization` and real YouTube IDs.
 - Refactored `SrsEngine` to use named constants for SM-2 algorithm.
 - Replaced all wildcard imports with explicit imports across the project.
+- Refactored `SrtParser` for more robust timestamp parsing.
+- Introduced **Koin DI** to the shared module.
+- Implemented `BaseViewModel` to standardize `CoroutineScope` management.
+- Provided `SqlDelightContentRepository` and `SqlDelightVocabularyRepository` implementations.
 
 - `Application.kt` as the entry point for the backend server.
 - `YouTubeIngestionService` refinement: added real metadata retrieval (title, duration) and Opus audio extraction.

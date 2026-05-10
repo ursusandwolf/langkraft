@@ -3,7 +3,7 @@ package com.langkraft.ui.srs
 import com.langkraft.domain.model.VocabularyWord
 import com.langkraft.domain.repository.VocabularyRepository
 import com.langkraft.domain.srs.SrsEngine
-import kotlinx.coroutines.CoroutineScope
+import com.langkraft.ui.BaseViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,9 +19,8 @@ data class SrsTrainingState(
 )
 
 class SrsTrainingViewModel(
-    private val vocabularyRepository: VocabularyRepository,
-    private val scope: CoroutineScope
-) {
+    private val vocabularyRepository: VocabularyRepository
+) : BaseViewModel() {
     private val _state = MutableStateFlow(SrsTrainingState())
     val state: StateFlow<SrsTrainingState> = _state.asStateFlow()
 
