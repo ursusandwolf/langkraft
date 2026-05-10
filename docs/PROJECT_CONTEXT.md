@@ -6,7 +6,7 @@ A German immersion-first learning platform. Users learn through YouTube content 
 ## Current State
 - **Data Layer:** SQLDelight schema implemented (Content, Subtitles, Vocabulary).
 - **Domain Layer:** Core models and UseCases (IngestContent) defined.
-- **Backend:** Ingestion service with `YtdlpJava` support (Opus + SRT).
+- **Backend:** Ktor server with `YouTubeIngestionService` using `YtdlpJava`. Supports Opus audio extraction, SRT/VTT parsing, and real metadata retrieval.
 - **Audio:** Multiplatform player (ExoPlayer/HTML5) via expect/actual.
 - **UI:** Immersion Player View with auto-scroll and word-click interactions.
 - **Vocabulary:** Word lookup with context and translation persistence.
@@ -23,3 +23,4 @@ A German immersion-first learning platform. Users learn through YouTube content 
 - [ ] Create Content Selection screen
 - [ ] Implement Spaced Repetition (SRS) training UI
 - [ ] Add "YouTube URL Paste" flow in UI
+- [ ] Implement `ContentRepository` network implementation for client

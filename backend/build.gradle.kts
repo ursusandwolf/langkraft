@@ -10,6 +10,6 @@ dependencies {
     implementation("io.ktor:ktor-server-content-negotiation:2.3.5")
     implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.5")
     
-    // YtdlpJava from user repository (should be added via jitpack or local)
-    // implementation("com.github.ursusandwolf:YtdlpJava:dev") 
+    // YtdlpJava from user repository
+    implementation("com.github.ursusandwolf:YtdlpJava:dev") 
 }

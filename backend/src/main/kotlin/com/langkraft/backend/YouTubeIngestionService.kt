@@ -20,9 +20,8 @@ class YouTubeIngestionService(
 
     suspend fun ingest(url: String): ImmersionContent = withContext(Dispatchers.IO) {
         val videoId = UUID.randomUUID().toString()
-        val outputPath = "$downloadsDir/$videoId"
         
-        // 1. Prepare Request using YtdlpJava (as per user's library style)
+        // 1. Prepare Request to get info and download
         val request = YtdlpRequest(url, downloadsDir)
             .setOption("write-auto-sub")
             .setOption("sub-lang", "de")
@@ -30,6 +29,7 @@ class YouTubeIngestionService(
             .setOption("extract-audio")
             .setOption("audio-format", "opus")
             .setOption("output", "$videoId.%(ext)s")
+            .setOption("write-info-json")
 
         // 2. Execute
         val response = YtdlpLauncher.execute(request)
@@ -41,22 +41,33 @@ class YouTubeIngestionService(
         // 3. Find files
         val audioFile = File("$downloadsDir/$videoId.opus")
         val srtFile = File("$downloadsDir/$videoId.de.srt")
+        val infoFile = File("$downloadsDir/$videoId.info.json")
         
         if (!audioFile.exists() || !srtFile.exists()) {
             throw Exception("Required files (audio or subtitles) missing after download")
         }
 
-        // 4. Parse Subtitles
+        // 4. Parse Metadata (Very simple for now, should use a JSON parser if available)
+        // For simplicity, we'll try to extract title from the info.json if it exists
+        var title = "Extracted Content"
+        var duration = 0L
+        if (infoFile.exists()) {
+            val infoJson = infoFile.readText()
+            title = "\"title\": \"(.*?)\"".toRegex().find(infoJson)?.groupValues?.get(1) ?: title
+            duration = "\"duration\": (\\d+)".toRegex().find(infoJson)?.groupValues?.get(1)?.toLong() ?: 0L
+        }
+
+        // 5. Parse Subtitles
         val subtitles = SrtParser.parse(videoId, srtFile.readText())
 
-        // 5. Construct Result
+        // 6. Construct Result
         ImmersionContent(
             id = videoId,
-            title = "Extracted Content", // In production, get this from ytdlp --get-title
-            audioUrl = "/api/media/$videoId.mp3",
-            localAudioPath = null,
+            title = title,
+            audioUrl = "/api/media/$videoId.opus",
+            localAudioPath = audioFile.absolutePath,
             sourceUrl = url,
-            durationSeconds = 0, // In production, get from ytdlp --get-duration
+            durationSeconds = duration,
             subtitles = subtitles
         )
     }

@@ -7,11 +7,11 @@
 - [x] Multiplatform Audio Player (expect/actual)
 - [x] Basic Immersion Player UI
 
-## Phase 2: Ingestion & Backend
-- [ ] Implement Ktor Backend using `YtdlpJava`
-- [ ] Robust SRT/VTT parsing logic
-- [ ] Audio streaming/downloading service (Opus format)
-- [ ] Error handling for YouTube extraction
+## Phase 2: Ingestion & Backend (Done)
+- [x] Implement Ktor Backend using `YtdlpJava`
+- [x] Robust SRT/VTT parsing logic
+- [x] Audio streaming/downloading service (Opus format)
+- [x] Error handling for YouTube extraction
 
 ## Phase 3: AI & Intelligence
 - [ ] Integrate Google Gemini API for translations
