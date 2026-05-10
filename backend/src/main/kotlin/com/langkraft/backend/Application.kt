@@ -1,25 +1,31 @@
 package com.langkraft.backend
 
-import io.ktor.serialization.kotlinx.json.*
-import io.ktor.server.application.*
-import io.ktor.server.engine.*
-import io.ktor.server.netty.*
-import io.ktor.server.plugins.contentnegotiation.*
-import io.ktor.server.response.*
-import io.ktor.server.routing.*
-import io.ktor.server.http.content.*
+import com.langkraft.backend.ai.GeminiLinguisticAssistant
+import com.langkraft.domain.ai.MockLinguisticAssistant
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.cio.CIO
+import io.ktor.http.HttpStatusCode
+import io.ktor.serialization.kotlinx.json.json
+import io.ktor.server.application.Application
+import io.ktor.server.application.call
+import io.ktor.server.application.install
+import io.ktor.server.engine.embeddedServer
+import io.ktor.server.http.content.staticFiles
+import io.ktor.server.netty.Netty
+import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.server.response.respond
+import io.ktor.server.response.respondText
+import io.ktor.server.routing.get
+import io.ktor.server.routing.post
+import io.ktor.server.routing.routing
 import java.io.File
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation as ClientContentNegotiation
+import io.ktor.serialization.kotlinx.json.json as ClientJson
 
 fun main() {
     embeddedServer(Netty, port = 8080, host = "0.0.0.0", module = Application::module)
         .start(wait = true)
 }
-
-import com.langkraft.backend.ai.GeminiLinguisticAssistant
-import io.ktor.client.*
-import io.ktor.client.engine.cio.*
-import io.ktor.client.plugins.contentnegotiation.* as ClientContentNegotiation
-import io.ktor.serialization.kotlinx.json.* as ClientJson
 
 fun Application.module() {
     install(ContentNegotiation) {
@@ -32,12 +38,12 @@ fun Application.module() {
     val apiKey = System.getenv("GEMINI_API_KEY") ?: "mock_key"
     val httpClient = HttpClient(CIO) {
         install(ClientContentNegotiation) {
-            json()
+            ClientJson()
         }
     }
     
     val aiAssistant = if (apiKey == "mock_key") {
-        com.langkraft.domain.ai.MockLinguisticAssistant()
+        MockLinguisticAssistant()
     } else {
         GeminiLinguisticAssistant(apiKey, httpClient)
     }
@@ -48,12 +54,12 @@ fun Application.module() {
         }
 
         post("/api/ingest") {
-            val url = call.parameters["url"] ?: return@post call.respondText("Missing URL", status = io.ktor.http.HttpStatusCode.BadRequest)
+            val url = call.parameters["url"] ?: return@post call.respondText("Missing URL", status = HttpStatusCode.BadRequest)
             try {
                 val content = ingestionService.ingest(url)
                 call.respond(content)
             } catch (e: Exception) {
-                call.respondText("Error: ${e.message}", status = io.ktor.http.HttpStatusCode.InternalServerError)
+                call.respondText("Error: ${e.message}", status = HttpStatusCode.InternalServerError)
             }
         }
 

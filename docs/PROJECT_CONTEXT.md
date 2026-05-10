@@ -15,10 +15,10 @@ The app follows a specific language acquisition methodology:
 ## Current State
 - **Data Layer:** SQLDelight schema implemented (Content, Subtitles, Vocabulary).
 - **Domain Layer:** Core models and UseCases (IngestContent) defined.
-- **Backend:** Ktor server with `YouTubeIngestionService` using `YtdlpJava`. Supports Opus audio extraction, SRT/VTT parsing, and real metadata retrieval.
+- **Backend:** Ktor server with `YouTubeIngestionService` using `YtdlpJava`. Supports Opus audio extraction, SRT/VTT parsing, and real YouTube ID tracking. Improved robustness with `kotlinx-serialization`.
 - **AI Integration:** Google Gemini integration for contextual translations, deep grammatical analysis, and text correction.
 - **Immersion Tools:** "Repeat Loop Mode" for deep listening and "Prose Memorization Tool" for active recall implemented in the player.
-- **Learning Experience:** SRS Engine and Training UI for context-based sentence review.
+- **Learning Experience:** SRS Engine (SM-2 with clean constants) and Training UI for context-based sentence review.
 - **Content:** Library and YouTube import screen implemented.
 - **Audio:** Multiplatform player (ExoPlayer/HTML5) via expect/actual.
 

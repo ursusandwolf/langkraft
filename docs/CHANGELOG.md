@@ -2,9 +2,10 @@
 
 ## [Unreleased]
 
-### Added
-- Comprehensive Code Review of backend and shared modules.
-- Identified improvements for Ingestion Service, SRS Engine, and AI Integration.
+### Changed
+- Refactored `YouTubeIngestionService` to use `kotlinx-serialization` and real YouTube IDs.
+- Refactored `SrsEngine` to use named constants for SM-2 algorithm.
+- Replaced all wildcard imports with explicit imports across the project.
 
 - `Application.kt` as the entry point for the backend server.
 - `YouTubeIngestionService` refinement: added real metadata retrieval (title, duration) and Opus audio extraction.
