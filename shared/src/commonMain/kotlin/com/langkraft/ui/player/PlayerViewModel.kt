@@ -33,6 +33,9 @@ class PlayerViewModel(
             is PlayerEvent.ToggleLoop -> {
                 _state.update { it.copy(isLooping = !it.isLooping) }
             }
+            is PlayerEvent.SetPlaybackSpeed -> {
+                _state.update { it.copy(playbackSpeed = event.speed) }
+            }
             is PlayerEvent.SeekTo -> {
                 _state.update { it.copy(currentTimeMs = event.timeMs) }
             }

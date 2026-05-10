@@ -11,6 +11,7 @@ data class PlayerState(
     val currentTimeMs: Long = 0,
     val isPlaying: Boolean = false,
     val isLooping: Boolean = false,
+    val playbackSpeed: Float = 1.0f,
     val selectedWord: String? = null,
     val selectedWordContext: SubtitleLine? = null,
     val wordTranslation: TranslationResult? = null,
@@ -27,6 +28,7 @@ sealed class PlayerEvent {
     data class LoadContent(val contentId: String) : PlayerEvent()
     object PlayPause : PlayerEvent()
     object ToggleLoop : PlayerEvent()
+    data class SetPlaybackSpeed(val speed: Float) : PlayerEvent()
     data class SeekTo(val timeMs: Long) : PlayerEvent()
     data class WordClicked(val word: String, val line: SubtitleLine) : PlayerEvent()
     data class DeepAnalysisClicked(val line: SubtitleLine) : PlayerEvent()

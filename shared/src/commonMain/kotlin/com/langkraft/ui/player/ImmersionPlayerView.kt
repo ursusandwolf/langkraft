@@ -71,8 +71,10 @@ fun ImmersionPlayerView(
             PlayerControlBar(
                 isPlaying = state.isPlaying,
                 isLooping = state.isLooping,
+                currentSpeed = state.playbackSpeed,
                 onPlayPause = { viewModel.onEvent(PlayerEvent.PlayPause) },
-                onToggleLoop = { viewModel.onEvent(PlayerEvent.ToggleLoop) }
+                onToggleLoop = { viewModel.onEvent(PlayerEvent.ToggleLoop) },
+                onSpeedChange = { viewModel.onEvent(PlayerEvent.SetPlaybackSpeed(it)) }
             )
         }
     ) { padding ->
@@ -257,8 +259,10 @@ fun DeepAnalysisDialog(
 fun PlayerControlBar(
     isPlaying: Boolean,
     isLooping: Boolean,
+    currentSpeed: Float,
     onPlayPause: () -> Unit,
-    onToggleLoop: () -> Unit
+    onToggleLoop: () -> Unit,
+    onSpeedChange: (Float) -> Unit
 ) {
     Surface(elevation = 8.dp) {
         Row(
@@ -278,8 +282,13 @@ fun PlayerControlBar(
                 Text(if (isPlaying) "PAUSE" else "PLAY")
             }
             
-            // Placeholder for speed control
-            Text("1.0x", style = MaterialTheme.typography.body2, color = Color.Gray)
+            // Speed Control
+            val speeds = listOf(0.75f, 1.0f, 1.25f, 1.5f)
+            val nextSpeed = speeds[(speeds.indexOf(currentSpeed) + 1) % speeds.size]
+            
+            Button(onClick = { onSpeedChange(nextSpeed) }) {
+                Text("${currentSpeed}x", style = MaterialTheme.typography.body2)
+            }
         }
     }
 }

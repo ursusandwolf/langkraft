@@ -12,6 +12,7 @@ import com.langkraft.ui.player.PlayerViewModel
 import com.langkraft.ui.srs.SrsTrainingViewModel
 import io.ktor.client.HttpClient
 import com.langkraft.ui.writing.WritingViewModel
+import com.langkraft.ui.dashboard.DashboardViewModel
 import org.koin.core.context.startKoin
 import org.koin.core.module.Module
 import org.koin.dsl.KoinAppDeclaration
@@ -42,4 +43,5 @@ val commonModule = module {
     factory { PlayerViewModel(get(), get(), get()) }
     factory { SrsTrainingViewModel(get()) }
     factory { WritingViewModel(get()) }
+    factory { DashboardViewModel() }
 }
