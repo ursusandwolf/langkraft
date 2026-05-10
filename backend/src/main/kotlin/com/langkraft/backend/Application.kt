@@ -15,6 +15,12 @@ fun main() {
         .start(wait = true)
 }
 
+import com.langkraft.backend.ai.GeminiLinguisticAssistant
+import io.ktor.client.*
+import io.ktor.client.engine.cio.*
+import io.ktor.client.plugins.contentnegotiation.* as ClientContentNegotiation
+import io.ktor.serialization.kotlinx.json.* as ClientJson
+
 fun Application.module() {
     install(ContentNegotiation) {
         json()
@@ -22,6 +28,19 @@ fun Application.module() {
 
     val downloadsDir = "downloads"
     val ingestionService = YouTubeIngestionService(downloadsDir)
+    
+    val apiKey = System.getenv("GEMINI_API_KEY") ?: "mock_key"
+    val httpClient = HttpClient(CIO) {
+        install(ClientContentNegotiation) {
+            json()
+        }
+    }
+    
+    val aiAssistant = if (apiKey == "mock_key") {
+        com.langkraft.domain.ai.MockLinguisticAssistant()
+    } else {
+        GeminiLinguisticAssistant(apiKey, httpClient)
+    }
 
     routing {
         get("/") {
@@ -36,6 +55,22 @@ fun Application.module() {
             } catch (e: Exception) {
                 call.respondText("Error: ${e.message}", status = io.ktor.http.HttpStatusCode.InternalServerError)
             }
+        }
+
+        post("/api/ai/translate-word") {
+            val word = call.parameters["word"] ?: ""
+            val context = call.parameters["context"] ?: ""
+            call.respond(aiAssistant.translateWord(word, context))
+        }
+
+        post("/api/ai/analyze-sentence") {
+            val text = call.parameters["text"] ?: ""
+            call.respond(aiAssistant.analyzeSentence(text))
+        }
+
+        post("/api/ai/correct-text") {
+            val text = call.parameters["text"] ?: ""
+            call.respond(aiAssistant.correctText(text))
         }
 
         // Serve downloaded media
