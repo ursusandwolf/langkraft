@@ -19,16 +19,16 @@
 - [ ] **Contextual Lemmatization:** Link words to their base forms while keeping the sentence context
 - [ ] **AI Correction:** Feature to correct user's "Active Writing" (diaries/summaries) based on content
 
-## Phase 4: Learning Experience
-- [ ] **Spaced Repetition (SRS):** Algorithm for vocabulary (sentences, not isolated words)
-- [ ] **Repeat Loop Mode:** Easy toggle to loop a specific audio/subtitle segment for "Deep Listening"
-- [ ] **Prose Memorization Tool:** Hidden-text mode for practicing memorized fragments
-- [ ] **Active Output:** Simple text editor to write summaries of listened content
+## Phase 4: Learning Experience (Done)
+- [x] **Spaced Repetition (SRS):** Algorithm for vocabulary (sentences, not isolated words)
+- [x] **Repeat Loop Mode:** Easy toggle to loop a specific audio/subtitle segment for "Deep Listening"
+- [x] **Prose Memorization Tool:** Hidden-text mode for practicing memorized fragments
+- [x] **Active Output:** Simple text editor to write summaries of listened content
 - [ ] Progress tracking dashboard (listening hours, sentences mastered)
 - [ ] Offline synchronization for Android
 
 ## Phase 5: UI/UX Polishing
-- [ ] Content selection screen (URL input, library)
+- [x] Content selection screen (URL input, library)
 - [ ] Theming and design system (German immersion aesthetics)
 - [ ] Waveform visualization for audio
 - [ ] Speed control (0.75x, 1x, 1.25x)

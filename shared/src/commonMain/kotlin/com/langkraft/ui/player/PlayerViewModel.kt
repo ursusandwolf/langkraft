@@ -28,6 +28,9 @@ class PlayerViewModel(
             is PlayerEvent.PlayPause -> {
                 _state.update { it.copy(isPlaying = !it.isPlaying) }
             }
+            is PlayerEvent.ToggleLoop -> {
+                _state.update { it.copy(isLooping = !it.isLooping) }
+            }
             is PlayerEvent.SeekTo -> {
                 _state.update { it.copy(currentTimeMs = event.timeMs) }
             }
@@ -37,6 +40,9 @@ class PlayerViewModel(
             is PlayerEvent.DeepAnalysisClicked -> {
                 handleDeepAnalysis(event.line)
             }
+            is PlayerEvent.MemorizationClicked -> {
+                _state.update { it.copy(memorizationText = event.text) }
+            }
             is PlayerEvent.ToggleTranslation -> {
                 handleToggleTranslation(event.line)
             }
@@ -45,6 +51,9 @@ class PlayerViewModel(
             }
             is PlayerEvent.DismissDeepAnalysis -> {
                 _state.update { it.copy(deepAnalysis = null) }
+            }
+            is PlayerEvent.DismissMemorization -> {
+                _state.update { it.copy(memorizationText = null) }
             }
         }
     }
@@ -113,6 +122,17 @@ class PlayerViewModel(
     
     // This will be called by the actual audio player implementation
     fun updateTime(timeMs: Long) {
+        val currentState = _state.value
+        if (currentState.isLooping) {
+            val currentLine = currentState.content?.subtitles?.find { 
+                currentState.currentTimeMs in it.startMs..it.endMs 
+            }
+            if (currentLine != null && timeMs > currentLine.endMs) {
+                // Seek back to start of current line
+                _state.update { it.copy(currentTimeMs = currentLine.startMs) }
+                return
+            }
+        }
         _state.update { it.copy(currentTimeMs = timeMs) }
     }
 }

@@ -45,7 +45,9 @@ fun ImmersionPlayerView(
         bottomBar = {
             PlayerControlBar(
                 isPlaying = state.isPlaying,
-                onPlayPause = { viewModel.onEvent(PlayerEvent.PlayPause) }
+                isLooping = state.isLooping,
+                onPlayPause = { viewModel.onEvent(PlayerEvent.PlayPause) },
+                onToggleLoop = { viewModel.onEvent(PlayerEvent.ToggleLoop) }
             )
         }
     ) { padding ->
@@ -67,7 +69,8 @@ fun ImmersionPlayerView(
                                 onClick = { viewModel.onEvent(PlayerEvent.SeekTo(line.startMs)) },
                                 onWordClick = { word -> viewModel.onEvent(PlayerEvent.WordClicked(word, line)) },
                                 onTranslateClick = { viewModel.onEvent(PlayerEvent.ToggleTranslation(line)) },
-                                onAnalyzeClick = { viewModel.onEvent(PlayerEvent.DeepAnalysisClicked(line)) }
+                                onAnalyzeClick = { viewModel.onEvent(PlayerEvent.DeepAnalysisClicked(line)) },
+                                onMemorizeClick = { viewModel.onEvent(PlayerEvent.MemorizationClicked(line.textDe)) }
                             )
                         }
                     }
@@ -105,6 +108,14 @@ fun ImmersionPlayerView(
                     onDismiss = { viewModel.onEvent(PlayerEvent.DismissDeepAnalysis) }
                 )
             }
+
+            // Memorization Tool
+            state.memorizationText?.let { text ->
+                MemorizationDialog(
+                    text = text,
+                    onDismiss = { viewModel.onEvent(PlayerEvent.DismissMemorization) }
+                )
+            }
             
             if (state.isAnalyzing) {
                 Surface(
@@ -127,7 +138,8 @@ fun SubtitleRow(
     onClick: () -> Unit,
     onWordClick: (String) -> Unit,
     onTranslateClick: () -> Unit,
-    onAnalyzeClick: () -> Unit
+    onAnalyzeClick: () -> Unit,
+    onMemorizeClick: () -> Unit
 ) {
     val backgroundColor by animateColorAsState(
         if (isCurrent) MaterialTheme.colors.primary.copy(alpha = 0.15f)
@@ -162,11 +174,15 @@ fun SubtitleRow(
             Row {
                 IconButton(onClick = onTranslateClick, modifier = Modifier.size(24.dp)) {
                     if (isTranslating) CircularProgressIndicator(modifier = Modifier.size(16.dp))
-                    else Text("文", style = MaterialTheme.typography.body2) // Translation icon
+                    else Text("文", style = MaterialTheme.typography.body2) 
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 IconButton(onClick = onAnalyzeClick, modifier = Modifier.size(24.dp)) {
-                    Text("⚙", style = MaterialTheme.typography.body2) // Analysis icon
+                    Text("⚙", style = MaterialTheme.typography.body2) 
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                IconButton(onClick = onMemorizeClick, modifier = Modifier.size(24.dp)) {
+                    Text("🧠", style = MaterialTheme.typography.body2) 
                 }
             }
         }
@@ -215,16 +231,30 @@ fun DeepAnalysisDialog(
 @Composable
 fun PlayerControlBar(
     isPlaying: Boolean,
-    onPlayPause: () -> Unit
+    isLooping: Boolean,
+    onPlayPause: () -> Unit,
+    onToggleLoop: () -> Unit
 ) {
     Surface(elevation = 8.dp) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
-            horizontalArrangement = Arrangement.Center
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            IconButton(onClick = onToggleLoop) {
+                Text(
+                    text = "🔁", 
+                    style = MaterialTheme.typography.h6,
+                    color = if (isLooping) MaterialTheme.colors.primary else Color.Gray
+                )
+            }
+            
             Button(onClick = onPlayPause) {
                 Text(if (isPlaying) "PAUSE" else "PLAY")
             }
+            
+            // Placeholder for speed control
+            Text("1.0x", style = MaterialTheme.typography.body2, color = Color.Gray)
         }
     }
 }

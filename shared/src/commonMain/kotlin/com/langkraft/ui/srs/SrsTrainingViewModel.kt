@@ -1,0 +1,71 @@
+package com.langkraft.ui.srs
+
+import com.langkraft.domain.model.VocabularyWord
+import com.langkraft.domain.repository.VocabularyRepository
+import com.langkraft.domain.srs.SrsEngine
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+
+data class SrsTrainingState(
+    val queue: List<VocabularyWord> = emptyList(),
+    val currentWord: VocabularyWord? = null,
+    val isAnswerVisible: Boolean = false,
+    val remainingCount: Int = 0,
+    val isLoading: Boolean = false
+)
+
+class SrsTrainingViewModel(
+    private val vocabularyRepository: VocabularyRepository,
+    private val scope: CoroutineScope
+) {
+    private val _state = MutableStateFlow(SrsTrainingState())
+    val state: StateFlow<SrsTrainingState> = _state.asStateFlow()
+
+    init {
+        loadQueue()
+    }
+
+    private fun loadQueue() {
+        scope.launch {
+            _state.update { it.copy(isLoading = true) }
+            vocabularyRepository.getWordsToReview().collect { words ->
+                _state.update { 
+                    it.copy(
+                        queue = words,
+                        currentWord = words.firstOrNull(),
+                        remainingCount = words.size,
+                        isLoading = false,
+                        isAnswerVisible = false
+                    ) 
+                }
+            }
+        }
+    }
+
+    fun showAnswer() {
+        _state.update { it.copy(isAnswerVisible = true) }
+    }
+
+    fun submitResult(quality: Int) {
+        val word = _state.value.currentWord ?: return
+        val updatedWord = SrsEngine.calculateNextReview(word, quality)
+        
+        scope.launch {
+            vocabularyRepository.saveWord(updatedWord)
+            // The flow will automatically update the queue, but we can also manually move to next
+            _state.update { 
+                val nextQueue = it.queue.drop(1)
+                it.copy(
+                    queue = nextQueue,
+                    currentWord = nextQueue.firstOrNull(),
+                    remainingCount = nextQueue.size,
+                    isAnswerVisible = false
+                )
+            }
+        }
+    }
+}
