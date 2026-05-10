@@ -19,6 +19,7 @@ kotlin {
                 implementation(compose.foundation)
                 implementation(compose.material)
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+                implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.4.1")
                 implementation("app.cash.sqldelight:runtime:2.0.0")
                 implementation("io.ktor:ktor-client-core:2.3.5")
             }

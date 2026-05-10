@@ -27,7 +27,10 @@ data class VocabularyWord(
     val contextSentence: String,
     val contentId: String?,
     val subtitleLineId: String?,
-    val status: WordStatus = WordStatus.NEW
+    val status: WordStatus = WordStatus.NEW,
+    val nextReviewMs: Long = 0,
+    val intervalDays: Int = 0,
+    val easeFactor: Double = 2.5
 )
 
 enum class WordStatus {
