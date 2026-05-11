@@ -4,73 +4,74 @@ import com.langkraft.domain.model.VocabularyWord
 import com.langkraft.domain.model.WordStatus
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.statements.UpdateBuilder
 import org.jetbrains.exposed.sql.transactions.transaction
 
 class BackendVocabularyRepository {
 
+    private fun UpdateBuilder<*>.applyWord(word: VocabularyWord, userId: String) {
+        this[VocabularySync.userId] = userId
+        this[VocabularySync.word] = word.word
+        this[VocabularySync.lemma] = word.lemma
+        this[VocabularySync.translation] = word.translation
+        this[VocabularySync.contextSentence] = word.contextSentence
+        this[VocabularySync.contentId] = word.contentId
+        this[VocabularySync.subtitleLineId] = word.subtitleLineId
+        this[VocabularySync.addedAt] = word.addedAt
+        this[VocabularySync.status] = word.status.name
+        this[VocabularySync.nextReviewAt] = word.nextReviewMs
+        this[VocabularySync.intervalDays] = word.intervalDays.toLong()
+        this[VocabularySync.easeFactor] = word.easeFactor
+        this[VocabularySync.lastUpdated] = word.lastUpdated
+    }
+
+    private fun ResultRow.toVocabularyWord() = VocabularyWord(
+        id = this[VocabularySync.id],
+        word = this[VocabularySync.word],
+        lemma = this[VocabularySync.lemma],
+        translation = this[VocabularySync.translation],
+        contextSentence = this[VocabularySync.contextSentence],
+        contentId = this[VocabularySync.contentId],
+        subtitleLineId = this[VocabularySync.subtitleLineId],
+        addedAt = this[VocabularySync.addedAt],
+        nextReviewMs = this[VocabularySync.nextReviewAt],
+        intervalDays = this[VocabularySync.intervalDays].toInt(),
+        easeFactor = this[VocabularySync.easeFactor],
+        status = WordStatus.valueOf(this[VocabularySync.status]),
+        lastUpdated = this[VocabularySync.lastUpdated]
+    )
+
     fun sync(userId: String, clientChanges: List<VocabularyWord>, lastSyncTimestamp: Long): List<VocabularyWord> = transaction {
-        // 1. Process client changes (Upsert)
-        clientChanges.forEach { word ->
-            val updated = VocabularySync.update({ VocabularySync.id eq word.id }) {
-                it[VocabularySync.userId] = userId
-                it[VocabularySync.word] = word.word
-                it[VocabularySync.lemma] = word.lemma
-                it[VocabularySync.translation] = word.translation
-                it[VocabularySync.contextSentence] = word.contextSentence
-                it[VocabularySync.contentId] = word.contentId
-                it[VocabularySync.subtitleLineId] = word.subtitleLineId
-                it[VocabularySync.addedAt] = word.addedAt
-                it[VocabularySync.status] = word.status.name
-                it[VocabularySync.nextReviewAt] = word.nextReviewMs
-                it[VocabularySync.intervalDays] = word.intervalDays.toLong()
-                it[VocabularySync.easeFactor] = word.easeFactor
-                it[VocabularySync.lastUpdated] = word.lastUpdated
+        // 1. Process client changes
+        val existingIds = VocabularySync
+            .slice(VocabularySync.id)
+            .select { VocabularySync.id inList clientChanges.map { it.id } }
+            .map { it[VocabularySync.id] }
+            .toSet()
+
+        val toInsert = clientChanges.filter { it.id !in existingIds }
+        val toUpdate = clientChanges.filter { it.id in existingIds }
+
+        if (toInsert.isNotEmpty()) {
+            VocabularySync.batchInsert(toInsert) { word ->
+                this[VocabularySync.id] = word.id
+                applyWord(word, userId)
             }
-            
-            if (updated == 0) {
-                VocabularySync.insert {
-                    it[VocabularySync.id] = word.id
-                    it[VocabularySync.userId] = userId
-                    it[VocabularySync.word] = word.word
-                    it[VocabularySync.lemma] = word.lemma
-                    it[VocabularySync.translation] = word.translation
-                    it[VocabularySync.contextSentence] = word.contextSentence
-                    it[VocabularySync.contentId] = word.contentId
-                    it[VocabularySync.subtitleLineId] = word.subtitleLineId
-                    it[VocabularySync.addedAt] = word.addedAt
-                    it[VocabularySync.status] = word.status.name
-                    it[VocabularySync.nextReviewAt] = word.nextReviewMs
-                    it[VocabularySync.intervalDays] = word.intervalDays.toLong()
-                    it[VocabularySync.easeFactor] = word.easeFactor
-                    it[VocabularySync.lastUpdated] = word.lastUpdated
-                }
+        }
+
+        toUpdate.forEach { word ->
+            VocabularySync.update({ VocabularySync.id eq word.id }) {
+                it.applyWord(word, userId)
             }
         }
 
         // 2. Find server changes since lastSyncTimestamp that were NOT in the clientChanges list
-        // (to avoid sending back what client just sent)
         val clientIds = clientChanges.map { it.id }.toSet()
         
         VocabularySync.select { 
             (VocabularySync.userId eq userId) and (VocabularySync.lastUpdated greater lastSyncTimestamp) 
         }.filter { 
             it[VocabularySync.id] !in clientIds 
-        }.map {
-            VocabularyWord(
-                id = it[VocabularySync.id],
-                word = it[VocabularySync.word],
-                lemma = it[VocabularySync.lemma],
-                translation = it[VocabularySync.translation],
-                contextSentence = it[VocabularySync.contextSentence],
-                contentId = it[VocabularySync.contentId],
-                subtitleLineId = it[VocabularySync.subtitleLineId],
-                addedAt = it[VocabularySync.addedAt],
-                nextReviewMs = it[VocabularySync.nextReviewAt],
-                intervalDays = it[VocabularySync.intervalDays].toInt(),
-                easeFactor = it[VocabularySync.easeFactor],
-                status = WordStatus.valueOf(it[VocabularySync.status]),
-                lastUpdated = it[VocabularySync.lastUpdated]
-            )
-        }
+        }.map { it.toVocabularyWord() }
     }
 }

@@ -29,6 +29,7 @@ val backendModule = module {
     
     single { BackendUserRepository() }
     single { BackendVocabularyRepository() }
+    single { com.langkraft.backend.JwtService(get()) }
 
     single { YtdlpClient("downloads") }
     single { YouTubeIngestionService(get()) }
@@ -42,11 +43,16 @@ val backendModule = module {
     }
 
     single<LinguisticAssistant> {
-        val apiKey = System.getenv("GEMINI_API_KEY") ?: "mock_key"
-        if (apiKey == "mock_key") {
+        val config = get<io.ktor.server.config.ApplicationConfig>()
+        val apiKey = config.propertyOrNull("gemini.api_key")?.getString() 
+            ?: System.getenv("GEMINI_API_KEY") 
+            ?: "mock_key"
+            
+        val baseAssistant = if (apiKey == "mock_key") {
             MockLinguisticAssistant()
         } else {
             GeminiLinguisticAssistant(apiKey, get())
         }
+        com.langkraft.backend.ai.CachingLinguisticAssistant(baseAssistant)
     }
 }

@@ -13,11 +13,13 @@ The app follows a specific language acquisition methodology:
 6. **Memorization:** Features to help internalize corrected prose.
 
 ## Current State
-- **Data Layer:** SQLDelight schema optimized with lemmas, SRS-data, and `lastUpdated` sync timestamps. `SqlDelightVocabularyRepository` now correctly implements synchronization and atomic updates.
-- **Backend:** Modularized Ktor server using `EngineMain` with `Exposed` ORM and SQLite for real persistence. Implements a robust JWT-based authentication and a real incremental synchronization protocol for vocabulary data.
-- **AI Integration:** Full suite of immersion tools: contextual translation, Deep Analysis Mode, contextual lemmatization, and pedagogical AI correction.
-- **Multi-platform:** Dedicated modules for Android, Web (Wasm), and Desktop. UI components in Shared module are synchronized with the latest state and AI capabilities.
-- **UI:** Langkraft Design System implemented with "German Immersion" aesthetics (Midnight Blue/Amber). `ImmersionPlayerView` supports lemmatization and deep analysis visualization.
+- **Security:** Critical vulnerabilities resolved. User passwords are secured with **BCrypt**. AI API keys are protected in headers. JWT logic is encapsulated in a dedicated service.
+- **Architecture:** Implemented **Interface Segregation (ISP)** for content management and **Dependency Inversion (DIP)** for SRS logic. Introduced the **Decorator Pattern** for AI response caching, improving performance and cost-efficiency.
+- **Data Layer:** SQLDelight schema optimized with lemmas and SRS-data. Backend synchronization protocol optimized to resolve N+1 query issues.
+- **Backend:** Modularized Ktor server with real persistence. Implements robust authentication and incremental vocabulary synchronization.
+- **AI Integration:** Full suite of immersion tools with a caching layer: contextual translation, Deep Analysis Mode, contextual lemmatization, and pedagogical correction.
+- **Multi-platform:** Shared UI and business logic supporting Android, Web (Wasm), and Desktop.
+- **UI:** Langkraft Design System with "German Immersion" aesthetics (Midnight Blue/Amber). Player supports deep grammatical analysis and lemmatization.
 
 ## Tech Stack
 ...

@@ -4,7 +4,8 @@ import com.langkraft.db.AppDatabase
 import com.langkraft.domain.model.DownloadStatus
 import com.langkraft.domain.model.ImmersionContent
 import com.langkraft.domain.model.SubtitleLine
-import com.langkraft.domain.repository.ContentRepository
+import com.langkraft.domain.repository.LocalContentRepository
+import com.langkraft.domain.repository.RemoteContentSource
 import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToList
 import app.cash.sqldelight.coroutines.mapToOne
@@ -22,7 +23,7 @@ class SqlDelightContentRepository(
     private val db: AppDatabase,
     private val httpClient: HttpClient,
     private val fileSystem: FileSystem
-) : ContentRepository {
+) : LocalContentRepository, RemoteContentSource, com.langkraft.domain.repository.AudioDownloader {
 
     override fun getAllContent(): Flow<List<ImmersionContent>> {
         return db.appDatabaseQueries.selectAllContent()

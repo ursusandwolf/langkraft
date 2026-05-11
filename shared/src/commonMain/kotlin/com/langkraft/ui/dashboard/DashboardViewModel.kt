@@ -1,6 +1,7 @@
 package com.langkraft.ui.dashboard
 
-import com.langkraft.domain.repository.ContentRepository
+import com.langkraft.domain.model.WordStatus
+import com.langkraft.domain.repository.LocalContentRepository
 import com.langkraft.domain.repository.VocabularyRepository
 import com.langkraft.ui.BaseViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,7 +23,7 @@ data class DashboardState(
 )
 
 class DashboardViewModel(
-    private val contentRepository: ContentRepository,
+    private val contentRepository: LocalContentRepository,
     private val vocabularyRepository: VocabularyRepository
 ) : BaseViewModel() {
     private val _state = MutableStateFlow(DashboardState())
@@ -44,9 +45,9 @@ class DashboardViewModel(
             DashboardState(
                 totalContent = immersion.totalContent,
                 totalImmersionSeconds = immersion.totalDurationSeconds,
-                wordsMastered = counts["MASTERED"] ?: 0,
-                wordsLearning = counts["LEARNING"] ?: 0,
-                wordsNew = counts["NEW"] ?: 0,
+                wordsMastered = counts[WordStatus.MASTERED] ?: 0,
+                wordsLearning = counts[WordStatus.LEARNING] ?: 0,
+                wordsNew = counts[WordStatus.NEW] ?: 0,
                 wordsToReviewToday = reviews.size,
                 wordsAddedThisWeek = recent
             )

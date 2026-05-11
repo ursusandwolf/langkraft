@@ -2,7 +2,7 @@ package com.langkraft.ui.srs
 
 import com.langkraft.domain.model.VocabularyWord
 import com.langkraft.domain.repository.VocabularyRepository
-import com.langkraft.domain.srs.SrsEngine
+import com.langkraft.domain.srs.SpacedRepetitionAlgorithm
 import com.langkraft.ui.BaseViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,7 +19,8 @@ data class SrsTrainingState(
 )
 
 class SrsTrainingViewModel(
-    private val vocabularyRepository: VocabularyRepository
+    private val vocabularyRepository: VocabularyRepository,
+    private val srsAlgorithm: SpacedRepetitionAlgorithm
 ) : BaseViewModel() {
     private val _state = MutableStateFlow(SrsTrainingState())
     val state: StateFlow<SrsTrainingState> = _state.asStateFlow()
@@ -51,7 +52,7 @@ class SrsTrainingViewModel(
 
     fun submitResult(quality: Int) {
         val word = _state.value.currentWord ?: return
-        val updatedWord = SrsEngine.calculateNextReview(word, quality)
+        val updatedWord = srsAlgorithm.calculateNextReview(word, quality)
         
         scope.launch {
             vocabularyRepository.saveWord(updatedWord)

@@ -24,14 +24,11 @@ import com.auth0.jwt.algorithms.Algorithm
 import java.util.*
 
 import com.langkraft.backend.db.*
+import at.favre.lib.crypto.bcrypt.BCrypt
 
 fun Route.authRoutes() {
-    val config = application.environment.config
-    val jwtSecret = config.property("jwt.secret").getString()
-    val jwtIssuer = config.property("jwt.issuer").getString()
-    val jwtAudience = config.property("jwt.audience").getString()
-    
     val userRepository by inject<BackendUserRepository>()
+    val jwtService by inject<JwtService>()
 
     route("/api/auth") {
         post("/register") {
@@ -42,9 +39,11 @@ fun Route.authRoutes() {
                 return@post
             }
             
-            val userId = userRepository.createUser(request.email, request.passwordHash, request.displayName)
+            val passwordHash = BCrypt.withDefaults().hashToString(12, request.passwordHash.toCharArray())
+            val userId = userRepository.createUser(request.email, passwordHash, request.displayName)
+            
             val response = AuthResponse(
-                token = generateToken(request.email, jwtSecret, jwtIssuer, jwtAudience),
+                token = jwtService.generateToken(request.email),
                 user = UserInfo(userId, request.email, request.displayName)
             )
             call.respond(response)
@@ -54,27 +53,24 @@ fun Route.authRoutes() {
             val request = call.receive<AuthRequest>()
             val user = userRepository.findByEmail(request.email)
             
-            if (user == null || user.passwordHash != request.passwordHash) {
+            if (user == null) {
+                call.respond(HttpStatusCode.Unauthorized, "Invalid credentials")
+                return@post
+            }
+
+            val result = BCrypt.verifyer().verify(request.passwordHash.toCharArray(), user.passwordHash)
+            if (!result.verified) {
                 call.respond(HttpStatusCode.Unauthorized, "Invalid credentials")
                 return@post
             }
             
             val response = AuthResponse(
-                token = generateToken(request.email, jwtSecret, jwtIssuer, jwtAudience),
+                token = jwtService.generateToken(request.email),
                 user = UserInfo(user.id, user.email, user.displayName)
             )
             call.respond(response)
         }
     }
-}
-
-private fun generateToken(email: String, secret: String, issuer: String, audience: String): String {
-    return JWT.create()
-        .withAudience(audience)
-        .withIssuer(issuer)
-        .withClaim("email", email)
-        .withExpiresAt(Date(System.currentTimeMillis() + 3600000 * 24)) // 24h
-        .sign(Algorithm.HMAC256(secret))
 }
 
 fun Route.apiRoutes() {

@@ -27,6 +27,56 @@ classDiagram
     YouTubeIngestionService --> SrtParser
 ```
 
+## Repository Architecture (ISP)
+
+```mermaid
+classDiagram
+    class LocalContentRepository {
+        <<interface>>
+        +getAllContent() Flow
+        +getContentById(id)
+        +saveContent(content)
+        +getImmersionStats() Flow
+    }
+    class RemoteContentSource {
+        <<interface>>
+        +fetchFromYouTube(url)
+    }
+    class AudioDownloader {
+        <<interface>>
+        +downloadAudio(content)
+    }
+    class SqlDelightContentRepository {
+        +db: AppDatabase
+        +httpClient: HttpClient
+    }
+
+    SqlDelightContentRepository ..|> LocalContentRepository
+    SqlDelightContentRepository ..|> RemoteContentSource
+    SqlDelightContentRepository ..|> AudioDownloader
+```
+
+## Spaced Repetition (SRS) Logic
+
+```mermaid
+classDiagram
+    class SpacedRepetitionAlgorithm {
+        <<interface>>
+        +calculateNextReview(word, quality)
+    }
+    class Sm2Algorithm {
+        +MIN_EASE_FACTOR
+        +SUCCESS_THRESHOLD
+    }
+    class SrsTrainingViewModel {
+        -srsAlgorithm: SpacedRepetitionAlgorithm
+        +submitResult(quality)
+    }
+
+    Sm2Algorithm ..|> SpacedRepetitionAlgorithm
+    SrsTrainingViewModel --> SpacedRepetitionAlgorithm
+```
+
 ## Domain Model Relationships
 
 ```mermaid

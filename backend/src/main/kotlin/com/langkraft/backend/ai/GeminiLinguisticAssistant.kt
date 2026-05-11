@@ -100,7 +100,10 @@ class GeminiLinguisticAssistant(
 
     private suspend fun callGeminiRaw(prompt: String): GeminiResponse {
         val response = try {
-            httpClient.post("$baseUrl?key=$apiKey") {
+            httpClient.post(baseUrl) {
+                headers {
+                    append("x-goog-api-key", apiKey)
+                }
                 contentType(ContentType.Application.Json)
                 setBody(GeminiRequest(listOf(GeminiContent(listOf(GeminiPart(prompt))))))
             }

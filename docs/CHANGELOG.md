@@ -3,6 +3,24 @@
 ## [Unreleased]
 
 ### Added
+- **Security Enhancements (Critical):**
+    - Implemented secure password hashing using **BCrypt** (12 rounds) on the backend.
+    - Encapsulated JWT logic into a dedicated `JwtService`.
+    - Moved Gemini API Key from URL query parameters to the secure `x-goog-api-key` header.
+- **Architectural Refactoring:**
+    - Refactored `ContentRepository` following the **Interface Segregation Principle (ISP)** into `LocalContentRepository`, `RemoteContentSource`, and `AudioDownloader`.
+    - Refactored `SrsEngine` from a static object to a `SpacedRepetitionAlgorithm` interface with `Sm2Algorithm` implementation (**Dependency Inversion Principle**).
+    - Introduced **Decorator Pattern** for AI responses via `CachingLinguisticAssistant`, significantly reducing redundant Gemini API calls.
+- **Performance & Type Safety:**
+    - Resolved **N+1 Query Problem** in `BackendVocabularyRepository.sync()` using batch inserts and mapping extensions.
+    - Standardized `WordStatus` usage across the data layer, replacing string-based maps with type-safe `Map<WordStatus, Long>`.
+
+### Fixed
+- **ViewModel Robustness:** Fixed a critical bug in `PlayerViewModel` where `isLoading` would get stuck in `true` if content was not found.
+- **Sync Honesty:** Replaced the "lying stub" `sync()` on the client with a proper `NotImplementedError` to prevent silent synchronization failures.
+- **Deterministic IDs:** Updated `SrtParser` to generate deterministic subtitle IDs based on content and timestamps, ensuring database integrity across re-parses.
+
+### Added (Previous)
 - **Backend Persistence:** Implemented real data storage using **Exposed ORM** and SQLite for users and vocabulary sync.
 - **Sync Protocol:** Added a functional incremental synchronization logic in the backend.
 - **Multiplatform UUID:** Implemented cross-platform UUID generator (`expect/actual`) to support JS/Web environments.

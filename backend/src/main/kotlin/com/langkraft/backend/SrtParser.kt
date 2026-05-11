@@ -38,7 +38,7 @@ object SrtParser {
             if (text.isEmpty()) return@mapNotNull null
             
             SubtitleLine(
-                id = UUID.randomUUID().toString(),
+                id = "${contentId}_${startMs}_${endMs}",
                 contentId = contentId,
                 startMs = startMs,
                 endMs = endMs,

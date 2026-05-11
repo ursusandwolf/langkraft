@@ -49,17 +49,17 @@ class SqlDelightVocabularyRepository(
     }
 
     override suspend fun sync(lastSyncTimestamp: Long): Long {
-        // Implementation for local sync state update if needed
-        // For now just return current time as server timestamp mock
-        return Clock.System.now().toEpochMilliseconds()
+        // TODO: Implement client-side synchronization with Backend API in Sprint 3.
+        // For now, we throw an error to avoid giving a false sense of synchronization.
+        throw NotImplementedError("Client-side synchronization is not yet implemented.")
     }
 
-    override fun getWordCountsByStatus(): Flow<Map<String, Long>> {
+    override fun getWordCountsByStatus(): Flow<Map<WordStatus, Long>> {
         return db.appDatabaseQueries.countWordsByStatus()
             .asFlow()
             .mapToList(Dispatchers.Default)
             .map { list ->
-                list.associate { it.status to it.count }
+                list.associate { WordStatus.valueOf(it.status) to it.count }
             }
     }
 

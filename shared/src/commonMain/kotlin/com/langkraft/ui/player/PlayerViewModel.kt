@@ -1,6 +1,7 @@
 package com.langkraft.ui.player
 
-import com.langkraft.domain.repository.ContentRepository
+import com.langkraft.domain.repository.LocalContentRepository
+import com.langkraft.domain.repository.AudioDownloader
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,7 +21,8 @@ import com.langkraft.io.FileSystem
 import com.langkraft.audio.AudioPlayer
 
 class PlayerViewModel(
-    private val contentRepository: ContentRepository,
+    private val contentRepository: LocalContentRepository,
+    private val audioDownloader: AudioDownloader,
     private val vocabularyRepository: VocabularyRepository,
     private val linguisticAssistant: LinguisticAssistant,
     private val audioPlayer: AudioPlayer,
@@ -157,7 +159,7 @@ class PlayerViewModel(
 
         scope.launch {
             try {
-                contentRepository.downloadAudio(currentContent)
+                audioDownloader.downloadAudio(currentContent)
                 // The repository updates the DB, and since we might be observing it (or we just reload)
                 // For now, let's manually refresh the content in state
                 val updated = contentRepository.getContentById(currentContent.id)
@@ -173,7 +175,11 @@ class PlayerViewModel(
     private fun loadContent(id: String) {
         scope.launch {
             _state.update { it.copy(isLoading = true) }
-            val content = contentRepository.getContentById(id) ?: return@launch
+            val content = contentRepository.getContentById(id)
+            if (content == null) {
+                _state.update { it.copy(isLoading = false, error = "Content not found") }
+                return@launch
+            }
             _state.update { it.copy(isLoading = false, content = content) }
             
             audioPlayer.load(content.getPlaybackUrl())

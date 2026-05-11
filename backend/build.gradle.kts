@@ -28,6 +28,9 @@ dependencies {
     // Logging
     implementation("ch.qos.logback:logback-classic:1.4.11")
 
+    // Security
+    implementation("at.favre.lib:bcrypt:0.10.2")
+
     // Database: Exposed & SQLite
     val exposedVersion = "0.46.0"
     implementation("org.jetbrains.exposed:exposed-core:$exposedVersion")
