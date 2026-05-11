@@ -42,8 +42,8 @@ object SrtParser {
                 contentId = contentId,
                 startMs = startMs,
                 endMs = endMs,
-                textDe = text,
-                textEn = null
+                originalText = text,
+                translationText = null
             )
         }
     }

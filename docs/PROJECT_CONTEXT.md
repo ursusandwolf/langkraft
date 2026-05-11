@@ -14,8 +14,8 @@ The app follows a specific language acquisition methodology:
 
 ## Current State
 - **Security:** Critical vulnerabilities resolved. User passwords are secured with **BCrypt**. AI API keys are protected in headers. JWT logic is encapsulated in a dedicated service.
-- **Architecture:** Implemented **Interface Segregation (ISP)** for content management and **Dependency Inversion (DIP)** for SRS logic. Introduced the **Decorator Pattern** for AI response caching, improving performance and cost-efficiency.
-- **Data Layer:** SQLDelight schema optimized with lemmas and SRS-data. Backend synchronization protocol optimized to resolve N+1 query issues.
+- **Architecture:** Implemented **Interface Segregation (ISP)** for content management and **Dependency Inversion (DIP)** for SRS logic. Introduced the **Decorator Pattern** for AI response caching and the **Delegate Pattern** for simplifying complex ViewModels.
+- **Data Layer:** SQLDelight schema optimized with lemmas and SRS-data. Backend synchronization protocol optimized to resolve N+1 query issues. The data model is language-agnostic, supporting flexible content and translation languages.
 - **Backend:** Modularized Ktor server with real persistence. Implements robust authentication and incremental vocabulary synchronization.
 - **AI Integration:** Full suite of immersion tools with a caching layer: contextual translation, Deep Analysis Mode, contextual lemmatization, and pedagogical correction.
 - **Multi-platform:** Shared UI and business logic supporting Android, Web (Wasm), and Desktop.

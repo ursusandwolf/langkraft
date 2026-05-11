@@ -128,7 +128,7 @@ fun ImmersionPlayerView(
                                     onTranslateClick = { viewModel.onEvent(PlayerEvent.ToggleTranslation(line)) },
                                     onLemmatizeClick = { viewModel.onEvent(PlayerEvent.ToggleLemmatization(line)) },
                                     onAnalysisClick = { viewModel.onEvent(PlayerEvent.DeepAnalysisClicked(line)) },
-                                    onMemorizationClick = { viewModel.onEvent(PlayerEvent.MemorizationClicked(line.textDe)) }
+                                    onMemorizationClick = { viewModel.onEvent(PlayerEvent.MemorizationClicked(line.originalText)) }
                                 )
                             }
                         }
@@ -230,7 +230,7 @@ fun SubtitleRow(
     ) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Row(modifier = Modifier.weight(1f).padding(end = 8.dp), horizontalArrangement = Arrangement.Start) {
-                line.textDe.split(Regex("\\s+")).forEach { word ->
+                line.originalText.split(Regex("\\s+")).forEach { word ->
                     val cleanWord = word.filter { it.isLetter() }
                     val lemma = lemmas?.get(word) ?: lemmas?.get(cleanWord)
 

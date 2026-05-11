@@ -28,7 +28,7 @@ val backendModule = module {
     }
     
     single { BackendUserRepository() }
-    single { BackendVocabularyRepository() }
+    single<VocabularySyncRepository> { BackendVocabularyRepository() }
     single { com.langkraft.backend.JwtService(get()) }
 
     single { YtdlpClient("downloads") }

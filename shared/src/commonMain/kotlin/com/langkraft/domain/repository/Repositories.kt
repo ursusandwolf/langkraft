@@ -33,6 +33,7 @@ data class ImmersionStats(
 
 interface VocabularyRepository {
     fun getWordsToReview(): Flow<List<VocabularyWord>>
+    fun getReviewCount(): Flow<Int>
     suspend fun saveWord(word: VocabularyWord)
     suspend fun deleteWord(id: String)
     

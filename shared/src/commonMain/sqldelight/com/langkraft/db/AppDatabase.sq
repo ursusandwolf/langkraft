@@ -16,8 +16,8 @@ CREATE TABLE SubtitleLine (
     contentId TEXT NOT NULL,
     startMs INTEGER NOT NULL,
     endMs INTEGER NOT NULL,
-    textDe TEXT NOT NULL,           -- Original German text
-    textEn TEXT,                    -- Optional English translation
+    originalText TEXT NOT NULL,     -- Original text in content language
+    translationText TEXT,           -- Optional translation text
     FOREIGN KEY (contentId) REFERENCES Content(id) ON DELETE CASCADE
 );
 
@@ -61,7 +61,7 @@ selectSubtitlesForContent:
 SELECT * FROM SubtitleLine WHERE contentId = ? ORDER BY startMs ASC;
 
 insertSubtitleLine:
-INSERT OR REPLACE INTO SubtitleLine(id, contentId, startMs, endMs, textDe, textEn)
+INSERT OR REPLACE INTO SubtitleLine(id, contentId, startMs, endMs, originalText, translationText)
 VALUES (?, ?, ?, ?, ?, ?);
 
 deleteSubtitlesByContentId:
@@ -79,6 +79,9 @@ SELECT * FROM Vocabulary WHERE lastUpdated > ?;
 
 selectVocabularyToReview:
 SELECT * FROM Vocabulary WHERE nextReviewAt <= ? OR nextReviewAt IS NULL ORDER BY nextReviewAt ASC;
+
+countVocabularyToReview:
+SELECT COUNT(*) FROM Vocabulary WHERE nextReviewAt <= ? OR nextReviewAt IS NULL;
 
 countWordsByStatus:
 SELECT status, COUNT(*) AS count FROM Vocabulary GROUP BY status;

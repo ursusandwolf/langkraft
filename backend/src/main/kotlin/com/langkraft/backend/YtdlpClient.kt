@@ -4,6 +4,7 @@ import com.sapher.youtubedl.YoutubeDL
 import com.sapher.youtubedl.YoutubeDLRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
@@ -14,7 +15,7 @@ data class YtdlpInfo(
     val id: String? = null,
     val title: String? = null,
     val duration: Long? = null,
-    val webpage_url: String? = null
+    @SerialName("webpage_url") val webpageUrl: String? = null
 )
 
 /**

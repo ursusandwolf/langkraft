@@ -26,6 +26,14 @@ class SqlDelightVocabularyRepository(
             }
     }
 
+    override fun getReviewCount(): Flow<Int> {
+        val now = Clock.System.now().toEpochMilliseconds()
+        return db.appDatabaseQueries.countVocabularyToReview(now)
+            .asFlow()
+            .mapToOne(Dispatchers.Default)
+            .map { it.toInt() }
+    }
+
     override suspend fun saveWord(word: VocabularyWord) {
         db.appDatabaseQueries.upsertWord(
             id = word.id,

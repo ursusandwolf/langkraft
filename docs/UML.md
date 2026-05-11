@@ -100,8 +100,8 @@ classDiagram
         +String id
         +Long startMs
         +Long endMs
-        +String textDe
-        +String textEn
+        +String originalText
+        +String translationText
     }
     class VocabularyWord {
         +String id

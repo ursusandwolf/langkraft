@@ -9,7 +9,9 @@ data class ImmersionContent(
     val durationSeconds: Long,
     val subtitles: List<SubtitleLine> = emptyList(),
     val waveform: List<Float> = emptyList(), // Normalized amplitudes [0.0 - 1.0]
-    val downloadStatus: DownloadStatus = DownloadStatus.IDLE
+    val downloadStatus: DownloadStatus = DownloadStatus.IDLE,
+    val contentLanguage: Language = Language.DE,
+    val translationLanguage: Language = Language.EN
 ) {
     fun getPlaybackUrl(): String {
         return if (downloadStatus == DownloadStatus.COMPLETED && localAudioPath != null) {
@@ -20,6 +22,8 @@ data class ImmersionContent(
     }
 }
 
+enum class Language { DE, EN, ES, RU, FR }
+
 enum class DownloadStatus {
     IDLE, DOWNLOADING, COMPLETED, ERROR
 }
@@ -29,8 +33,8 @@ data class SubtitleLine(
     val contentId: String,
     val startMs: Long,
     val endMs: Long,
-    val textDe: String,
-    val textEn: String?
+    val originalText: String,
+    val translationText: String?
 )
 
 @kotlinx.serialization.Serializable

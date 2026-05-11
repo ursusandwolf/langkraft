@@ -60,8 +60,8 @@ class SqlDelightContentRepository(
                     contentId = content.id,
                     startMs = line.startMs,
                     endMs = line.endMs,
-                    textDe = line.textDe,
-                    textEn = line.textEn
+                    originalText = line.originalText,
+                    translationText = line.translationText
                 )
             }
         }
@@ -148,8 +148,8 @@ class SqlDelightContentRepository(
             contentId = contentId,
             startMs = startMs,
             endMs = endMs,
-            textDe = textDe,
-            textEn = textEn
+            originalText = originalText,
+            translationText = translationText
         )
     }
 }

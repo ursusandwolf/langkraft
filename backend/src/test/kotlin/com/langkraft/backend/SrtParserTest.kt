@@ -20,7 +20,7 @@ class SrtParserTest {
         
         val lines = SrtParser.parse("test-id", srt)
         assertEquals(2, lines.size)
-        assertEquals("Hallo, wie geht es dir?", lines[0].textDe)
+        assertEquals("Hallo, wie geht es dir?", lines[0].originalText)
         assertEquals(20000L, lines[0].startMs)
         assertEquals(24400L, lines[0].endMs)
     }
@@ -39,7 +39,7 @@ class SrtParserTest {
         
         val lines = SrtParser.parse("test-id", vtt)
         assertEquals(2, lines.size)
-        assertEquals("Hallo, wie geht es dir?", lines[0].textDe)
+        assertEquals("Hallo, wie geht es dir?", lines[0].originalText)
         assertEquals(20000L, lines[0].startMs)
     }
 
@@ -80,16 +80,16 @@ class SrtParserTest {
         assertEquals("doFTT_aFPYI", lines[0].contentId)
         
         // Check line 1
-        assertEquals("Hallo, willkommen bei Easy German!", lines[0].textDe)
+        assertEquals("Hallo, willkommen bei Easy German!", lines[0].originalText)
         assertEquals(1200L, lines[0].startMs)
         assertEquals(4500L, lines[0].endMs)
         
         // Check line 2 (German grammar check)
-        assertTrue(lines[1].textDe.contains("versteht"))
+        assertTrue(lines[1].originalText.contains("versteht"))
         assertEquals(4600L, lines[1].startMs)
         
         // Check line 3 (Special characters and millis)
-        assertTrue(lines[2].textDe.contains("Spaß"))
+        assertTrue(lines[2].originalText.contains("Spaß"))
         assertEquals(8150L, lines[2].startMs)
     }
 }

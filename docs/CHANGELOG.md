@@ -10,15 +10,20 @@
 - **Architectural Refactoring:**
     - Refactored `ContentRepository` following the **Interface Segregation Principle (ISP)** into `LocalContentRepository`, `RemoteContentSource`, and `AudioDownloader`.
     - Refactored `SrsEngine` from a static object to a `SpacedRepetitionAlgorithm` interface with `Sm2Algorithm` implementation (**Dependency Inversion Principle**).
+    - Introduced **Delegate Pattern** in `PlayerViewModel` via `PlayerLinguisticDelegate` to resolve the "God ViewModel" issue.
     - Introduced **Decorator Pattern** for AI responses via `CachingLinguisticAssistant`, significantly reducing redundant Gemini API calls.
+    - Generalized `SubtitleLine` model to be language-agnostic (renamed `textDe`/`textEn` to `originalText`/`translationText`) and added `Language` enum.
 - **Performance & Type Safety:**
     - Resolved **N+1 Query Problem** in `BackendVocabularyRepository.sync()` using batch inserts and mapping extensions.
+    - Optimized `DashboardViewModel` by introducing `getReviewCount()` to avoid loading full vocabulary lists for stats.
     - Standardized `WordStatus` usage across the data layer, replacing string-based maps with type-safe `Map<WordStatus, Long>`.
+    - Fixed naming convention in `YtdlpClient` using `@SerialName` for `webpageUrl`.
 
 ### Fixed
 - **ViewModel Robustness:** Fixed a critical bug in `PlayerViewModel` where `isLoading` would get stuck in `true` if content was not found.
 - **Sync Honesty:** Replaced the "lying stub" `sync()` on the client with a proper `NotImplementedError` to prevent silent synchronization failures.
 - **Deterministic IDs:** Updated `SrtParser` to generate deterministic subtitle IDs based on content and timestamps, ensuring database integrity across re-parses.
+- **Mock Accuracy:** Fixed `MockLinguisticAssistant` to return more realistic lemma data during development.
 
 ### Added (Previous)
 - **Backend Persistence:** Implemented real data storage using **Exposed ORM** and SQLite for users and vocabulary sync.

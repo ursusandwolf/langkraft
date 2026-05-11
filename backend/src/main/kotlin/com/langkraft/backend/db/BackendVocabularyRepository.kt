@@ -7,7 +7,11 @@ import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.statements.UpdateBuilder
 import org.jetbrains.exposed.sql.transactions.transaction
 
-class BackendVocabularyRepository {
+interface VocabularySyncRepository {
+    fun sync(userId: String, clientChanges: List<VocabularyWord>, lastSyncTimestamp: Long): List<VocabularyWord>
+}
+
+class BackendVocabularyRepository : VocabularySyncRepository {
 
     private fun UpdateBuilder<*>.applyWord(word: VocabularyWord, userId: String) {
         this[VocabularySync.userId] = userId

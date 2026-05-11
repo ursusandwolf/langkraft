@@ -24,12 +24,14 @@ class PlayerViewModel(
     private val contentRepository: LocalContentRepository,
     private val audioDownloader: AudioDownloader,
     private val vocabularyRepository: VocabularyRepository,
-    private val linguisticAssistant: LinguisticAssistant,
+    linguisticAssistant: LinguisticAssistant,
     private val audioPlayer: AudioPlayer,
     private val fileSystem: FileSystem
 ) : BaseViewModel() {
     private val _state = MutableStateFlow(PlayerState())
     val state: StateFlow<PlayerState> = _state.asStateFlow()
+
+    private val linguisticDelegate = PlayerLinguisticDelegate(linguisticAssistant, scope, _state)
 
     fun onEvent(event: PlayerEvent) {
         when (event) {
@@ -51,19 +53,19 @@ class PlayerViewModel(
                 _state.update { it.copy(currentTimeMs = event.timeMs) }
             }
             is PlayerEvent.WordClicked -> {
-                handleWordClicked(event.word, event.line)
+                linguisticDelegate.handleWordClicked(event.word, event.line)
             }
             is PlayerEvent.DeepAnalysisClicked -> {
-                handleDeepAnalysis(event.line)
+                linguisticDelegate.handleDeepAnalysis(event.line)
             }
             is PlayerEvent.MemorizationClicked -> {
                 _state.update { it.copy(memorizationText = event.text) }
             }
             is PlayerEvent.ToggleTranslation -> {
-                handleToggleTranslation(event.line)
+                linguisticDelegate.handleToggleTranslation(event.line)
             }
             is PlayerEvent.ToggleLemmatization -> {
-                handleToggleLemmatization(event.line)
+                linguisticDelegate.handleToggleLemmatization(event.line)
             }
             is PlayerEvent.DismissWordDetails -> {
                 _state.update { it.copy(selectedWord = null, wordTranslation = null) }
@@ -73,75 +75,6 @@ class PlayerViewModel(
             }
             is PlayerEvent.DismissMemorization -> {
                 _state.update { it.copy(memorizationText = null) }
-            }
-        }
-    }
-
-    private fun handleWordClicked(word: String, line: SubtitleLine) {
-        _state.update { it.copy(selectedWord = word, selectedWordContext = line, isTranslatingWord = true) }
-        scope.launch {
-            try {
-                val result = linguisticAssistant.translateWord(word, line.textDe)
-                _state.update { it.copy(wordTranslation = result, isTranslatingWord = false) }
-            } catch (e: Exception) {
-                _state.update { it.copy(isTranslatingWord = false, error = e.message) }
-            }
-        }
-    }
-
-    private fun handleDeepAnalysis(line: SubtitleLine) {
-        _state.update { it.copy(isAnalyzing = true) }
-        scope.launch {
-            try {
-                val result = linguisticAssistant.analyzeSentence(line.textDe)
-                _state.update { it.copy(deepAnalysis = result, isAnalyzing = false) }
-            } catch (e: Exception) {
-                _state.update { it.copy(isAnalyzing = false, error = e.message) }
-            }
-        }
-    }
-
-    private fun handleToggleLemmatization(line: SubtitleLine) {
-        val current = _state.value.lemmatizedSentences[line.id]
-        if (current != null) {
-            _state.update { it.copy(lemmatizedSentences = it.lemmatizedSentences - line.id) }
-        } else {
-            _state.update { it.copy(lemmatizingSentenceId = line.id) }
-            scope.launch {
-                try {
-                    val result = linguisticAssistant.analyzeSentence(line.textDe)
-                    val lemmas = result.words.associate { it.original to it.lemma }
-                    _state.update { 
-                        it.copy(
-                            lemmatizedSentences = it.lemmatizedSentences + (line.id to lemmas),
-                            lemmatizingSentenceId = null
-                        ) 
-                    }
-                } catch (e: Exception) {
-                    _state.update { it.copy(lemmatizingSentenceId = null, error = e.message) }
-                }
-            }
-        }
-    }
-
-    private fun handleToggleTranslation(line: SubtitleLine) {
-        val current = _state.value.sentenceTranslations[line.id]
-        if (current != null) {
-            _state.update { it.copy(sentenceTranslations = it.sentenceTranslations - line.id) }
-        } else {
-            _state.update { it.copy(analyzingSentenceId = line.id) }
-            scope.launch {
-                try {
-                    val translation = linguisticAssistant.translateSentence(line.textDe)
-                    _state.update { 
-                        it.copy(
-                            sentenceTranslations = it.sentenceTranslations + (line.id to translation),
-                            analyzingSentenceId = null
-                        ) 
-                    }
-                } catch (e: Exception) {
-                    _state.update { it.copy(analyzingSentenceId = null, error = e.message) }
-                }
             }
         }
     }

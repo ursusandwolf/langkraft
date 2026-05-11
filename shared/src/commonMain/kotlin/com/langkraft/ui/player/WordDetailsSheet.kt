@@ -59,7 +59,7 @@ fun WordDetailsSheet(
         Spacer(modifier = Modifier.height(16.dp))
         
         Text(text = "Context:", style = MaterialTheme.typography.overline)
-        Text(text = contextLine?.textDe ?: "", style = MaterialTheme.typography.body1)
+        Text(text = contextLine?.originalText ?: "", style = MaterialTheme.typography.body1)
         
         Spacer(modifier = Modifier.height(16.dp))
         
@@ -84,7 +84,7 @@ fun WordDetailsSheet(
                         word = word,
                         lemma = result.lemma,
                         translation = result.translation,
-                        contextSentence = contextLine.textDe,
+                        contextSentence = contextLine.originalText,
                         contentId = contextLine.contentId,
                         subtitleLineId = contextLine.id
                     ))

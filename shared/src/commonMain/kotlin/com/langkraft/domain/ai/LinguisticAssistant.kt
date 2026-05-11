@@ -65,7 +65,7 @@ data class TextChange(
  */
 class MockLinguisticAssistant : LinguisticAssistant {
     override suspend fun translateWord(word: String, context: String): TranslationResult {
-        return TranslationResult("Translation of '$word'", word.lowercase(), "Noun")
+        return TranslationResult("Translation of '$word'", word, "Noun")
     }
 
     override suspend fun translateSentence(text: String): String {

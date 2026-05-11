@@ -39,16 +39,16 @@ class DashboardViewModel(
         combine(
             contentRepository.getImmersionStats(),
             vocabularyRepository.getWordCountsByStatus(),
-            vocabularyRepository.getWordsToReview(),
+            vocabularyRepository.getReviewCount(),
             vocabularyRepository.getWordsAddedSince(oneWeekAgo)
-        ) { immersion, counts, reviews, recent ->
+        ) { immersion, counts, reviewCount, recent ->
             DashboardState(
                 totalContent = immersion.totalContent,
                 totalImmersionSeconds = immersion.totalDurationSeconds,
                 wordsMastered = counts[WordStatus.MASTERED] ?: 0,
                 wordsLearning = counts[WordStatus.LEARNING] ?: 0,
                 wordsNew = counts[WordStatus.NEW] ?: 0,
-                wordsToReviewToday = reviews.size,
+                wordsToReviewToday = reviewCount,
                 wordsAddedThisWeek = recent
             )
         }.onEach { newState ->

@@ -77,7 +77,7 @@ fun Route.apiRoutes() {
     val ingestionService by inject<YouTubeIngestionService>()
     val aiAssistant by inject<LinguisticAssistant>()
     val userRepository by inject<BackendUserRepository>()
-    val vocabularyRepository by inject<BackendVocabularyRepository>()
+    val vocabularyRepository by inject<VocabularySyncRepository>()
 
     authenticate("auth-jwt") {
         route("/api") {

@@ -49,6 +49,7 @@ Uses **Google Gemini 1.5 Flash** for linguistic tasks. Implementation features:
 
 The project uses **Compose Multiplatform** for the UI and a custom `BaseViewModel` for state management.
 - **`BaseViewModel`**: Manages a `CoroutineScope` tied to the lifecycle of the ViewModel.
+- **Delegate Pattern**: Complex ViewModels like `PlayerViewModel` delegate specific responsibilities (e.g., AI linguistic analysis) to specialized delegates like `PlayerLinguisticDelegate`.
 - **Koin DI**: Used for dependency injection in the shared module. Initialized via `initKoin`.
 
 ## Learning Methodology
