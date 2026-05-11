@@ -1,12 +1,14 @@
 package com.langkraft.backend
 
 import com.langkraft.domain.model.SubtitleLine
+import org.slf4j.LoggerFactory
 import java.util.UUID
 
 /**
  * A simple SRT parser to convert raw subtitle files into Domain models.
  */
 object SrtParser {
+    private val logger = LoggerFactory.getLogger(SrtParser::class.java)
     private val BLOCK_SEPARATOR = Regex("(\\r?\\n){2,}")
     private val TIMESTAMP_PATTERN = Regex("(\\d{2}:)?\\d{2}:\\d{2}[,. ]\\d{3} --> (\\d{2}:)?\\d{2}:\\d{2}[,. ]\\d{3}")
 
@@ -27,8 +29,8 @@ object SrtParser {
             
             val (startStr, endStr) = timeLine.split(" --> ").let { it[0] to it[1] }
             
-            val startMs = parseTimestamp(startStr)
-            val endMs = parseTimestamp(endStr)
+            val startMs = parseTimestamp(startStr) ?: return@mapNotNull null
+            val endMs = parseTimestamp(endStr) ?: return@mapNotNull null
             
             // Text is everything after the timestamp line in this block
             val timeLineIndex = lines.indexOfFirst { it.contains(" --> ") }
@@ -46,7 +48,7 @@ object SrtParser {
         }
     }
 
-    private fun parseTimestamp(timestamp: String): Long {
+    private fun parseTimestamp(timestamp: String): Long? {
         val cleaned = timestamp.replace(",", ".").replace(" ", "").trim()
         val parts = cleaned.split(":")
         
@@ -69,13 +71,14 @@ object SrtParser {
                     
                     minutes * 60_000 + seconds * 1_000 + millis
                 }
-                else -> 0L
+                else -> {
+                    logger.warn("Unknown timestamp format: $timestamp")
+                    null
+                }
             }
-        } catch (e: NumberFormatException) {
-            // Log if we had a logger here, but avoid returning 0 on critical failures
-            0L
         } catch (e: Exception) {
-            0L
+            logger.error("Failed to parse timestamp: $timestamp", e)
+            null
         }
     }
 

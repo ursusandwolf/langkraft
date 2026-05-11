@@ -1,5 +1,6 @@
 package com.langkraft.backend.ai
 
+import com.langkraft.backend.AiException
 import com.langkraft.domain.ai.LinguisticAssistant
 import com.langkraft.domain.ai.TranslationResult
 import com.langkraft.domain.ai.DeepAnalysisResult
@@ -69,19 +70,27 @@ class GeminiLinguisticAssistant(
         val text = rawResponse.candidates.firstOrNull()?.content?.parts?.firstOrNull()?.text
             ?.replace("```json", "")
             ?.replace("```", "")
-            ?.trim() ?: throw Exception("Gemini returned empty response")
+            ?.trim() ?: throw AiException("Gemini returned empty response")
         
-        return jsonIgnoreUnknown.decodeFromString(text)
+        return try {
+            jsonIgnoreUnknown.decodeFromString(text)
+        } catch (e: Exception) {
+            throw AiException("Failed to parse Gemini response: $text", e)
+        }
     }
 
     private suspend fun callGeminiRaw(prompt: String): GeminiResponse {
-        val response = httpClient.post("$baseUrl?key=$apiKey") {
-            contentType(ContentType.Application.Json)
-            setBody(GeminiRequest(listOf(GeminiContent(listOf(GeminiPart(prompt))))))
+        val response = try {
+            httpClient.post("$baseUrl?key=$apiKey") {
+                contentType(ContentType.Application.Json)
+                setBody(GeminiRequest(listOf(GeminiContent(listOf(GeminiPart(prompt))))))
+            }
+        } catch (e: Exception) {
+            throw AiException("Failed to call Gemini API", e)
         }
 
         if (!response.status.isSuccess()) {
-            throw Exception("Gemini API error: ${response.bodyAsText()}")
+            throw AiException("Gemini API error: ${response.bodyAsText()}")
         }
 
         return response.body()

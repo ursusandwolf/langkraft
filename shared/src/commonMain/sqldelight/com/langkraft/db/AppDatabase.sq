@@ -6,7 +6,8 @@ CREATE TABLE Content (
     localAudioPath TEXT,            -- Local path for offline mode
     sourceUrl TEXT NOT NULL,        -- Original YouTube URL
     durationSeconds INTEGER NOT NULL DEFAULT 0,
-    createdAt INTEGER NOT NULL      -- Timestamp
+    createdAt INTEGER NOT NULL,     -- Timestamp
+    downloadStatus TEXT NOT NULL DEFAULT 'IDLE'
 );
 
 -- Table for subtitle lines/cues
@@ -45,9 +46,15 @@ CREATE TABLE Vocabulary (
 selectAllContent:
 SELECT * FROM Content ORDER BY createdAt DESC;
 
+selectContentById:
+SELECT * FROM Content WHERE id = ?;
+
 insertContent:
-INSERT OR REPLACE INTO Content(id, title, audioUrl, localAudioPath, sourceUrl, durationSeconds, createdAt)
-VALUES (?, ?, ?, ?, ?, ?, ?);
+INSERT OR REPLACE INTO Content(id, title, audioUrl, localAudioPath, sourceUrl, durationSeconds, createdAt, downloadStatus)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+deleteContent:
+DELETE FROM Content WHERE id = ?;
 
 selectSubtitlesForContent:
 SELECT * FROM SubtitleLine WHERE contentId = ? ORDER BY startMs ASC;
@@ -56,9 +63,15 @@ insertSubtitleLine:
 INSERT OR REPLACE INTO SubtitleLine(id, contentId, startMs, endMs, textDe, textEn)
 VALUES (?, ?, ?, ?, ?, ?);
 
+deleteSubtitlesByContentId:
+DELETE FROM SubtitleLine WHERE contentId = ?;
+
 upsertWord:
 INSERT OR REPLACE INTO Vocabulary(id, word, lemma, translation, contextSentence, contentId, subtitleLineId, addedAt, status)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+deleteWord:
+DELETE FROM Vocabulary WHERE id = ?;
 
 selectVocabularyToReview:
 SELECT * FROM Vocabulary WHERE nextReviewAt <= ? OR nextReviewAt IS NULL ORDER BY nextReviewAt ASC;
@@ -72,5 +85,10 @@ SELECT COUNT(*) AS totalContent, SUM(durationSeconds) AS totalDurationSeconds FR
 getWordsAddedRecently:
 SELECT COUNT(*) FROM Vocabulary WHERE addedAt >= ?;
 
-updateLocalAudioPath:
-UPDATE Content SET localAudioPath = ? WHERE id = ?;
+updateDownloadStatus:
+UPDATE Content SET downloadStatus = ?, localAudioPath = ? WHERE id = ?;
+
+-- Indexes for performance
+CREATE INDEX IF NOT EXISTS idx_subtitle_content_id ON SubtitleLine(contentId);
+CREATE INDEX IF NOT EXISTS idx_vocabulary_review ON Vocabulary(nextReviewAt);
+CREATE INDEX IF NOT EXISTS idx_content_created_at ON Content(createdAt);

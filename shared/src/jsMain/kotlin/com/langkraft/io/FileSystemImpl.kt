@@ -5,4 +5,5 @@ actual class FileSystemImpl : FileSystem {
     actual override fun exists(path: String): Boolean = false
     actual override fun delete(path: String) {}
     actual override fun writeBytes(path: String, bytes: ByteArray) {}
-}
+    actual override fun resolve(base: String, child: String): String = "$base/$child"
+    }

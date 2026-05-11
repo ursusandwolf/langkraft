@@ -41,7 +41,7 @@ class SqlDelightVocabularyRepository(
     }
 
     override suspend fun deleteWord(id: String) {
-        // Implementation for deletion query would be needed in .sq
+        db.appDatabaseQueries.deleteWord(id)
     }
 
     override fun getWordCountsByStatus(): Flow<Map<String, Long>> {
@@ -49,7 +49,7 @@ class SqlDelightVocabularyRepository(
             .asFlow()
             .mapToList(Dispatchers.Default)
             .map { list ->
-                list.associate { (it.status ?: "NEW") to it.count }
+                list.associate { it.status to it.count }
             }
     }
 
@@ -57,7 +57,6 @@ class SqlDelightVocabularyRepository(
         return db.appDatabaseQueries.getWordsAddedRecently(timestamp)
             .asFlow()
             .mapToOne(Dispatchers.Default)
-            .map { it ?: 0L }
     }
 
     private fun com.langkraft.db.Vocabulary.toDomain(): VocabularyWord {
@@ -66,14 +65,14 @@ class SqlDelightVocabularyRepository(
             word = word,
             lemma = lemma,
             translation = translation,
-            contextSentence = contextSentence,
+            contextSentence = contextSentence ?: "",
             contentId = contentId,
             subtitleLineId = subtitleLineId,
-            addedAt = addedAt ?: 0L,
+            addedAt = addedAt,
             nextReviewMs = nextReviewAt ?: 0L,
             intervalDays = intervalDays.toInt(),
             easeFactor = easeFactor,
-            status = WordStatus.valueOf(status ?: "NEW")
+            status = WordStatus.valueOf(status)
         )
     }
 }

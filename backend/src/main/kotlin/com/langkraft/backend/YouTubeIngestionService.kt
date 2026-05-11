@@ -17,15 +17,15 @@ class YouTubeIngestionService(
         logger.info("Starting ingestion process for URL: $url")
         // 1. Get info
         val info = ytdlpClient.getVideoInfo(url)
-        val videoId = info.id ?: throw RuntimeException("Could not determine video ID")
+        val videoId = info.id ?: throw IngestionException("Could not determine video ID")
 
         // 2. Download files
         logger.info("Video ID determined: $videoId. Downloading content...")
         val files = ytdlpClient.downloadContent(url, videoId)
         val audioFile = files.find { it.extension == "opus" } 
-            ?: throw RuntimeException("Audio file missing")
+            ?: throw IngestionException("Audio file missing")
         val srtFile = files.find { it.extension == "srt" }
-            ?: throw RuntimeException("Subtitles file missing")
+            ?: throw IngestionException("Subtitles file missing")
 
         // 3. Parse Subtitles
         logger.info("Parsing subtitles for $videoId...")

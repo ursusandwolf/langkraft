@@ -21,7 +21,6 @@ data class PlayerState(
     val sentenceTranslations: Map<String, String> = emptyMap(), // subtitle line id -> translation
     val analyzingSentenceId: String? = null,
     val memorizationText: String? = null,
-    val isDownloading: Boolean = false,
     val error: String? = null
 )
 

@@ -21,4 +21,8 @@ actual class FileSystemImpl : FileSystem {
     actual override fun writeBytes(path: String, bytes: ByteArray) {
         File(path).writeBytes(bytes)
     }
-}
+
+    actual override fun resolve(base: String, child: String): String {
+        return File(base, child).absolutePath
+    }
+    }

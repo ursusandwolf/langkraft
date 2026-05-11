@@ -8,8 +8,21 @@ data class ImmersionContent(
     val sourceUrl: String,
     val durationSeconds: Long,
     val subtitles: List<SubtitleLine> = emptyList(),
-    val waveform: List<Float> = emptyList() // Normalized amplitudes [0.0 - 1.0]
-)
+    val waveform: List<Float> = emptyList(), // Normalized amplitudes [0.0 - 1.0]
+    val downloadStatus: DownloadStatus = DownloadStatus.IDLE
+) {
+    fun getPlaybackUrl(): String {
+        return if (downloadStatus == DownloadStatus.COMPLETED && localAudioPath != null) {
+            localAudioPath
+        } else {
+            audioUrl
+        }
+    }
+}
+
+enum class DownloadStatus {
+    IDLE, DOWNLOADING, COMPLETED, ERROR
+}
 
 data class SubtitleLine(
     val id: String,

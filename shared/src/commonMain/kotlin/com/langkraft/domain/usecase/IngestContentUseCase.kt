@@ -14,16 +14,11 @@ class IngestContentUseCase(
         // 1. Fetch metadata and links from Backend
         val remoteContent = contentRepository.fetchFromYouTube(youtubeUrl)
         
-        // 2. Save initial structure to Local DB
+        // 2. Save initial structure to Local DB (Status: IDLE)
         contentRepository.saveContent(remoteContent)
         
-        // 3. Start background download of audio for offline access
-        val localPath = contentRepository.downloadAudio(remoteContent)
-        
-        // 4. Update content with local path
-        val updatedContent = remoteContent.copy(localAudioPath = localPath)
-        contentRepository.saveContent(updatedContent)
-        
-        updatedContent
+        // 3. We return here. The UI (ViewModel) will decide when to trigger downloadAudio.
+        // This prevents blocking the whole ingestion flow on a large file download.
+        remoteContent
     }
 }

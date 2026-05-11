@@ -13,9 +13,9 @@ The app follows a specific language acquisition methodology:
 6. **Memorization:** Features to help internalize corrected prose.
 
 ## Current State
-- **Data Layer:** SQLDelight schema implemented (Content, Subtitles, Vocabulary). Analytical queries for Dashboard added.
+- **Data Layer:** SQLDelight schema implemented. Repositories refined with better null-safety and clean mappings.
 - **Domain Layer:** Core models and UseCases defined. Repositories support statistics and offline synchronization.
-- **Backend:** Ktor server refactored for robustness. `YtdlpClient` isolated for better process management. JSON API with DTOs.
+- **Backend:** Ktor server refactored with Koin DI, `suspend` yt-dlp client, and structured routing with global exception handling.
 - **AI Integration:** Google Gemini integration for contextual translations, deep grammatical analysis, and text correction.
 - **Immersion Tools:** "Repeat Loop Mode" and "Prose Memorization Tool" fully integrated into the Writing/Correction flow.
 - **Learning Experience:** SRS Engine and Dashboard with real-time statistics (Hours, Mastery, Reviews).

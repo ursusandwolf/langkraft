@@ -15,8 +15,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.langkraft.domain.model.DownloadStatus
 import com.langkraft.domain.model.SubtitleLine
 import com.langkraft.domain.ai.DeepAnalysisResult
 import com.langkraft.ui.components.WaveformVisualizer
@@ -48,15 +50,32 @@ fun ImmersionPlayerView(
                 title = { Text(state.content?.title ?: "Langkraft") },
                 actions = {
                     IconButton(onClick = { viewModel.onEvent(PlayerEvent.ToggleOffline) }) {
-                        if (state.isDownloading) {
-                            CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
-                        } else {
-                            val isDownloaded = state.content?.localAudioPath != null
-                            Icon(
-                                if (isDownloaded) Icons.Default.CheckCircle else Icons.Default.KeyboardArrowDown,
-                                contentDescription = "Offline",
-                                tint = if (isDownloaded) Color(0xFF4CAF50) else Color.White
-                            )
+                        val status = state.content?.downloadStatus ?: DownloadStatus.IDLE
+                        when (status) {
+                            DownloadStatus.DOWNLOADING -> {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
+                            }
+                            DownloadStatus.COMPLETED -> {
+                                Icon(
+                                    Icons.Default.CheckCircle,
+                                    contentDescription = "Downloaded",
+                                    tint = Color(0xFF4CAF50)
+                                )
+                            }
+                            DownloadStatus.ERROR -> {
+                                Icon(
+                                    Icons.Default.Warning,
+                                    contentDescription = "Error",
+                                    tint = Color.Red
+                                )
+                            }
+                            DownloadStatus.IDLE -> {
+                                Icon(
+                                    Icons.Default.KeyboardArrowDown,
+                                    contentDescription = "Download",
+                                    tint = Color.White
+                                )
+                            }
                         }
                     }
                 }
@@ -101,12 +120,12 @@ fun ImmersionPlayerView(
                                     line = line,
                                     isCurrent = state.currentTimeMs in line.startMs..line.endMs,
                                     translation = state.sentenceTranslations[line.id],
-                                    isTranslating = state.analyzingSentenceId == line.id,
+                                    isAnalyzing = state.analyzingSentenceId == line.id,
                                     onClick = { viewModel.onEvent(PlayerEvent.SeekTo(line.startMs)) },
-                                    onWordClick = { word -> viewModel.onEvent(PlayerEvent.WordClicked(word, line)) },
+                                    onWordClick = { viewModel.onEvent(PlayerEvent.WordClicked(it, line)) },
                                     onTranslateClick = { viewModel.onEvent(PlayerEvent.ToggleTranslation(line)) },
-                                    onAnalyzeClick = { viewModel.onEvent(PlayerEvent.DeepAnalysisClicked(line)) },
-                                    onMemorizeClick = { viewModel.onEvent(PlayerEvent.MemorizationClicked(line.textDe)) }
+                                    onAnalysisClick = { viewModel.onEvent(PlayerEvent.DeepAnalysisClicked(line)) },
+                                    onMemorizationClick = { viewModel.onEvent(PlayerEvent.MemorizationClicked(line.textDe)) }
                                 )
                             }
                         }
@@ -162,6 +181,19 @@ fun ImmersionPlayerView(
                     CircularProgressIndicator(modifier = Modifier.wrapContentSize())
                 }
             }
+
+            state.error?.let { message ->
+                Snackbar(
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
+                    action = {
+                        TextButton(onClick = { /* Clear error */ }) {
+                            Text("OK", color = Color.Yellow)
+                        }
+                    }
+                ) {
+                    Text(message)
+                }
+            }
         }
     }
 }
@@ -171,12 +203,12 @@ fun SubtitleRow(
     line: SubtitleLine,
     isCurrent: Boolean,
     translation: String?,
-    isTranslating: Boolean,
+    isAnalyzing: Boolean,
     onClick: () -> Unit,
     onWordClick: (String) -> Unit,
     onTranslateClick: () -> Unit,
-    onAnalyzeClick: () -> Unit,
-    onMemorizeClick: () -> Unit
+    onAnalysisClick: () -> Unit,
+    onMemorizationClick: () -> Unit
 ) {
     val backgroundColor by animateColorAsState(
         if (isCurrent) MaterialTheme.colors.primary.copy(alpha = 0.15f)
@@ -207,15 +239,15 @@ fun SubtitleRow(
 
             Row {
                 IconButton(onClick = onTranslateClick, modifier = Modifier.size(24.dp)) {
-                    if (isTranslating) CircularProgressIndicator(modifier = Modifier.size(16.dp))
+                    if (isAnalyzing) CircularProgressIndicator(modifier = Modifier.size(16.dp))
                     else Text("文", style = MaterialTheme.typography.body2) 
                 }
                 Spacer(modifier = Modifier.width(8.dp))
-                IconButton(onClick = onAnalyzeClick, modifier = Modifier.size(24.dp)) {
+                IconButton(onClick = onAnalysisClick, modifier = Modifier.size(24.dp)) {
                     Text("⚙", style = MaterialTheme.typography.body2) 
                 }
                 Spacer(modifier = Modifier.width(8.dp))
-                IconButton(onClick = onMemorizeClick, modifier = Modifier.size(24.dp)) {
+                IconButton(onClick = onMemorizationClick, modifier = Modifier.size(24.dp)) {
                     Text("🧠", style = MaterialTheme.typography.body2) 
                 }
             }

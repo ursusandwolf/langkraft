@@ -6,19 +6,26 @@ The backend is built with **Ktor** and is responsible for content ingestion and 
 
 ### Components
 
-- **`Application.kt`**: The Ktor server entry point. Defines routes:
-    - `POST /api/ingest?url={url}`: Triggers the ingestion process.
-    - `GET /api/media/{file}`: Serves downloaded audio files and subtitles.
-- **`YouTubeIngestionService`**: Orchestrates `yt-dlp` to download audio (Opus format), subtitles (SRT/VTT), and metadata.
-- **`SrtParser`**: Parses SRT and VTT files into the shared `SubtitleLine` domain model.
+- **`Application.kt`**: The server entry point. Uses **Koin** for dependency injection and **StatusPages** for global exception handling.
+- **`Routing.kt`**: Modular routing configuration. All API endpoints are prefixed with `/api`.
+- **`YtdlpClient`**: A `suspend`-friendly wrapper around `yt-dlp`. Executes long-running processes on `Dispatchers.IO`.
+- **`YouTubeIngestionService`**: Orchestrates content fetching and metadata extraction.
+- **`SrtParser`**: Robust SRT/VTT parser with strict timestamp validation.
 
-### Ingestion Flow
+## Data Layer & IO
 
-1. User provides a YouTube URL.
-2. `YouTubeIngestionService` calls `yt-dlp` with `--extract-audio`, `--write-auto-sub`, and `--write-info-json`.
-3. Metadata is extracted from the generated `.info.json`.
-4. Subtitles are parsed by `SrtParser`.
-5. An `ImmersionContent` object is returned with URLs pointing to the Ktor media endpoints.
+- **SQLDelight**: Local SQLite persistence with optimized indexes for subtitles and vocabulary review.
+- **Repositories**: 
+    - `SqlDelightContentRepository`: Manages media content and offline synchronization.
+    - `SqlDelightVocabularyRepository`: Manages words and SRS state.
+- **`FileSystem`**: A multiplatform abstraction for file operations. Supports platform-safe path resolution via `resolve(base, child)`.
+
+## Offline Synchronization
+
+The app implements a robust offline-first strategy:
+1. **Metadata Ingestion:** Metadata and subtitles are saved immediately upon import.
+2. **Safe Download:** Audio is downloaded as a `.part` file. Upon completion, it is moved to the final destination and the `DownloadStatus` is updated to `COMPLETED`.
+3. **Playback Resolution:** The `ImmersionContent.getPlaybackUrl()` method automatically prefers local files if the download is successful and the file exists.
 
 ### Setup
 

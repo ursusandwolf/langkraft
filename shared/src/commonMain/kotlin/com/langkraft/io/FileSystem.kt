@@ -5,6 +5,7 @@ interface FileSystem {
     fun exists(path: String): Boolean
     fun delete(path: String)
     fun writeBytes(path: String, bytes: ByteArray)
+    fun resolve(base: String, child: String): String
 }
 
 expect class FileSystemImpl() : FileSystem {
@@ -12,4 +13,5 @@ expect class FileSystemImpl() : FileSystem {
     override fun exists(path: String): Boolean
     override fun delete(path: String)
     override fun writeBytes(path: String, bytes: ByteArray)
+    override fun resolve(base: String, child: String): String
 }

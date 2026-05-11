@@ -13,6 +13,7 @@ import com.langkraft.ui.BaseViewModel
 
 import com.langkraft.domain.repository.VocabularyRepository
 import com.langkraft.domain.ai.LinguisticAssistant
+import com.langkraft.domain.model.DownloadStatus
 import com.langkraft.domain.model.VocabularyWord
 import com.langkraft.domain.model.SubtitleLine
 import com.langkraft.io.FileSystem
@@ -126,16 +127,19 @@ class PlayerViewModel(
 
     private fun handleToggleOffline() {
         val currentContent = _state.value.content ?: return
+        if (currentContent.downloadStatus == DownloadStatus.DOWNLOADING) return
+
         scope.launch {
-            if (currentContent.localAudioPath == null) {
-                _state.update { it.copy(isDownloading = true) }
-                try {
-                    val localPath = contentRepository.downloadAudio(currentContent)
-                    val updatedContent = currentContent.copy(localAudioPath = localPath)
-                    _state.update { it.copy(content = updatedContent, isDownloading = false) }
-                } catch (e: Exception) {
-                    _state.update { it.copy(isDownloading = false, error = "Download failed: ${e.message}") }
+            try {
+                contentRepository.downloadAudio(currentContent)
+                // The repository updates the DB, and since we might be observing it (or we just reload)
+                // For now, let's manually refresh the content in state
+                val updated = contentRepository.getContentById(currentContent.id)
+                if (updated != null) {
+                    _state.update { it.copy(content = updated) }
                 }
+            } catch (e: Exception) {
+                _state.update { it.copy(error = "Download failed: ${e.message}") }
             }
         }
     }
@@ -146,13 +150,7 @@ class PlayerViewModel(
             val content = contentRepository.getContentById(id) ?: return@launch
             _state.update { it.copy(isLoading = false, content = content) }
             
-            // Prefer local file if available
-            val audioUrl = if (content.localAudioPath != null && fileSystem.exists(content.localAudioPath)) {
-                content.localAudioPath
-            } else {
-                content.audioUrl
-            }
-            audioPlayer.load(audioUrl)
+            audioPlayer.load(content.getPlaybackUrl())
         }
     }
     

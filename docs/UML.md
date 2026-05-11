@@ -1,27 +1,30 @@
 # UML Diagrams
 
-## Backend Ingestion Pattern
+## Backend Architecture (Refactored)
 
 ```mermaid
 classDiagram
     class Application {
-        +main()
         +module()
+    }
+    class Routing {
+        +apiRoutes(Route)
     }
     class YouTubeIngestionService {
         +ingest(url: String) ImmersionContent
     }
-    class SrtParser {
-        +parse(contentId: String, content: String) List~SubtitleLine~
+    class YtdlpClient {
+        +getVideoInfo(url: String) YtdlpInfo
+        +downloadContent(url, videoId) List~File~
     }
-    class YtdlpLauncher {
-        <<external>>
-        +execute(request: YtdlpRequest) YtdlpResponse
+    class SrtParser {
+        +parse(contentId, content) List~SubtitleLine~
     }
 
-    Application --> YouTubeIngestionService
+    Application --> Routing
+    Routing --> YouTubeIngestionService
+    YouTubeIngestionService --> YtdlpClient
     YouTubeIngestionService --> SrtParser
-    YouTubeIngestionService --> YtdlpLauncher
 ```
 
 ## Domain Model Relationships
@@ -32,7 +35,16 @@ classDiagram
         +String id
         +String title
         +String audioUrl
-        +List~SubtitleLine~ subtitles
+        +String localAudioPath
+        +DownloadStatus downloadStatus
+        +getPlaybackUrl() String
+    }
+    class DownloadStatus {
+        <<enumeration>>
+        IDLE
+        DOWNLOADING
+        COMPLETED
+        ERROR
     }
     class SubtitleLine {
         +String id
@@ -48,17 +60,10 @@ classDiagram
         +String contextSentence
         +Long nextReviewMs
         +Double easeFactor
-    }
-    class SrsEngine {
-        +calculateNextReview(word, quality) VocabularyWord
-    }
-    class GeminiLinguisticAssistant {
-        +analyzeSentence(text) DeepAnalysisResult
-        +translateWord(word, context) TranslationResult
+        +WordStatus status
     }
 
     ImmersionContent "1" *-- "many" SubtitleLine
+    ImmersionContent --> DownloadStatus
     VocabularyWord ..> SubtitleLine : context
-    SrsEngine ..> VocabularyWord : updates
-    GeminiLinguisticAssistant ..> VocabularyWord : provides info
 ```
