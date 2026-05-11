@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 ### Added
+- **Langkraft Design System:** New theme with "German Immersion" aesthetics (Midnight Blue & Amber palette).
+- **Dark Mode Support:** Full support for dark theme across all components.
 - **Enhanced AI Correction:** Improved pedagogical explanations and stylistic suggestions for "Active Writing".
 - **Polished Writing UI:** Redesigned `WritingView` with better typography, card-based results, and "Clear" input capability.
 - **Deep Analysis Mode:** Enhanced AI-driven grammatical breakdown with German-specific insights (cases, verb forms, syntax).

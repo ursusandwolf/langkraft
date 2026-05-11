@@ -24,14 +24,14 @@
 - [x] **Repeat Loop Mode:** Easy toggle to loop a specific audio/subtitle segment for "Deep Listening"
 - [x] **Prose Memorization Tool:** Hidden-text mode for practicing memorized fragments
 - [x] **Active Output:** Simple text editor to write summaries of listened content
-- [ ] Progress tracking dashboard (listening hours, sentences mastered)
-- [ ] Offline synchronization for Android
+- [x] Progress tracking dashboard (listening hours, sentences mastered)
+- [x] Offline synchronization for Android
 
 ## Phase 5: UI/UX Polishing
 - [x] Content selection screen (URL input, library)
-- [ ] Theming and design system (German immersion aesthetics)
-- [ ] Waveform visualization for audio
-- [ ] Speed control (0.75x, 1x, 1.25x)
+- [x] Theming and design system (German immersion aesthetics)
+- [x] Waveform visualization for audio
+- [x] Speed control (0.75x, 1x, 1.25x)
 
 ## Phase 6: Release & Scale
 - [ ] Android APK/Bundle build
