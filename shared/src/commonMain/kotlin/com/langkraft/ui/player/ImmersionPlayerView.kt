@@ -3,44 +3,23 @@ package com.langkraft.ui.player
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.item
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material.AlertDialog
-import androidx.compose.material.Button
-import androidx.compose.material.CircularProgressIndicator
-import androidx.compose.material.Divider
-import androidx.compose.material.IconButton
-import androidx.compose.material.MaterialTheme
-import androidx.compose.material.Scaffold
-import androidx.compose.material.Surface
-import androidx.compose.material.Text
-import androidx.compose.material.TopAppBar
-import androidx.compose.material.rememberScaffoldState
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.langkraft.domain.model.SubtitleLine
-
-import androidx.compose.foundation.shape.RoundedCornerShape
 import com.langkraft.domain.ai.DeepAnalysisResult
+import com.langkraft.ui.components.WaveformVisualizer
 
 @Composable
 fun ImmersionPlayerView(
@@ -65,7 +44,23 @@ fun ImmersionPlayerView(
     Scaffold(
         scaffoldState = scaffoldState,
         topBar = {
-            TopAppBar(title = { Text(state.content?.title ?: "Langkraft") })
+            TopAppBar(
+                title = { Text(state.content?.title ?: "Langkraft") },
+                actions = {
+                    IconButton(onClick = { viewModel.onEvent(PlayerEvent.ToggleOffline) }) {
+                        if (state.isDownloading) {
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
+                        } else {
+                            val isDownloaded = state.content?.localAudioPath != null
+                            Icon(
+                                if (isDownloaded) Icons.Default.CheckCircle else Icons.Default.KeyboardArrowDown,
+                                contentDescription = "Offline",
+                                tint = if (isDownloaded) Color(0xFF4CAF50) else Color.White
+                            )
+                        }
+                    }
+                }
+            )
         },
         bottomBar = {
             PlayerControlBar(
@@ -79,32 +74,47 @@ fun ImmersionPlayerView(
         }
     ) { padding ->
         Box(modifier = modifier.padding(padding)) {
-            if (state.isLoading) {
-                CircularProgressIndicator(modifier = Modifier.fillMaxSize().wrapContentSize())
-            } else {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    state.content?.subtitles?.let { subtitles ->
-                        items(subtitles) { line ->
-                            SubtitleRow(
-                                line = line,
-                                isCurrent = state.currentTimeMs in line.startMs..line.endMs,
-                                translation = state.sentenceTranslations[line.id],
-                                isTranslating = state.analyzingSentenceId == line.id,
-                                onClick = { viewModel.onEvent(PlayerEvent.SeekTo(line.startMs)) },
-                                onWordClick = { word -> viewModel.onEvent(PlayerEvent.WordClicked(word, line)) },
-                                onTranslateClick = { viewModel.onEvent(PlayerEvent.ToggleTranslation(line)) },
-                                onAnalyzeClick = { viewModel.onEvent(PlayerEvent.DeepAnalysisClicked(line)) },
-                                onMemorizeClick = { viewModel.onEvent(PlayerEvent.MemorizationClicked(line.textDe)) }
-                            )
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Waveform visualization at the top
+                state.content?.let { content ->
+                    val progress = if (content.durationSeconds > 0) {
+                        state.currentTimeMs.toFloat() / (content.durationSeconds * 1000)
+                    } else 0f
+
+                    WaveformVisualizer(
+                        amplitudes = content.waveform.ifEmpty { List(50) { 0.2f + (it % 5) * 0.1f } },
+                        progress = progress,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                }
+
+                if (state.isLoading) {
+                    CircularProgressIndicator(modifier = Modifier.fillMaxSize().wrapContentSize())
+                } else {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        state.content?.subtitles?.let { subtitles ->
+                            items(subtitles) { line ->
+                                SubtitleRow(
+                                    line = line,
+                                    isCurrent = state.currentTimeMs in line.startMs..line.endMs,
+                                    translation = state.sentenceTranslations[line.id],
+                                    isTranslating = state.analyzingSentenceId == line.id,
+                                    onClick = { viewModel.onEvent(PlayerEvent.SeekTo(line.startMs)) },
+                                    onWordClick = { word -> viewModel.onEvent(PlayerEvent.WordClicked(word, line)) },
+                                    onTranslateClick = { viewModel.onEvent(PlayerEvent.ToggleTranslation(line)) },
+                                    onAnalyzeClick = { viewModel.onEvent(PlayerEvent.DeepAnalysisClicked(line)) },
+                                    onMemorizeClick = { viewModel.onEvent(PlayerEvent.MemorizationClicked(line.textDe)) }
+                                )
+                            }
                         }
                     }
                 }
             }
 
-            // Word Details Sheet (Simple Modal)
+            // Word Details Sheet
             state.selectedWord?.let { word ->
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -119,7 +129,7 @@ fun ImmersionPlayerView(
                                 word = word,
                                 contextLine = state.selectedWordContext,
                                 result = state.wordTranslation,
-                                isSaving = false, // TODO: handle saving state
+                                isSaving = false,
                                 onSave = { viewModel.saveWord(it) },
                                 onDismiss = { viewModel.onEvent(PlayerEvent.DismissWordDetails) }
                             )
@@ -181,9 +191,7 @@ fun SubtitleRow(
             .padding(16.dp)
     ) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            // Text tokens
             Row(modifier = Modifier.weight(1f).padding(end = 8.dp), horizontalArrangement = Arrangement.Start) {
-                // Tokenize by word
                 line.textDe.split(Regex("\\s+")).forEach { word ->
                     Text(
                         text = word,
@@ -197,7 +205,6 @@ fun SubtitleRow(
                 }
             }
 
-            // Quick Actions
             Row {
                 IconButton(onClick = onTranslateClick, modifier = Modifier.size(24.dp)) {
                     if (isTranslating) CircularProgressIndicator(modifier = Modifier.size(16.dp))
@@ -282,7 +289,6 @@ fun PlayerControlBar(
                 Text(if (isPlaying) "PAUSE" else "PLAY")
             }
             
-            // Speed Control
             val speeds = listOf(0.75f, 1.0f, 1.25f, 1.5f)
             val nextSpeed = speeds[(speeds.indexOf(currentSpeed) + 1) % speeds.size]
             

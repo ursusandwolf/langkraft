@@ -1,68 +1,38 @@
 package com.langkraft.backend
 
 import com.langkraft.domain.model.ImmersionContent
-import com.sapher.youtubedl.YtdlpLauncher
-import com.sapher.youtubedl.YtdlpRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import kotlinx.serialization.SerialName
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
-import java.io.File
+import org.slf4j.LoggerFactory
 
 /**
- * Service that uses YtdlpJava to fetch content from YouTube.
+ * Service that uses YtdlpClient to fetch content from YouTube.
  */
 class YouTubeIngestionService(
-    private val downloadsDir: String = "downloads"
+    private val ytdlpClient: YtdlpClient
 ) {
-    private val json = Json { ignoreUnknownKeys = true }
-
-    init {
-        File(downloadsDir).mkdirs()
-    }
+    private val logger = LoggerFactory.getLogger(YouTubeIngestionService::class.java)
 
     suspend fun ingest(url: String): ImmersionContent = withContext(Dispatchers.IO) {
-        // 1. Get info first to get real ID
-        val infoRequest = YtdlpRequest(url, downloadsDir)
-            .setOption("dump-json")
-            .setOption("no-download")
-        
-        val infoResponse = YtdlpLauncher.execute(infoRequest)
-        if (infoResponse.exitCode != 0) {
-            throw Exception("Failed to get info: ${infoResponse.out}")
-        }
-        
-        val info = json.decodeFromString<YtdlpInfo>(infoResponse.out)
-        val videoId = info.id ?: throw Exception("Could not determine video ID")
+        logger.info("Starting ingestion process for URL: $url")
+        // 1. Get info
+        val info = ytdlpClient.getVideoInfo(url)
+        val videoId = info.id ?: throw RuntimeException("Could not determine video ID")
 
-        // 2. Prepare Request to download
-        val request = YtdlpRequest(url, downloadsDir)
-            .setOption("write-auto-sub")
-            .setOption("sub-lang", "de")
-            .setOption("convert-subs", "srt")
-            .setOption("extract-audio")
-            .setOption("audio-format", "opus")
-            .setOption("output", "$videoId.%(ext)s")
+        // 2. Download files
+        logger.info("Video ID determined: $videoId. Downloading content...")
+        val files = ytdlpClient.downloadContent(url, videoId)
+        val audioFile = files.find { it.extension == "opus" } 
+            ?: throw RuntimeException("Audio file missing")
+        val srtFile = files.find { it.extension == "srt" }
+            ?: throw RuntimeException("Subtitles file missing")
 
-        // 3. Execute download
-        val response = YtdlpLauncher.execute(request)
-        if (response.exitCode != 0) {
-            throw Exception("yt-dlp failed: ${response.out}")
-        }
-
-        // 4. Find files
-        val audioFile = File("$downloadsDir/$videoId.opus")
-        val srtFile = File("$downloadsDir/$videoId.de.srt")
-        
-        if (!audioFile.exists() || !srtFile.exists()) {
-            throw Exception("Required files (audio or subtitles) missing after download")
-        }
-
-        // 5. Parse Subtitles
+        // 3. Parse Subtitles
+        logger.info("Parsing subtitles for $videoId...")
         val subtitles = SrtParser.parse(videoId, srtFile.readText())
+        logger.info("Parsed ${subtitles.size} subtitle lines.")
 
-        // 6. Construct Result
+        // 4. Construct Result
         ImmersionContent(
             id = videoId,
             title = info.title ?: "Extracted Content",
@@ -73,11 +43,4 @@ class YouTubeIngestionService(
             subtitles = subtitles
         )
     }
-
-    @Serializable
-    private data class YtdlpInfo(
-        val id: String? = null,
-        val title: String? = null,
-        val duration: Long? = null
-    )
 }

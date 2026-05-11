@@ -62,3 +62,15 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 selectVocabularyToReview:
 SELECT * FROM Vocabulary WHERE nextReviewAt <= ? OR nextReviewAt IS NULL ORDER BY nextReviewAt ASC;
+
+countWordsByStatus:
+SELECT status, COUNT(*) AS count FROM Vocabulary GROUP BY status;
+
+getImmersionStats:
+SELECT COUNT(*) AS totalContent, SUM(durationSeconds) AS totalDurationSeconds FROM Content;
+
+getWordsAddedRecently:
+SELECT COUNT(*) FROM Vocabulary WHERE addedAt >= ?;
+
+updateLocalAudioPath:
+UPDATE Content SET localAudioPath = ? WHERE id = ?;

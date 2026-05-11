@@ -21,6 +21,7 @@ data class PlayerState(
     val sentenceTranslations: Map<String, String> = emptyMap(), // subtitle line id -> translation
     val analyzingSentenceId: String? = null,
     val memorizationText: String? = null,
+    val isDownloading: Boolean = false,
     val error: String? = null
 )
 
@@ -28,6 +29,7 @@ sealed class PlayerEvent {
     data class LoadContent(val contentId: String) : PlayerEvent()
     object PlayPause : PlayerEvent()
     object ToggleLoop : PlayerEvent()
+    object ToggleOffline : PlayerEvent()
     data class SetPlaybackSpeed(val speed: Float) : PlayerEvent()
     data class SeekTo(val timeMs: Long) : PlayerEvent()
     data class WordClicked(val word: String, val line: SubtitleLine) : PlayerEvent()

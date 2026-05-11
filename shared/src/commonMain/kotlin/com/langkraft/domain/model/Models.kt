@@ -7,7 +7,8 @@ data class ImmersionContent(
     val localAudioPath: String?,
     val sourceUrl: String,
     val durationSeconds: Long,
-    val subtitles: List<SubtitleLine> = emptyList()
+    val subtitles: List<SubtitleLine> = emptyList(),
+    val waveform: List<Float> = emptyList() // Normalized amplitudes [0.0 - 1.0]
 )
 
 data class SubtitleLine(
@@ -27,6 +28,7 @@ data class VocabularyWord(
     val contextSentence: String,
     val contentId: String?,
     val subtitleLineId: String?,
+    val addedAt: Long = 0,
     val status: WordStatus = WordStatus.NEW,
     val nextReviewMs: Long = 0,
     val intervalDays: Int = 0,

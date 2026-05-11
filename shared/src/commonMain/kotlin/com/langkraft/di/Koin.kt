@@ -13,6 +13,10 @@ import com.langkraft.ui.srs.SrsTrainingViewModel
 import io.ktor.client.HttpClient
 import com.langkraft.ui.writing.WritingViewModel
 import com.langkraft.ui.dashboard.DashboardViewModel
+import com.langkraft.io.FileSystem
+import com.langkraft.io.FileSystemImpl
+import com.langkraft.audio.AudioPlayer
+import com.langkraft.audio.AudioPlayerImpl
 import org.koin.core.context.startKoin
 import org.koin.core.module.Module
 import org.koin.dsl.KoinAppDeclaration
@@ -29,8 +33,12 @@ fun initKoin() = initKoin {}
 
 val commonModule = module {
     // Repositories
-    single<ContentRepository> { SqlDelightContentRepository(get(), get()) }
+    single<ContentRepository> { SqlDelightContentRepository(get(), get(), get()) }
     single<VocabularyRepository> { SqlDelightVocabularyRepository(get()) }
+
+    // IO & Hardware
+    single<FileSystem> { FileSystemImpl() }
+    single<AudioPlayer> { AudioPlayerImpl() }
 
     // UseCases
     single { IngestContentUseCase(get()) }
@@ -40,8 +48,8 @@ val commonModule = module {
 
     // ViewModels
     factory { ContentSelectionViewModel(get(), get()) }
-    factory { PlayerViewModel(get(), get(), get()) }
+    factory { PlayerViewModel(get(), get(), get(), get(), get()) }
     factory { SrsTrainingViewModel(get()) }
     factory { WritingViewModel(get()) }
-    factory { DashboardViewModel() }
+    factory { DashboardViewModel(get(), get()) }
 }

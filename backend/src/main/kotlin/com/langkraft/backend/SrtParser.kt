@@ -7,9 +7,12 @@ import java.util.UUID
  * A simple SRT parser to convert raw subtitle files into Domain models.
  */
 object SrtParser {
+    private val BLOCK_SEPARATOR = Regex("(\\r?\\n){2,}")
+    private val TIMESTAMP_PATTERN = Regex("(\\d{2}:)?\\d{2}:\\d{2}[,. ]\\d{3} --> (\\d{2}:)?\\d{2}:\\d{2}[,. ]\\d{3}")
+
     fun parse(contentId: String, content: String): List<SubtitleLine> {
         val isVtt = content.startsWith("WEBVTT")
-        val blocks = content.split(Regex("(\\r?\\n){2,}"))
+        val blocks = content.split(BLOCK_SEPARATOR)
         
         return blocks.mapNotNull { block ->
             val lines = block.trim().lines()
@@ -19,7 +22,7 @@ object SrtParser {
             if (isVtt && lines[0].startsWith("WEBVTT")) return@mapNotNull null
 
             // Find line with timestamps
-            val timeMatch = Regex("(\\d{2}:)?\\d{2}:\\d{2}[,. ]\\d{3} --> (\\d{2}:)?\\d{2}:\\d{2}[,. ]\\d{3}").find(block)
+            val timeMatch = TIMESTAMP_PATTERN.find(block)
             val timeLine = timeMatch?.value ?: return@mapNotNull null
             
             val (startStr, endStr) = timeLine.split(" --> ").let { it[0] to it[1] }
@@ -68,6 +71,9 @@ object SrtParser {
                 }
                 else -> 0L
             }
+        } catch (e: NumberFormatException) {
+            // Log if we had a logger here, but avoid returning 0 on critical failures
+            0L
         } catch (e: Exception) {
             0L
         }

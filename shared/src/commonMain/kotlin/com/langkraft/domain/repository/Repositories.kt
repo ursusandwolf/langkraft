@@ -13,10 +13,22 @@ interface ContentRepository {
     
     // Remote ingestion
     suspend fun fetchFromYouTube(url: String): ImmersionContent
+    
+    // Stats
+    fun getImmersionStats(): Flow<ImmersionStats>
 }
+
+data class ImmersionStats(
+    val totalContent: Long,
+    val totalDurationSeconds: Long
+)
 
 interface VocabularyRepository {
     fun getWordsToReview(): Flow<List<VocabularyWord>>
     suspend fun saveWord(word: VocabularyWord)
     suspend fun deleteWord(id: String)
+    
+    // Stats
+    fun getWordCountsByStatus(): Flow<Map<String, Long>>
+    fun getWordsAddedSince(timestamp: Long): Flow<Long>
 }

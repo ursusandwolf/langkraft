@@ -13,25 +13,25 @@ The app follows a specific language acquisition methodology:
 6. **Memorization:** Features to help internalize corrected prose.
 
 ## Current State
-- **Data Layer:** SQLDelight schema implemented (Content, Subtitles, Vocabulary).
-- **Domain Layer:** Core models and UseCases (IngestContent) defined.
-- **Backend:** Ktor server with `YouTubeIngestionService` using `YtdlpJava`. Supports Opus audio extraction, SRT/VTT parsing, and real YouTube ID tracking. Improved robustness with `kotlinx-serialization`.
+- **Data Layer:** SQLDelight schema implemented (Content, Subtitles, Vocabulary). Analytical queries for Dashboard added.
+- **Domain Layer:** Core models and UseCases defined. Repositories support statistics and offline synchronization.
+- **Backend:** Ktor server refactored for robustness. `YtdlpClient` isolated for better process management. JSON API with DTOs.
 - **AI Integration:** Google Gemini integration for contextual translations, deep grammatical analysis, and text correction.
-- **Immersion Tools:** "Repeat Loop Mode" for deep listening and "Prose Memorization Tool" for active recall implemented in the player.
-- **Learning Experience:** SRS Engine (SM-2 with clean constants) and Training UI for context-based sentence review.
-- **Content:** Library and YouTube import screen implemented.
-- **Audio:** Multiplatform player (ExoPlayer/HTML5) via expect/actual.
+- **Immersion Tools:** "Repeat Loop Mode" and "Prose Memorization Tool" fully integrated into the Writing/Correction flow.
+- **Learning Experience:** SRS Engine and Dashboard with real-time statistics (Hours, Mastery, Reviews).
+- **Offline Sync:** Android offline mode implemented. Audio files are downloaded locally and preferred during playback. Multiplatform `FileSystem` abstraction added.
+- **Audio:** Multiplatform player (ExoPlayer/HTML5). Improved with local file support and interactive Waveform visualization.
 
 ## Tech Stack
 - **Language:** Kotlin
 - **UI:** Compose Multiplatform
 - **DB:** SQLDelight (SQLite)
-- **AI:** Google Gemini 1.5 Flash via LinguisticAssistant
+- **AI:** Google Gemini 1.5 Flash
 - **Backend:** Ktor + yt-dlp
 
 ## Pending Items
-- [ ] Implement AI Correction UI for "Active Writing"
-- [ ] Add Progress tracking dashboard
-- [ ] Offline synchronization for Android
+- [x] Implement AI Correction UI for "Active Writing"
+- [x] Add Progress tracking dashboard
+- [x] Offline synchronization for Android
+- [x] Waveform visualization
 - [ ] Theming and UI/UX Polishing (German aesthetics)
-- [ ] Waveform visualization

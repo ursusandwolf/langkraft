@@ -126,7 +126,7 @@ fun QualityButtons(onQualitySelected: (Int) -> Unit) {
         Spacer(modifier = Modifier.height(8.dp))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             QualityButton("0", "Forgot", Color.Red) { onQualitySelected(0) }
-            QualityButton("3", "Hard", Color.Orange) { onQualitySelected(3) }
+            QualityButton("3", "Hard", Color(0xFFF57C00)) { onQualitySelected(3) }
             QualityButton("4", "Good", Color.Green) { onQualitySelected(4) }
             QualityButton("5", "Easy", MaterialTheme.colors.primary) { onQualitySelected(5) }
         }

@@ -15,11 +15,15 @@ import com.langkraft.domain.repository.VocabularyRepository
 import com.langkraft.domain.ai.LinguisticAssistant
 import com.langkraft.domain.model.VocabularyWord
 import com.langkraft.domain.model.SubtitleLine
+import com.langkraft.io.FileSystem
+import com.langkraft.audio.AudioPlayer
 
 class PlayerViewModel(
     private val contentRepository: ContentRepository,
     private val vocabularyRepository: VocabularyRepository,
-    private val linguisticAssistant: LinguisticAssistant
+    private val linguisticAssistant: LinguisticAssistant,
+    private val audioPlayer: AudioPlayer,
+    private val fileSystem: FileSystem
 ) : BaseViewModel() {
     private val _state = MutableStateFlow(PlayerState())
     val state: StateFlow<PlayerState> = _state.asStateFlow()
@@ -28,10 +32,14 @@ class PlayerViewModel(
         when (event) {
             is PlayerEvent.LoadContent -> loadContent(event.contentId)
             is PlayerEvent.PlayPause -> {
+                if (_state.value.isPlaying) audioPlayer.pause() else audioPlayer.play()
                 _state.update { it.copy(isPlaying = !it.isPlaying) }
             }
             is PlayerEvent.ToggleLoop -> {
                 _state.update { it.copy(isLooping = !it.isLooping) }
+            }
+            is PlayerEvent.ToggleOffline -> {
+                handleToggleOffline()
             }
             is PlayerEvent.SetPlaybackSpeed -> {
                 _state.update { it.copy(playbackSpeed = event.speed) }
@@ -116,12 +124,35 @@ class PlayerViewModel(
         }
     }
 
+    private fun handleToggleOffline() {
+        val currentContent = _state.value.content ?: return
+        scope.launch {
+            if (currentContent.localAudioPath == null) {
+                _state.update { it.copy(isDownloading = true) }
+                try {
+                    val localPath = contentRepository.downloadAudio(currentContent)
+                    val updatedContent = currentContent.copy(localAudioPath = localPath)
+                    _state.update { it.copy(content = updatedContent, isDownloading = false) }
+                } catch (e: Exception) {
+                    _state.update { it.copy(isDownloading = false, error = "Download failed: ${e.message}") }
+                }
+            }
+        }
+    }
 
     private fun loadContent(id: String) {
         scope.launch {
             _state.update { it.copy(isLoading = true) }
-            val content = contentRepository.getContentById(id)
+            val content = contentRepository.getContentById(id) ?: return@launch
             _state.update { it.copy(isLoading = false, content = content) }
+            
+            // Prefer local file if available
+            val audioUrl = if (content.localAudioPath != null && fileSystem.exists(content.localAudioPath)) {
+                content.localAudioPath
+            } else {
+                content.audioUrl
+            }
+            audioPlayer.load(audioUrl)
         }
     }
     

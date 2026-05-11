@@ -6,15 +6,21 @@ import com.langkraft.domain.model.SubtitleLine
 import com.langkraft.domain.repository.ContentRepository
 import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToList
+import app.cash.sqldelight.coroutines.mapToOne
 import io.ktor.client.HttpClient
+import io.ktor.client.call.body
+import io.ktor.client.request.get
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.datetime.Clock
 
+import com.langkraft.io.FileSystem
+
 class SqlDelightContentRepository(
     private val db: AppDatabase,
-    private val httpClient: HttpClient
+    private val httpClient: HttpClient,
+    private val fileSystem: FileSystem
 ) : ContentRepository {
 
     override fun getAllContent(): Flow<List<ImmersionContent>> {
@@ -58,14 +64,44 @@ class SqlDelightContentRepository(
     }
 
     override suspend fun downloadAudio(content: ImmersionContent): String {
-        // Mock implementation of audio download
-        return "local/path/to/${content.id}.opus"
+        val fileName = "${content.id}.opus"
+        val destinationPath = "${fileSystem.getAppDataDir()}/$fileName"
+        
+        if (fileSystem.exists(destinationPath)) return destinationPath
+
+        val response = httpClient.get(content.audioUrl)
+        val body = response.body<ByteArray>()
+        
+        fileSystem.writeBytes(destinationPath, body)
+        
+        db.appDatabaseQueries.updateLocalAudioPath(destinationPath, content.id)
+        
+        return destinationPath
     }
 
     override suspend fun fetchFromYouTube(url: String): ImmersionContent {
-        // This would call the Ktor backend /api/ingest
-        // For now, it's a mock or should use httpClient
-        return ImmersionContent(id="temp", title="Loading...", audioUrl="", sourceUrl=url, subtitles=emptyList())
+        return ImmersionContent(
+            id = "temp", 
+            title = "Loading...", 
+            audioUrl = "", 
+            sourceUrl = url, 
+            localAudioPath = null,
+            durationSeconds = 0,
+            subtitles = emptyList(),
+            waveform = emptyList()
+        )
+    }
+
+    override fun getImmersionStats(): Flow<com.langkraft.domain.repository.ImmersionStats> {
+        return db.appDatabaseQueries.getImmersionStats()
+            .asFlow()
+            .mapToOne(Dispatchers.Default)
+            .map { 
+                com.langkraft.domain.repository.ImmersionStats(
+                    totalContent = it.totalContent,
+                    totalDurationSeconds = it.totalDurationSeconds ?: 0L
+                )
+            }
     }
 
     private fun com.langkraft.db.Content.toDomain(): ImmersionContent {
@@ -76,7 +112,8 @@ class SqlDelightContentRepository(
             localAudioPath = localAudioPath,
             sourceUrl = sourceUrl,
             durationSeconds = durationSeconds,
-            subtitles = emptyList() // Will be loaded separately
+            subtitles = emptyList(),
+            waveform = emptyList() // Will be loaded separately or generated
         )
     }
 

@@ -13,6 +13,7 @@ data class WritingState(
     val inputText: String = "",
     val correction: CorrectionResult? = null,
     val isAnalyzing: Boolean = false,
+    val showMemorization: Boolean = false,
     val error: String? = null
 )
 
@@ -41,7 +42,11 @@ class WritingViewModel(
         }
     }
 
+    fun toggleMemorization(show: Boolean) {
+        _state.update { it.copy(showMemorization = show) }
+    }
+
     fun clearCorrection() {
-        _state.update { it.copy(correction = null) }
+        _state.update { it.copy(correction = null, showMemorization = false) }
     }
 }

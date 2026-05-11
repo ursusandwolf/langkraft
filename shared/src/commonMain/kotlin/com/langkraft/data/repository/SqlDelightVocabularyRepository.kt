@@ -6,6 +6,7 @@ import com.langkraft.domain.model.WordStatus
 import com.langkraft.domain.repository.VocabularyRepository
 import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToList
+import app.cash.sqldelight.coroutines.mapToOne
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -43,6 +44,22 @@ class SqlDelightVocabularyRepository(
         // Implementation for deletion query would be needed in .sq
     }
 
+    override fun getWordCountsByStatus(): Flow<Map<String, Long>> {
+        return db.appDatabaseQueries.countWordsByStatus()
+            .asFlow()
+            .mapToList(Dispatchers.Default)
+            .map { list ->
+                list.associate { (it.status ?: "NEW") to it.count }
+            }
+    }
+
+    override fun getWordsAddedSince(timestamp: Long): Flow<Long> {
+        return db.appDatabaseQueries.getWordsAddedRecently(timestamp)
+            .asFlow()
+            .mapToOne(Dispatchers.Default)
+            .map { it ?: 0L }
+    }
+
     private fun com.langkraft.db.Vocabulary.toDomain(): VocabularyWord {
         return VocabularyWord(
             id = id,
@@ -52,11 +69,11 @@ class SqlDelightVocabularyRepository(
             contextSentence = contextSentence,
             contentId = contentId,
             subtitleLineId = subtitleLineId,
-            addedAt = addedAt,
-            nextReviewMs = nextReviewAt,
+            addedAt = addedAt ?: 0L,
+            nextReviewMs = nextReviewAt ?: 0L,
             intervalDays = intervalDays.toInt(),
             easeFactor = easeFactor,
-            status = WordStatus.valueOf(status)
+            status = WordStatus.valueOf(status ?: "NEW")
         )
     }
 }
