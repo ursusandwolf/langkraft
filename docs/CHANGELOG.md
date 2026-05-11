@@ -3,6 +3,11 @@
 ## [Unreleased]
 
 ### Added
+- **Enhanced AI Correction:** Improved pedagogical explanations and stylistic suggestions for "Active Writing".
+- **Polished Writing UI:** Redesigned `WritingView` with better typography, card-based results, and "Clear" input capability.
+- **Deep Analysis Mode:** Enhanced AI-driven grammatical breakdown with German-specific insights (cases, verb forms, syntax).
+- **Contextual Lemmatization:** Ability to toggle base forms (lemmas) directly in the subtitle track.
+- **Improved Deep Analysis UI:** Redesigned dialog with structured cards and syntax explanations.
 - **Download Status Tracking:** Introduced `DownloadStatus` (IDLE, DOWNLOADING, COMPLETED, ERROR) to track offline media state.
 - **Domain Exceptions:** Added `IngestionException` and `AiException` for structured error handling.
 - **Backend Koin DI:** Transitioned backend service management to Koin.

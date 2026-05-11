@@ -13,25 +13,19 @@ The app follows a specific language acquisition methodology:
 6. **Memorization:** Features to help internalize corrected prose.
 
 ## Current State
-- **Data Layer:** SQLDelight schema implemented. Repositories refined with better null-safety and clean mappings.
-- **Domain Layer:** Core models and UseCases defined. Repositories support statistics and offline synchronization.
-- **Backend:** Ktor server refactored with Koin DI, `suspend` yt-dlp client, and structured routing with global exception handling.
-- **AI Integration:** Google Gemini integration for contextual translations, deep grammatical analysis, and text correction.
-- **Immersion Tools:** "Repeat Loop Mode" and "Prose Memorization Tool" fully integrated into the Writing/Correction flow.
-- **Learning Experience:** SRS Engine and Dashboard with real-time statistics (Hours, Mastery, Reviews).
-- **Offline Sync:** Android offline mode implemented. Audio files are downloaded locally and preferred during playback. Multiplatform `FileSystem` abstraction added.
-- **Audio:** Multiplatform player (ExoPlayer/HTML5). Improved with local file support and interactive Waveform visualization.
+- **Data Layer:** SQLDelight schema optimized with lemmas and SRS-data. Repositories support atomic transactions and safe file IO.
+- **Backend:** Modularized Ktor server with Koin DI, non-blocking asynchronous clients, and enhanced Gemini 1.5 Flash prompts for deep grammatical analysis.
+- **AI Integration:** Google Gemini 1.5 Flash integrated for contextual translation, detailed grammatical analysis (Deep Analysis Mode), and contextual lemmatization.
+- **Offline Sync:** Robust background downloading with file integrity checks.
+- **UI:** Compose Multiplatform architecture featuring reactive ViewModels, waveform visualization, and interactive deep analysis tools.
 
 ## Tech Stack
-- **Language:** Kotlin
-- **UI:** Compose Multiplatform
-- **DB:** SQLDelight (SQLite)
-- **AI:** Google Gemini 1.5 Flash
-- **Backend:** Ktor + yt-dlp
-
+...
 ## Pending Items
 - [x] Implement AI Correction UI for "Active Writing"
 - [x] Add Progress tracking dashboard
 - [x] Offline synchronization for Android
 - [x] Waveform visualization
+- [x] Deep Analysis Mode and Contextual Lemmatization
+- [x] Pedagogical AI Correction for Active Writing
 - [ ] Theming and UI/UX Polishing (German aesthetics)

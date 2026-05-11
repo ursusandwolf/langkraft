@@ -56,6 +56,7 @@ classDiagram
     class VocabularyWord {
         +String id
         +String word
+        +String lemma
         +String translation
         +String contextSentence
         +Long nextReviewMs
@@ -66,4 +67,22 @@ classDiagram
     ImmersionContent "1" *-- "many" SubtitleLine
     ImmersionContent --> DownloadStatus
     VocabularyWord ..> SubtitleLine : context
+    VocabularyWord ..> ImmersionContent : source
+```
+
+## UI State Machine
+
+```mermaid
+stateDiagram-v2
+    [*] --> Loading
+    Loading --> Idle: Content Loaded
+    Idle --> Playing: Play Event
+    Playing --> Idle: Pause Event
+    Playing --> Playing: Update Time
+    Playing --> DeepAnalysis: Analysis Event
+    DeepAnalysis --> Playing: Dismiss
+    Playing --> Lemmatization: Toggle Lemma
+    Lemmatization --> Playing: Toggle Lemma
+    Playing --> WordDetails: Word Clicked
+    WordDetails --> Playing: Save/Dismiss
 ```

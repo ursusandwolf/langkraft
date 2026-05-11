@@ -28,7 +28,7 @@ class WritingViewModel(
     }
 
     fun submitForCorrection() {
-        val text = _state.value.inputText
+        val text = _state.value.inputText.trim()
         if (text.isBlank()) return
 
         _state.update { it.copy(isAnalyzing = true, error = null) }
@@ -37,7 +37,7 @@ class WritingViewModel(
                 val result = linguisticAssistant.correctText(text)
                 _state.update { it.copy(correction = result, isAnalyzing = false) }
             } catch (e: Exception) {
-                _state.update { it.copy(isAnalyzing = false, error = e.message) }
+                _state.update { it.copy(isAnalyzing = false, error = "Korrektur fehlgeschlagen: ${e.message}") }
             }
         }
     }

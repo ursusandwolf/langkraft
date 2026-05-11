@@ -15,9 +15,9 @@
 
 ## Phase 3: AI & Intelligence
 - [/] Integrate Google Gemini API for translations (Backend service implemented)
-- [ ] **Deep Analysis Mode:** Grammatical breakdown of a specific subtitle line (cases, verb forms, syntax)
-- [ ] **Contextual Lemmatization:** Link words to their base forms while keeping the sentence context
-- [ ] **AI Correction:** Feature to correct user's "Active Writing" (diaries/summaries) based on content
+- [x] **Deep Analysis Mode:** Grammatical breakdown of a specific subtitle line (cases, verb forms, syntax)
+- [x] **Contextual Lemmatization:** Link words to their base forms while keeping the sentence context
+- [x] **AI Correction:** Feature to correct user's "Active Writing" (diaries/summaries) based on content with pedagogical explanations
 
 ## Phase 4: Learning Experience (Done)
 - [x] **Spaced Repetition (SRS):** Algorithm for vocabulary (sentences, not isolated words)

@@ -120,12 +120,19 @@ fun WritingInputView(
             value = text,
             onValueChange = onTextChanged,
             modifier = Modifier.weight(1f).fillMaxWidth(),
-            placeholder = { Text("Gestern habe ich...") },
+            placeholder = { Text("Gestern habe ich ein interessantes Video gesehen...") },
             shape = RoundedCornerShape(12.dp),
             colors = TextFieldDefaults.outlinedTextFieldColors(
                 focusedBorderColor = MaterialTheme.colors.primary,
                 unfocusedBorderColor = Color.LightGray
-            )
+            ),
+            trailingIcon = if (text.isNotEmpty()) {
+                {
+                    IconButton(onClick = { onTextChanged("") }) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Clear", modifier = Modifier.size(18.dp)) // Using Back as placeholder for clear
+                    }
+                }
+            } else null
         )
 
         Spacer(modifier = Modifier.height(16.dp))

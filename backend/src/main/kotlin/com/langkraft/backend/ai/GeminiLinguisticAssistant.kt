@@ -44,10 +44,16 @@ class GeminiLinguisticAssistant(
 
     override suspend fun analyzeSentence(text: String): DeepAnalysisResult {
         val prompt = """
-            Perform a deep grammatical analysis of this German sentence: "$text".
+            Perform a professional grammatical analysis of this German sentence: "$text".
+            Focus on the Ilis Immersion methodology (Deep Analysis).
             Provide the result as a JSON object with fields:
-            "words" (list of objects with: "original", "lemma", "grammaticalInfo", "roleInSentence"),
-            "syntaxExplanation" (string).
+            "words": list of objects with:
+                "original": the word as it appears in the text,
+                "lemma": the dictionary form (e.g., "gegangen" -> "gehen"),
+                "grammaticalInfo": detailed info (e.g., "Noun, feminine, Genitiv, singular" or "Verb, 1st person singular, Präsens, Indikativ"),
+                "roleInSentence": (e.g., "Subject", "Indirect Object", "Predicate part"),
+            "syntaxExplanation": A clear explanation of the sentence structure, word order (V2, end-placed verb, etc.), and any tricky idiomatic parts.
+            
             Output ONLY the JSON object.
         """.trimIndent()
 
@@ -56,9 +62,22 @@ class GeminiLinguisticAssistant(
 
     override suspend fun correctText(text: String): CorrectionResult {
         val prompt = """
-            Correct this German text and explain the changes: "$text".
+            Correct this German text as a supportive language teacher: "$text".
+            Focus on the Ilis Immersion methodology (natural phrasing and pedagogical clarity).
+            
             Provide the result as a JSON object with fields:
-            "originalText" (string), "correctedText" (string), "changes" (list of objects with: "original", "replacement", "explanation").
+            "originalText": the input text,
+            "correctedText": the improved version, making it sound more natural and idiomatic while keeping the user's intended meaning,
+            "changes": list of objects with:
+                "original": the part being changed,
+                "replacement": the correction,
+                "explanation": a short, encouraging pedagogical explanation (e.g., explaining why a certain case was used or why the word order changed).
+            
+            Focus especially on:
+            - Word order (V2, end-placed verbs in subordinate clauses).
+            - Correct case usage (Nominativ, Akkusativ, Dativ, Genitiv).
+            - Natural-sounding vocabulary (idiomatic German).
+            
             Output ONLY the JSON object.
         """.trimIndent()
 

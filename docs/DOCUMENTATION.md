@@ -36,7 +36,8 @@ The `downloads` directory is used for temporary storage of media files.
 
 Uses **Google Gemini 1.5 Flash** for linguistic tasks:
 - **Contextual Translation:** Translates words based on the sentence they appear in.
-- **Deep Analysis:** Dissects grammar and syntax of complex German sentences.
+- **Deep Analysis Mode:** Dissects grammar and syntax of complex German sentences, providing detailed information on cases, verb forms, and sentence structure according to the Ilis methodology.
+- **Contextual Lemmatization:** Automatically identifies base forms (lemmas) for all words in a sentence, allowing users to toggle a "base form" view in the player.
 - **Text Correction:** Corrects user's active writing with pedagogical explanations.
 
 ## UI & ViewModel Architecture

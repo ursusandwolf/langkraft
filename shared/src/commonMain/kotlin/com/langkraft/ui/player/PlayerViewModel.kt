@@ -96,6 +96,29 @@ class PlayerViewModel(
         }
     }
 
+    private fun handleToggleLemmatization(line: SubtitleLine) {
+        val current = _state.value.lemmatizedSentences[line.id]
+        if (current != null) {
+            _state.update { it.copy(lemmatizedSentences = it.lemmatizedSentences - line.id) }
+        } else {
+            _state.update { it.copy(lemmatizingSentenceId = line.id) }
+            scope.launch {
+                try {
+                    val result = linguisticAssistant.analyzeSentence(line.textDe)
+                    val lemmas = result.words.associate { it.original to it.lemma }
+                    _state.update { 
+                        it.copy(
+                            lemmatizedSentences = it.lemmatizedSentences + (line.id to lemmas),
+                            lemmatizingSentenceId = null
+                        ) 
+                    }
+                } catch (e: Exception) {
+                    _state.update { it.copy(lemmatizingSentenceId = null, error = e.message) }
+                }
+            }
+        }
+    }
+
     private fun handleToggleTranslation(line: SubtitleLine) {
         val current = _state.value.sentenceTranslations[line.id]
         if (current != null) {

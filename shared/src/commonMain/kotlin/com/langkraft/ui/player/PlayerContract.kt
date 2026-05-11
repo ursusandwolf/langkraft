@@ -19,7 +19,9 @@ data class PlayerState(
     val deepAnalysis: DeepAnalysisResult? = null,
     val isAnalyzing: Boolean = false,
     val sentenceTranslations: Map<String, String> = emptyMap(), // subtitle line id -> translation
+    val lemmatizedSentences: Map<String, Map<String, String>> = emptyMap(), // id -> (original -> lemma)
     val analyzingSentenceId: String? = null,
+    val lemmatizingSentenceId: String? = null,
     val memorizationText: String? = null,
     val error: String? = null
 )
@@ -34,6 +36,7 @@ sealed class PlayerEvent {
     data class WordClicked(val word: String, val line: SubtitleLine) : PlayerEvent()
     data class DeepAnalysisClicked(val line: SubtitleLine) : PlayerEvent()
     data class ToggleTranslation(val line: SubtitleLine) : PlayerEvent()
+    data class ToggleLemmatization(val line: SubtitleLine) : PlayerEvent()
     data class MemorizationClicked(val text: String) : PlayerEvent()
     object DismissWordDetails : PlayerEvent()
     object DismissDeepAnalysis : PlayerEvent()

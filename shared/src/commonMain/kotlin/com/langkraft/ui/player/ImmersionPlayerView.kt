@@ -203,10 +203,13 @@ fun SubtitleRow(
     line: SubtitleLine,
     isCurrent: Boolean,
     translation: String?,
-    isAnalyzing: Boolean,
+    lemmas: Map<String, String>?,
+    isTranslating: Boolean,
+    isLemmatizing: Boolean,
     onClick: () -> Unit,
     onWordClick: (String) -> Unit,
     onTranslateClick: () -> Unit,
+    onLemmatizeClick: () -> Unit,
     onAnalysisClick: () -> Unit,
     onMemorizationClick: () -> Unit
 ) {
@@ -225,22 +228,40 @@ fun SubtitleRow(
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Row(modifier = Modifier.weight(1f).padding(end = 8.dp), horizontalArrangement = Arrangement.Start) {
                 line.textDe.split(Regex("\\s+")).forEach { word ->
-                    Text(
-                        text = word,
-                        modifier = Modifier
-                            .clickable { onWordClick(word.filter { it.isLetter() }) }
-                            .padding(horizontal = 2.dp),
-                        style = MaterialTheme.typography.h6.copy(
-                            color = if (isCurrent) MaterialTheme.colors.primary else Color.Unspecified
+                    val cleanWord = word.filter { it.isLetter() }
+                    val lemma = lemmas?.get(word) ?: lemmas?.get(cleanWord)
+
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = word,
+                            modifier = Modifier
+                                .clickable { onWordClick(cleanWord) }
+                                .padding(horizontal = 2.dp),
+                            style = MaterialTheme.typography.h6.copy(
+                                color = if (isCurrent) MaterialTheme.colors.primary else Color.Unspecified
+                            )
                         )
-                    )
+                        if (lemma != null && lemma.lowercase() != word.lowercase()) {
+                            Text(
+                                text = lemma,
+                                style = MaterialTheme.typography.caption,
+                                color = MaterialTheme.colors.secondary,
+                                modifier = Modifier.padding(bottom = 2.dp)
+                            )
+                        }
+                    }
                 }
             }
 
             Row {
                 IconButton(onClick = onTranslateClick, modifier = Modifier.size(24.dp)) {
-                    if (isAnalyzing) CircularProgressIndicator(modifier = Modifier.size(16.dp))
+                    if (isTranslating) CircularProgressIndicator(modifier = Modifier.size(16.dp))
                     else Text("文", style = MaterialTheme.typography.body2) 
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                IconButton(onClick = onLemmatizeClick, modifier = Modifier.size(24.dp)) {
+                    if (isLemmatizing) CircularProgressIndicator(modifier = Modifier.size(16.dp))
+                    else Text("L", style = MaterialTheme.typography.body2, fontWeight = FontWeight.Bold) 
                 }
                 Spacer(modifier = Modifier.width(8.dp))
                 IconButton(onClick = onAnalysisClick, modifier = Modifier.size(24.dp)) {
@@ -271,26 +292,76 @@ fun DeepAnalysisDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Deep Grammatical Analysis") },
+        title = { 
+            Text(
+                "Deep Grammatical Analysis",
+                style = MaterialTheme.typography.h5,
+                fontWeight = FontWeight.Bold
+            ) 
+        },
         text = {
-            LazyColumn {
-                item {
-                    Text(text = analysis.syntaxExplanation, style = MaterialTheme.typography.body1)
-                    Divider(modifier = Modifier.padding(vertical = 8.dp))
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Card(
+                    elevation = 2.dp,
+                    backgroundColor = MaterialTheme.colors.primary.copy(alpha = 0.05f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = analysis.syntaxExplanation,
+                        style = MaterialTheme.typography.body1,
+                        modifier = Modifier.padding(12.dp)
+                    )
                 }
-                items(analysis.words) { word ->
-                    Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                        Text(text = word.original, style = MaterialTheme.typography.subtitle1, color = MaterialTheme.colors.primary)
-                        Text(text = "Base: ${word.lemma}", style = MaterialTheme.typography.caption)
-                        Text(text = "Info: ${word.grammaticalInfo}", style = MaterialTheme.typography.body2)
-                        Text(text = "Role: ${word.roleInSentence}", style = MaterialTheme.typography.body2, color = Color.Gray)
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                LazyColumn(modifier = Modifier.heightIn(max = 400.dp)) {
+                    items(analysis.words) { word ->
+                        Card(
+                            modifier = Modifier.padding(vertical = 4.dp).fillMaxWidth(),
+                            elevation = 1.dp
+                        ) {
+                            Column(modifier = Modifier.padding(8.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = word.original,
+                                        style = MaterialTheme.typography.subtitle1,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colors.primary
+                                    )
+                                    Text(
+                                        text = word.lemma,
+                                        style = MaterialTheme.typography.subtitle2,
+                                        color = MaterialTheme.colors.secondary
+                                    )
+                                }
+                                Text(
+                                    text = word.grammaticalInfo,
+                                    style = MaterialTheme.typography.body2
+                                )
+                                Text(
+                                    text = "Role: ${word.roleInSentence}",
+                                    style = MaterialTheme.typography.caption,
+                                    color = Color.Gray
+                                )
+                            }
+                        }
                     }
                 }
             }
         },
         confirmButton = {
-            Button(onClick = onDismiss) { Text("CLOSE") }
-        }
+            Button(
+                onClick = onDismiss,
+                modifier = Modifier.padding(8.dp)
+            ) { 
+                Text("VERSTANDEN") 
+            }
+        },
+        shape = RoundedCornerShape(12.dp)
     )
 }
 
@@ -330,3 +401,4 @@ fun PlayerControlBar(
         }
     }
 }
+
