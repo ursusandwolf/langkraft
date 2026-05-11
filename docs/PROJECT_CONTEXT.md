@@ -13,21 +13,19 @@ The app follows a specific language acquisition methodology:
 6. **Memorization:** Features to help internalize corrected prose.
 
 ## Current State
-- **Data Layer:** SQLDelight schema optimized with lemmas and SRS-data. Repositories support atomic transactions and safe file IO.
-- **Backend:** Modularized Ktor server with Koin DI, non-blocking asynchronous clients, and enhanced Gemini 1.5 Flash prompts for deep grammatical analysis.
-- **AI Integration:** Google Gemini 1.5 Flash integrated for contextual translation, detailed grammatical analysis (Deep Analysis Mode), and contextual lemmatization.
-- **Offline Sync:** Robust background downloading with file integrity checks.
-- **UI:** Compose Multiplatform architecture featuring reactive ViewModels, waveform visualization, and interactive deep analysis tools.
+- **Data Layer:** SQLDelight schema optimized with lemmas, SRS-data, and `lastUpdated` sync timestamps. Repositories support atomic transactions and incremental synchronization.
+- **Backend:** Modularized Ktor server with Koin DI, JWT-based authentication, and a robust synchronization endpoint. Enhanced Gemini 1.5 Flash prompts for linguistic analysis.
+- **AI Integration:** Full suite of immersion tools: contextual translation, Deep Analysis Mode (grammatical breakdown), contextual lemmatization, and pedagogical AI correction.
+- **Multi-platform:** Dedicated modules for Android, Web (Wasm), and Desktop. Configured release build types and ProGuard for production readiness.
+- **UI:** Langkraft Design System implemented with "German Immersion" aesthetics (Midnight Blue/Amber), supporting both Light and Dark modes.
 
 ## Tech Stack
 ...
 ## Pending Items
-- [x] Implement AI Correction UI for "Active Writing"
-- [x] Add Progress tracking dashboard
-- [x] Offline synchronization for Android
-- [x] Waveform visualization
 - [x] Deep Analysis Mode and Contextual Lemmatization
 - [x] Pedagogical AI Correction for Active Writing
 - [x] Theming and UI/UX Polishing (German aesthetics)
 - [x] Multi-platform Release Configuration (Android & Web)
-- [x] User authentication and cloud sync (JWT & Sync implemented)
+- [x] User authentication and cloud sync foundation
+- [ ] Production deployment and user scaling
+
