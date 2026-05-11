@@ -33,14 +33,15 @@ data class SubtitleLine(
     val textEn: String?
 )
 
+@kotlinx.serialization.Serializable
 data class VocabularyWord(
     val id: String,
     val word: String,
-    val lemma: String?,
-    val translation: String?,
+    val lemma: String? = null,
+    val translation: String? = null,
     val contextSentence: String,
-    val contentId: String?,
-    val subtitleLineId: String?,
+    val contentId: String? = null,
+    val subtitleLineId: String? = null,
     val addedAt: Long = 0,
     val status: WordStatus = WordStatus.NEW,
     val nextReviewMs: Long = 0,

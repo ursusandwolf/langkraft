@@ -1,7 +1,7 @@
 package com.langkraft.backend
 
-import com.sapher.youtubedl.YtdlpLauncher
-import com.sapher.youtubedl.YtdlpRequest
+import com.sapher.youtubedl.YoutubeDL
+import com.sapher.youtubedl.YoutubeDLRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
@@ -30,12 +30,12 @@ class YtdlpClient(private val downloadsDir: String) {
 
     suspend fun getVideoInfo(url: String): YtdlpInfo = withContext(Dispatchers.IO) {
         logger.info("Fetching video info for URL: $url")
-        val request = YtdlpRequest(url, downloadsDir)
-            .setOption("dump-json")
-            .setOption("no-download")
+        val request = YoutubeDLRequest(url, downloadsDir)
+        request.setOption("dump-json")
+        request.setOption("no-download")
 
         try {
-            val response = YtdlpLauncher.execute(request)
+            val response = YoutubeDL.execute(request)
             if (response.exitCode != 0) {
                 logger.error("Failed to get info for $url. Exit code: ${response.exitCode}, Output: ${response.out}")
                 throw IngestionException("Failed to get video info: ${response.out}")
@@ -50,16 +50,16 @@ class YtdlpClient(private val downloadsDir: String) {
 
     suspend fun downloadContent(url: String, videoId: String): List<File> = withContext(Dispatchers.IO) {
         logger.info("Starting download for videoId: $videoId, URL: $url")
-        val request = YtdlpRequest(url, downloadsDir)
-            .setOption("write-auto-sub")
-            .setOption("sub-lang", "de")
-            .setOption("convert-subs", "srt")
-            .setOption("extract-audio")
-            .setOption("audio-format", "opus")
-            .setOption("output", "$videoId.%(ext)s")
+        val request = YoutubeDLRequest(url, downloadsDir)
+        request.setOption("write-auto-sub")
+        request.setOption("sub-lang", "de")
+        request.setOption("convert-subs", "srt")
+        request.setOption("extract-audio")
+        request.setOption("audio-format", "opus")
+        request.setOption("output", "$videoId.%(ext)s")
 
         try {
-            val response = YtdlpLauncher.execute(request)
+            val response = YoutubeDL.execute(request)
             if (response.exitCode != 0) {
                 logger.error("Download failed for $videoId. Exit code: ${response.exitCode}, Output: ${response.out}")
                 throw IngestionException("yt-dlp download failed: ${response.out}")

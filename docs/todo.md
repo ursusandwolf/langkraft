@@ -36,4 +36,4 @@
 ## Phase 6: Release & Scale
 - [x] Android APK/Bundle build configuration
 - [x] Web production deployment setup (Compose HTML/Wasm)
-- [x] User authentication and cloud sync (JWT & Sync Protocol implemented)
+- [x] User authentication and cloud sync (Exposed DB & Real Sync Protocol implemented)

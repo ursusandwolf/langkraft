@@ -120,10 +120,13 @@ fun ImmersionPlayerView(
                                     line = line,
                                     isCurrent = state.currentTimeMs in line.startMs..line.endMs,
                                     translation = state.sentenceTranslations[line.id],
-                                    isAnalyzing = state.analyzingSentenceId == line.id,
+                                    lemmas = state.lemmatizedSentences[line.id],
+                                    isTranslating = state.analyzingSentenceId == line.id,
+                                    isLemmatizing = state.lemmatizingSentenceId == line.id,
                                     onClick = { viewModel.onEvent(PlayerEvent.SeekTo(line.startMs)) },
                                     onWordClick = { viewModel.onEvent(PlayerEvent.WordClicked(it, line)) },
                                     onTranslateClick = { viewModel.onEvent(PlayerEvent.ToggleTranslation(line)) },
+                                    onLemmatizeClick = { viewModel.onEvent(PlayerEvent.ToggleLemmatization(line)) },
                                     onAnalysisClick = { viewModel.onEvent(PlayerEvent.DeepAnalysisClicked(line)) },
                                     onMemorizationClick = { viewModel.onEvent(PlayerEvent.MemorizationClicked(line.textDe)) }
                                 )

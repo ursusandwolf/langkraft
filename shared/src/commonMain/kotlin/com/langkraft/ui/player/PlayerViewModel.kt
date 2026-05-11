@@ -60,6 +60,9 @@ class PlayerViewModel(
             is PlayerEvent.ToggleTranslation -> {
                 handleToggleTranslation(event.line)
             }
+            is PlayerEvent.ToggleLemmatization -> {
+                handleToggleLemmatization(event.line)
+            }
             is PlayerEvent.DismissWordDetails -> {
                 _state.update { it.copy(selectedWord = null, wordTranslation = null) }
             }

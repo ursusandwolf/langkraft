@@ -1,10 +1,11 @@
 plugins {
     kotlin("multiplatform")
-    id("com.android.library")
+    // id("com.android.library")
     id("org.jetbrains.compose")
     id("app.cash.sqldelight")
 }
 
+/*
 android {
     namespace = "com.langkraft"
     compileSdk = 34
@@ -12,9 +13,10 @@ android {
         minSdk = 24
     }
 }
+*/
 
 kotlin {
-    androidTarget()
+    // androidTarget()
     jvm("desktop") // For testing on desktop
     js(IR) {
         browser()
@@ -35,20 +37,23 @@ kotlin {
                 implementation("io.ktor:ktor-client-logging:2.3.5")
                 implementation("io.ktor:ktor-client-content-negotiation:2.3.5")
                 implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.5")
-                
+
                 // Koin DI
                 val koinVersion = "3.5.0"
                 implementation("io.insert-koin:koin-core:$koinVersion")
                 implementation("io.insert-koin:koin-compose:1.1.0")
             }
         }
+        /*
         val androidMain by getting {
             dependencies {
                 implementation("androidx.media3:media3-exoplayer:1.1.1")
                 implementation("app.cash.sqldelight:android-driver:2.0.0")
             }
         }
+        */
         val desktopMain by getting {
+
             dependencies {
                 implementation(compose.desktop.currentOs)
                 implementation("app.cash.sqldelight:sqlite-driver:2.0.0")

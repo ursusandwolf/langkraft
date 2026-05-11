@@ -4,11 +4,12 @@ import com.langkraft.domain.ai.LinguisticAssistant
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
 import io.ktor.server.http.content.staticFiles
-import io.ktor.server.plugins.statuspages.StatusPages
+import io.ktor.server.plugins.statuspages.StatusPagesConfig
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.Route
+import io.ktor.server.routing.application
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
@@ -22,42 +23,65 @@ import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import java.util.*
 
+import com.langkraft.backend.db.*
+
 fun Route.authRoutes() {
+    val config = application.environment.config
+    val jwtSecret = config.property("jwt.secret").getString()
+    val jwtIssuer = config.property("jwt.issuer").getString()
+    val jwtAudience = config.property("jwt.audience").getString()
+    
+    val userRepository by inject<BackendUserRepository>()
+
     route("/api/auth") {
         post("/register") {
             val request = call.receive<RegisterRequest>()
-            // Simplistic implementation for MVP
+            val existing = userRepository.findByEmail(request.email)
+            if (existing != null) {
+                call.respond(HttpStatusCode.Conflict, "User already exists")
+                return@post
+            }
+            
+            val userId = userRepository.createUser(request.email, request.passwordHash, request.displayName)
             val response = AuthResponse(
-                token = generateToken(request.email),
-                user = UserInfo(UUID.randomUUID().toString(), request.email, request.displayName)
+                token = generateToken(request.email, jwtSecret, jwtIssuer, jwtAudience),
+                user = UserInfo(userId, request.email, request.displayName)
             )
             call.respond(response)
         }
 
         post("/login") {
             val request = call.receive<AuthRequest>()
-            // Simplistic implementation for MVP
+            val user = userRepository.findByEmail(request.email)
+            
+            if (user == null || user.passwordHash != request.passwordHash) {
+                call.respond(HttpStatusCode.Unauthorized, "Invalid credentials")
+                return@post
+            }
+            
             val response = AuthResponse(
-                token = generateToken(request.email),
-                user = UserInfo(UUID.randomUUID().toString(), request.email, "User")
+                token = generateToken(request.email, jwtSecret, jwtIssuer, jwtAudience),
+                user = UserInfo(user.id, user.email, user.displayName)
             )
             call.respond(response)
         }
     }
 }
 
-private fun generateToken(email: String): String {
+private fun generateToken(email: String, secret: String, issuer: String, audience: String): String {
     return JWT.create()
-        .withAudience("http://0.0.0.0:8080/api")
-        .withIssuer("http://0.0.0.0:8080/")
+        .withAudience(audience)
+        .withIssuer(issuer)
         .withClaim("email", email)
         .withExpiresAt(Date(System.currentTimeMillis() + 3600000 * 24)) // 24h
-        .sign(Algorithm.HMAC256("secret"))
+        .sign(Algorithm.HMAC256(secret))
 }
 
 fun Route.apiRoutes() {
     val ingestionService by inject<YouTubeIngestionService>()
     val aiAssistant by inject<LinguisticAssistant>()
+    val userRepository by inject<BackendUserRepository>()
+    val vocabularyRepository by inject<BackendVocabularyRepository>()
 
     authenticate("auth-jwt") {
         route("/api") {
@@ -85,9 +109,24 @@ fun Route.apiRoutes() {
             }
             
             post("/sync") {
+                val principal = call.principal<JWTPrincipal>()
+                val email = principal?.getClaim("email", String::class)
+                
+                if (email == null) {
+                    call.respond(HttpStatusCode.Unauthorized)
+                    return@post
+                }
+                
+                val user = userRepository.findByEmail(email)
+                if (user == null) {
+                    call.respond(HttpStatusCode.Unauthorized)
+                    return@post
+                }
+                
                 val request = call.receive<SyncRequest>()
-                // Mock sync response
-                call.respond(SyncResponse(System.currentTimeMillis(), emptyList()))
+                val serverChanges = vocabularyRepository.sync(user.id, request.clientChanges, request.lastSyncTimestamp)
+                
+                call.respond(SyncResponse(System.currentTimeMillis(), serverChanges))
             }
 
             staticFiles("/media", File("downloads"))
@@ -95,7 +134,7 @@ fun Route.apiRoutes() {
     }
 }
 
-fun StatusPages.Configuration.configureBackendExceptions() {
+fun StatusPagesConfig.configureBackendExceptions() {
     exception<IngestionException> { call, cause ->
         call.respondText("Ingestion Error: ${cause.message}", status = HttpStatusCode.BadRequest)
     }

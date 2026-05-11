@@ -3,6 +3,24 @@
 ## [Unreleased]
 
 ### Added
+- **Backend Persistence:** Implemented real data storage using **Exposed ORM** and SQLite for users and vocabulary sync.
+- **Sync Protocol:** Added a functional incremental synchronization logic in the backend.
+- **Multiplatform UUID:** Implemented cross-platform UUID generator (`expect/actual`) to support JS/Web environments.
+- **Backend Configuration:** Added `application.conf` for secure management of JWT secrets and server settings.
+
+### Fixed
+- **Code Review Fixes:**
+    - Repaired `SqlDelightVocabularyRepository` (fixed broken `upsert`, implemented missing `sync`).
+    - Fixed UI compilation errors in `ImmersionPlayerView`, `PlayerViewModel`, and `Theme`.
+    - Removed hardcoded JWT secrets and фейковую авторизацию.
+- **Build Stabilization:**
+    - Replaced unavailable `YtdlpJava` with stable `youtubedl-java`.
+    - Fixed missing Compose and Koin dependencies in `webApp`.
+    - Resolved platform-specific `java.util` dependencies in the Shared module.
+    - Temporarily disabled `androidApp` module and Android targets to allow builds in SDK-less environments.
+    - Configured `mainClass` for Ktor to enable `shadowJar` builds.
+
+### Added
 - **User Authentication:** Implemented JWT-based authentication for the backend and secure API routes.
 - **Cloud Sync Infrastructure:** Added a synchronization endpoint and logic for multi-device vocabulary updates.
 - **Cloud Sync Foundation:** Updated SQLDelight schema with `lastUpdated` timestamps and incremental sync queries.

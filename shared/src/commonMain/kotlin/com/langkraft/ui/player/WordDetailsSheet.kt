@@ -20,7 +20,7 @@ import androidx.compose.ui.unit.dp
 import com.langkraft.domain.ai.TranslationResult
 import com.langkraft.domain.model.VocabularyWord
 import com.langkraft.domain.model.SubtitleLine
-import java.util.UUID
+import com.langkraft.io.randomUUID
 
 @Composable
 fun WordDetailsSheet(
@@ -80,7 +80,7 @@ fun WordDetailsSheet(
             onClick = {
                 if (result != null && contextLine != null) {
                     onSave(VocabularyWord(
-                        id = UUID.randomUUID().toString(),
+                        id = randomUUID(),
                         word = word,
                         lemma = result.lemma,
                         translation = result.translation,

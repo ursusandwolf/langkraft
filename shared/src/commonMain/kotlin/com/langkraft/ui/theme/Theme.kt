@@ -102,7 +102,7 @@ fun LangkraftTheme(
     MaterialTheme(
         colors = colors,
         typography = LangkraftTypography,
-        shapes = Shapes, // Using default for now
+        shapes = Shapes(), // Using default constructor
         content = content
     )
 }

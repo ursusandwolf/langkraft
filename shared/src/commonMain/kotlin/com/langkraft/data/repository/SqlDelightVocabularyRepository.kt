@@ -36,12 +36,22 @@ class SqlDelightVocabularyRepository(
             contentId = word.contentId,
             subtitleLineId = word.subtitleLineId,
             addedAt = word.addedAt,
-            status = word.status.name
+            status = word.status.name,
+            nextReviewAt = word.nextReviewMs,
+            intervalDays = word.intervalDays.toLong(),
+            easeFactor = word.easeFactor,
+            lastUpdated = Clock.System.now().toEpochMilliseconds()
         )
     }
 
     override suspend fun deleteWord(id: String) {
         db.appDatabaseQueries.deleteWord(id)
+    }
+
+    override suspend fun sync(lastSyncTimestamp: Long): Long {
+        // Implementation for local sync state update if needed
+        // For now just return current time as server timestamp mock
+        return Clock.System.now().toEpochMilliseconds()
     }
 
     override fun getWordCountsByStatus(): Flow<Map<String, Long>> {
@@ -74,18 +84,6 @@ class SqlDelightVocabularyRepository(
             easeFactor = easeFactor,
             status = WordStatus.valueOf(status),
             lastUpdated = lastUpdated
-        )
-    }
-}
-      translation = translation,
-            contextSentence = contextSentence ?: "",
-            contentId = contentId,
-            subtitleLineId = subtitleLineId,
-            addedAt = addedAt,
-            nextReviewMs = nextReviewAt ?: 0L,
-            intervalDays = intervalDays.toInt(),
-            easeFactor = easeFactor,
-            status = WordStatus.valueOf(status)
         )
     }
 }

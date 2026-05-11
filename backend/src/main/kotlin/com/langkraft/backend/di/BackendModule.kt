@@ -11,7 +11,25 @@ import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
 import org.koin.dsl.module
 
+import com.langkraft.backend.db.*
+import org.jetbrains.exposed.sql.Database
+import org.jetbrains.exposed.sql.SchemaUtils
+import org.jetbrains.exposed.sql.transactions.transaction
+import java.io.File
+
 val backendModule = module {
+    single { 
+        val dbFile = File("data").apply { mkdirs() }
+        Database.connect("jdbc:sqlite:data/langkraft.db", "org.xerial.sqlite.JDBC").also {
+            transaction(it) {
+                SchemaUtils.create(Users, VocabularySync)
+            }
+        }
+    }
+    
+    single { BackendUserRepository() }
+    single { BackendVocabularyRepository() }
+
     single { YtdlpClient("downloads") }
     single { YouTubeIngestionService(get()) }
     
