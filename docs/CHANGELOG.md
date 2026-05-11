@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 ### Added
+- **User Authentication:** Implemented JWT-based authentication for the backend and secure API routes.
+- **Cloud Sync Infrastructure:** Added a synchronization endpoint and logic for multi-device vocabulary updates.
 - **Cloud Sync Foundation:** Updated SQLDelight schema with `lastUpdated` timestamps and incremental sync queries.
 - **Auth & Sync Models:** Defined domain models for JWT authentication and multi-device synchronization.
 - **Multi-platform Release Modules:** Dedicated `androidApp` and `webApp` modules for production builds.

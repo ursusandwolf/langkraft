@@ -30,6 +30,11 @@ fun main() {
         .start(wait = true)
 }
 
+import io.ktor.server.auth.*
+import io.ktor.server.auth.jwt.*
+import com.auth0.jwt.JWT
+import com.auth0.jwt.algorithms.Algorithm
+
 fun Application.module() {
     install(Koin) {
         slf4jLogger()
@@ -44,11 +49,29 @@ fun Application.module() {
         configureBackendExceptions()
     }
 
+    install(Authentication) {
+        jwt("auth-jwt") {
+            realm = "Access to 'api'"
+            verifier(
+                JWT.require(Algorithm.HMAC256("secret"))
+                    .withAudience("http://0.0.0.0:8080/api")
+                    .withIssuer("http://0.0.0.0:8080/")
+                    .build()
+            )
+            validate { credential ->
+                if (credential.payload.audience.contains("http://0.0.0.0:8080/api")) {
+                    JWTPrincipal(credential.payload)
+                } else null
+            }
+        }
+    }
+
     routing {
         get("/") {
             call.respondText("Langkraft Backend is running")
         }
         
+        authRoutes()
         apiRoutes()
     }
 }
