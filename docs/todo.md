@@ -34,6 +34,6 @@
 - [x] Speed control (0.75x, 1x, 1.25x)
 
 ## Phase 6: Release & Scale
-- [ ] Android APK/Bundle build
-- [ ] Web production deployment (Compose HTML/Wasm)
+- [x] Android APK/Bundle build configuration
+- [x] Web production deployment setup (Compose HTML/Wasm)
 - [ ] User authentication and cloud sync

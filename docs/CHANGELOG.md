@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 ### Added
+- **Multi-platform Release Modules:** Dedicated `androidApp` and `webApp` modules for production builds.
+- **Android Release Config:** Configured ProGuard and release build types for APK/Bundle generation.
+- **Web Production Setup:** Implemented Compose HTML/Wasm entry point for production deployment.
 - **Langkraft Design System:** New theme with "German Immersion" aesthetics (Midnight Blue & Amber palette).
 - **Dark Mode Support:** Full support for dark theme across all components.
 - **Enhanced AI Correction:** Improved pedagogical explanations and stylistic suggestions for "Active Writing".

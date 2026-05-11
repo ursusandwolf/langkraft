@@ -19,5 +19,5 @@ dependencyResolutionManagement {
 rootProject.name = "langkraft"
 include(":shared")
 include(":backend")
-// include(":androidApp") 
-// include(":webApp")
+include(":androidApp") 
+include(":webApp")
