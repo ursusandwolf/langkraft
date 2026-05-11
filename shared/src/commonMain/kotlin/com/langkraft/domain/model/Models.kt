@@ -45,9 +45,11 @@ data class VocabularyWord(
     val status: WordStatus = WordStatus.NEW,
     val nextReviewMs: Long = 0,
     val intervalDays: Int = 0,
-    val easeFactor: Double = 2.5
+    val easeFactor: Double = 2.5,
+    val lastUpdated: Long = 0
 )
 
+@kotlinx.serialization.Serializable
 enum class WordStatus {
     NEW, LEARNING, MASTERED
 }

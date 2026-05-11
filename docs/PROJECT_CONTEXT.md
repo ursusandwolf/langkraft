@@ -30,4 +30,4 @@ The app follows a specific language acquisition methodology:
 - [x] Pedagogical AI Correction for Active Writing
 - [x] Theming and UI/UX Polishing (German aesthetics)
 - [x] Multi-platform Release Configuration (Android & Web)
-- [ ] User authentication and cloud sync
+- [/] User authentication and cloud sync (Sync protocol & schema implemented)

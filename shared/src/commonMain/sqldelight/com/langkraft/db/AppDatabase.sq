@@ -37,6 +37,7 @@ CREATE TABLE Vocabulary (
     intervalDays INTEGER NOT NULL DEFAULT 0,
     easeFactor REAL NOT NULL DEFAULT 2.5,
     status TEXT NOT NULL DEFAULT 'NEW', -- NEW, LEARNING, MASTERED
+    lastUpdated INTEGER NOT NULL DEFAULT 0,
     
     FOREIGN KEY (contentId) REFERENCES Content(id) ON DELETE SET NULL,
     FOREIGN KEY (subtitleLineId) REFERENCES SubtitleLine(id) ON DELETE SET NULL
@@ -67,11 +68,14 @@ deleteSubtitlesByContentId:
 DELETE FROM SubtitleLine WHERE contentId = ?;
 
 upsertWord:
-INSERT OR REPLACE INTO Vocabulary(id, word, lemma, translation, contextSentence, contentId, subtitleLineId, addedAt, status)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT OR REPLACE INTO Vocabulary(id, word, lemma, translation, contextSentence, contentId, subtitleLineId, addedAt, nextReviewAt, intervalDays, easeFactor, status, lastUpdated)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 deleteWord:
 DELETE FROM Vocabulary WHERE id = ?;
+
+selectWordsUpdatedAfter:
+SELECT * FROM Vocabulary WHERE lastUpdated > ?;
 
 selectVocabularyToReview:
 SELECT * FROM Vocabulary WHERE nextReviewAt <= ? OR nextReviewAt IS NULL ORDER BY nextReviewAt ASC;

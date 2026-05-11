@@ -72,6 +72,19 @@ class SqlDelightVocabularyRepository(
             nextReviewMs = nextReviewAt ?: 0L,
             intervalDays = intervalDays.toInt(),
             easeFactor = easeFactor,
+            status = WordStatus.valueOf(status),
+            lastUpdated = lastUpdated
+        )
+    }
+}
+      translation = translation,
+            contextSentence = contextSentence ?: "",
+            contentId = contentId,
+            subtitleLineId = subtitleLineId,
+            addedAt = addedAt,
+            nextReviewMs = nextReviewAt ?: 0L,
+            intervalDays = intervalDays.toInt(),
+            easeFactor = easeFactor,
             status = WordStatus.valueOf(status)
         )
     }

@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 ### Added
+- **Cloud Sync Foundation:** Updated SQLDelight schema with `lastUpdated` timestamps and incremental sync queries.
+- **Auth & Sync Models:** Defined domain models for JWT authentication and multi-device synchronization.
 - **Multi-platform Release Modules:** Dedicated `androidApp` and `webApp` modules for production builds.
 - **Android Release Config:** Configured ProGuard and release build types for APK/Bundle generation.
 - **Web Production Setup:** Implemented Compose HTML/Wasm entry point for production deployment.

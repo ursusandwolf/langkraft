@@ -13,6 +13,9 @@ dependencies {
     implementation("io.insert-koin:koin-ktor:3.5.0")
     implementation("io.insert-koin:koin-logger-slf4j:3.5.0")
 
+    implementation("io.ktor:ktor-server-auth:2.3.5")
+    implementation("io.ktor:ktor-server-auth-jwt:2.3.5")
+
     implementation("io.ktor:ktor-client-core:2.3.5")
     implementation("io.ktor:ktor-client-cio:2.3.5")
     implementation("io.ktor:ktor-client-content-negotiation:2.3.5")

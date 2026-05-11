@@ -28,6 +28,9 @@ interface VocabularyRepository {
     suspend fun saveWord(word: VocabularyWord)
     suspend fun deleteWord(id: String)
     
+    // Sync
+    suspend fun sync(lastSyncTimestamp: Long): Long // Returns new server timestamp
+    
     // Stats
     fun getWordCountsByStatus(): Flow<Map<String, Long>>
     fun getWordsAddedSince(timestamp: Long): Flow<Long>
