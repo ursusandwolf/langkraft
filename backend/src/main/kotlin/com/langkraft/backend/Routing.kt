@@ -27,48 +27,27 @@ import com.langkraft.backend.db.*
 import at.favre.lib.crypto.bcrypt.BCrypt
 
 fun Route.authRoutes() {
-    val userRepository by inject<BackendUserRepository>()
-    val jwtService by inject<JwtService>()
+    val authService by inject<AuthService>()
 
     route("/api/auth") {
         post("/register") {
             val request = call.receive<RegisterRequest>()
-            val existing = userRepository.findByEmail(request.email)
-            if (existing != null) {
+            val response = authService.register(request)
+            if (response == null) {
                 call.respond(HttpStatusCode.Conflict, "User already exists")
-                return@post
+            } else {
+                call.respond(response)
             }
-            
-            val passwordHash = BCrypt.withDefaults().hashToString(12, request.passwordHash.toCharArray())
-            val userId = userRepository.createUser(request.email, passwordHash, request.displayName)
-            
-            val response = AuthResponse(
-                token = jwtService.generateToken(request.email),
-                user = UserInfo(userId, request.email, request.displayName)
-            )
-            call.respond(response)
         }
 
         post("/login") {
             val request = call.receive<AuthRequest>()
-            val user = userRepository.findByEmail(request.email)
-            
-            if (user == null) {
+            val response = authService.login(request)
+            if (response == null) {
                 call.respond(HttpStatusCode.Unauthorized, "Invalid credentials")
-                return@post
+            } else {
+                call.respond(response)
             }
-
-            val result = BCrypt.verifyer().verify(request.passwordHash.toCharArray(), user.passwordHash)
-            if (!result.verified) {
-                call.respond(HttpStatusCode.Unauthorized, "Invalid credentials")
-                return@post
-            }
-            
-            val response = AuthResponse(
-                token = jwtService.generateToken(request.email),
-                user = UserInfo(user.id, user.email, user.displayName)
-            )
-            call.respond(response)
         }
     }
 }

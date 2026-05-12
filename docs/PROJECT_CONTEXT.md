@@ -22,7 +22,14 @@ The app follows a specific language acquisition methodology:
 - **UI & UX:** Langkraft Design System implemented. The SRS module now utilizes an Anki-style 4-button system (AGAIN, HARD, GOOD, EASY) for better mobile UX. 
 
 ## Tech Stack
-...
+- **Build**: Gradle 8.14
+- **Language**: Kotlin 2.0.21
+- **Platform**: Multi-platform (Android, Web/Wasm, Desktop)
+- **UI**: Compose Multiplatform
+- **Database**: SQLDelight
+- **Backend**: Ktor
+- **AI**: Gemini API (via `GeminiLinguisticAssistant`)
+- **Authentication**: JWT & BCrypt
 ## Pending Items
 - [x] Deep Analysis Mode and Contextual Lemmatization
 - [x] Pedagogical AI Correction for Active Writing

@@ -1,7 +1,9 @@
 # Changelog
 
 ## [Unreleased]
-
+- Refactored Auth logic: extracted `AuthService` from `Routing.kt` for improved SRP and maintainability.
+- Initialized `SyncManager` in the shared module to handle offline-first synchronization queues.
+- Updated `PROJECT_CONTEXT.md` to reflect the Gradle upgrade to 8.14.
 ### Added
 - **Async Backend Ingestion:** Refactored `/api/ingest` on the backend to execute asynchronously, returning a `jobId` for client polling to prevent HTTP timeouts.
 - **Offline Sync Queue:** Implemented a robust offline-first synchronization strategy using `PendingSyncChange` tables in SQLDelight, replacing the previous `NotImplementedError` stub.

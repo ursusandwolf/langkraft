@@ -30,6 +30,7 @@ val backendModule = module {
     single { BackendUserRepository() }
     single<VocabularySyncRepository> { BackendVocabularyRepository() }
     single { com.langkraft.backend.JwtService(get()) }
+    single { com.langkraft.backend.AuthService(get(), get()) }
 
     single { YtdlpClient("downloads") }
     single { YouTubeIngestionService(get()) }
