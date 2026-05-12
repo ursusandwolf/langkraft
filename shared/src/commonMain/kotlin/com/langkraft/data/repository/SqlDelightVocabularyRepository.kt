@@ -1,20 +1,28 @@
 package com.langkraft.data.repository
 
-import com.langkraft.db.AppDatabase
-import com.langkraft.domain.model.VocabularyWord
-import com.langkraft.domain.model.WordStatus
-import com.langkraft.domain.repository.VocabularyRepository
 import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToList
 import app.cash.sqldelight.coroutines.mapToOne
+import com.langkraft.db.AppDatabase
+import com.langkraft.domain.model.SyncRequest
+import com.langkraft.domain.model.SyncResponse
+import com.langkraft.domain.model.VocabularyWord
+import com.langkraft.domain.model.WordStatus
+import com.langkraft.domain.repository.VocabularyRepository
+import io.ktor.client.*
+import io.ktor.client.call.*
+import io.ktor.client.request.*
+import io.ktor.http.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.datetime.Clock
 
 class SqlDelightVocabularyRepository(
-    private val db: AppDatabase
+    private val db: AppDatabase,
+    private val httpClient: HttpClient
 ) : VocabularyRepository {
+
 
     override fun getWordsToReview(): Flow<List<VocabularyWord>> {
         val now = Clock.System.now().toEpochMilliseconds()
@@ -67,23 +75,54 @@ class SqlDelightVocabularyRepository(
             db.appDatabaseQueries.insertPendingChange(
                 wordId = id,
                 changeType = "DELETE",
-                timestamp = Clock.System.now().toEpochMilliseconds()
-            )
-        }
-    }
+                import com.langkraft.domain.model.SyncRequest
+                import com.langkraft.domain.model.SyncResponse
+                import io.ktor.client.*
+                import io.ktor.client.call.*
+                import io.ktor.client.request.*
+                import io.ktor.http.*
+                import kotlinx.serialization.json.Json
 
-    override suspend fun sync(lastSyncTimestamp: Long): Long {
-        // Collect pending changes
-        val pendingChanges = db.appDatabaseQueries.getAllPendingChanges().executeAsList()
-        
-        // TODO: In Phase 7, send these pendingChanges to the backend via HttpClient:
-        // val request = SyncRequest(lastSyncTimestamp, clientChanges)
-        // val response = httpClient.post("/api/sync") { setBody(request) }.body<SyncResponse>()
-        // Then apply response.serverChanges to the local DB.
-        
-        // For now, to enable offline functionality without crashing:
-        db.appDatabaseQueries.clearAllPendingChanges()
-        return Clock.System.now().toEpochMilliseconds()
+                class SqlDelightVocabularyRepository(
+                    private val db: AppDatabase,
+                    private val httpClient: HttpClient
+                ) : VocabularyRepository {
+                ...
+                    override suspend fun sync(lastSyncTimestamp: Long): Long {
+                        val pendingChanges = db.appDatabaseQueries.getAllPendingChanges().executeAsList()
+                        val changedWords = pendingChanges.map { change ->
+                            val wordEntity = db.appDatabaseQueries.selectWordById(change.wordId).executeAsOneOrNull()
+                            wordEntity?.toDomain() ?: VocabularyWord(
+                                id = change.wordId, word = "", lemma = "", translation = "", contextSentence = "",
+                                contentId = "", subtitleLineId = "", addedAt = 0, nextReviewMs = 0,
+                                intervalDays = 0, easeFactor = 0f, status = WordStatus.NEW, lapseCount = 0, tags = emptyList(), lastUpdated = 0
+                            )
+                        }
+
+                        return try {
+                            val response: SyncResponse = httpClient.post("https://api.langkraft.com/api/sync") {
+                                contentType(ContentType.Application.Json)
+                                setBody(SyncRequest(lastSyncTimestamp, changedWords))
+                            }.body()
+
+                            db.appDatabaseQueries.transaction {
+                                response.serverChanges.forEach { word ->
+                                    db.appDatabaseQueries.upsertWord(
+                                        word.id, word.word, word.lemma, word.translation, word.contextSentence,
+                                        word.contentId, word.subtitleLineId, word.addedAt, word.nextReviewMs,
+                                        word.intervalDays.toLong(), word.easeFactor, word.status.name,
+                                        word.lapseCount.toLong(), word.tags.joinToString(","), word.lastUpdated
+                                    )
+                                }
+                                db.appDatabaseQueries.clearAllPendingChanges()
+                            }
+                            response.serverTimestamp
+                        } catch (e: Exception) {
+                            println("Sync failed: ${e.message}")
+                            lastSyncTimestamp
+                        }
+                    }
+
     }
 
     override fun getWordCountsByStatus(): Flow<Map<WordStatus, Long>> {

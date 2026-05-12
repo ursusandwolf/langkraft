@@ -33,12 +33,24 @@ fun initKoin(appDeclaration: KoinAppDeclaration = {}) =
 fun initKoin() = initKoin {}
 
 val commonModule = module {
+    // Network
+    single { 
+        HttpClient {
+            install(ContentNegotiation) {
+                json(Json { ignoreUnknownKeys = true })
+            }
+        }
+    }
+
     // Repositories
     single { SqlDelightContentRepository(get(), get(), get()) }
     single<LocalContentRepository> { get<SqlDelightContentRepository>() }
     single<RemoteContentSource> { get<SqlDelightContentRepository>() }
     single<AudioDownloader> { get<SqlDelightContentRepository>() }
-    single<VocabularyRepository> { SqlDelightVocabularyRepository(get()) }
+    single<VocabularyRepository> { SqlDelightVocabularyRepository(get(), get()) }
+
+
+
 
     // IO & Hardware
     single<FileSystem> { FileSystemImpl() }
