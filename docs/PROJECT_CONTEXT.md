@@ -14,12 +14,12 @@ The app follows a specific language acquisition methodology:
 
 ## Current State
 - **Security:** Critical vulnerabilities resolved. User passwords are secured with **BCrypt**. AI API keys are protected in headers. JWT logic is encapsulated in a dedicated service.
-- **Architecture:** Implemented **Interface Segregation (ISP)** for content management and **Dependency Inversion (DIP)** for SRS logic. Introduced the **Decorator Pattern** for AI response caching and the **Delegate Pattern** for simplifying complex ViewModels.
-- **Data Layer:** SQLDelight schema optimized with lemmas and SRS-data. Backend synchronization protocol optimized to resolve N+1 query issues. The data model is language-agnostic, supporting flexible content and translation languages.
-- **Backend:** Modularized Ktor server with real persistence. Implements robust authentication and incremental vocabulary synchronization.
-- **AI Integration:** Full suite of immersion tools with a caching layer: contextual translation, Deep Analysis Mode, contextual lemmatization, and pedagogical correction.
+- **Architecture:** The project strictly follows **Clean Architecture** principles. Introduced **Interface Segregation (ISP)** for content management and **Dependency Inversion (DIP)** for SRS logic. ViewModels are kept lean via the **Delegate Pattern** (`PlayerLinguisticDelegate`, `OfflineDownloadDelegate`), and AI responses are optimized using the **Decorator Pattern**.
+- **Data Layer:** SQLDelight schema is fully robust, supporting incremental sync, `lapseCount`, and tags. The N+1 query issue in synchronization is resolved via batch upserts.
+- **Backend:** Modularized Ktor server with asynchronous YouTube ingestion (`/api/ingest` polling) and background processing for waveform generation.
+- **Offline-First Sync:** Implemented a `PendingSyncChange` queue on the client to seamlessly handle operations without network connectivity.
 - **Multi-platform:** Shared UI and business logic supporting Android, Web (Wasm), and Desktop.
-- **UI:** Langkraft Design System with "German Immersion" aesthetics (Midnight Blue/Amber). Player supports deep grammatical analysis and lemmatization.
+- **UI & UX:** Langkraft Design System implemented. The SRS module now utilizes an Anki-style 4-button system (AGAIN, HARD, GOOD, EASY) for better mobile UX. 
 
 ## Tech Stack
 ...
@@ -29,5 +29,7 @@ The app follows a specific language acquisition methodology:
 - [x] Theming and UI/UX Polishing (German aesthetics)
 - [x] Multi-platform Release Configuration (Android & Web)
 - [x] User authentication and cloud sync foundation
+- [x] Async Backend Ingestion & Offline Sync Queue
 - [ ] Production deployment and user scaling
+- [ ] Implement full network synchronization loop using the new Offline Sync Queue
 

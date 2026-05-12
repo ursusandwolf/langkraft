@@ -3,6 +3,19 @@
 ## [Unreleased]
 
 ### Added
+- **Async Backend Ingestion:** Refactored `/api/ingest` on the backend to execute asynchronously, returning a `jobId` for client polling to prevent HTTP timeouts.
+- **Offline Sync Queue:** Implemented a robust offline-first synchronization strategy using `PendingSyncChange` tables in SQLDelight, replacing the previous `NotImplementedError` stub.
+- **Waveform Generation:** Added a placeholder for waveform amplitude extraction during YouTube audio ingestion.
+
+### Changed
+- **SRS UX Overhaul:** Replaced the 0-5 quality scale with an intuitive 4-button Anki-style system (`AGAIN`, `HARD`, `GOOD`, `EASY`) in `SrsTrainingView` and `SrsEngine`.
+- **Vocabulary Domain Model:** Enhanced `VocabularyWord` with `lapseCount` and `tags` to support advanced SRS tracking.
+- **Player Delegate Refactoring:** Extracted offline audio downloading logic from `PlayerViewModel` into a dedicated `OfflineDownloadDelegate` (Single Responsibility Principle).
+
+### Fixed
+- **UI Race Condition:** Resolved a state race condition in `SrsTrainingViewModel` by removing manual UI list manipulation and fully relying on the reactive SQLDelight database flow as the single source of truth.
+
+### Added (Previous)
 - **Security Enhancements (Critical):**
     - Implemented secure password hashing using **BCrypt** (12 rounds) on the backend.
     - Encapsulated JWT logic into a dedicated `JwtService`.
