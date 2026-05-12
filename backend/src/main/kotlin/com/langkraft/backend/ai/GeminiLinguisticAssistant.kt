@@ -7,8 +7,7 @@ import com.langkraft.domain.ai.DeepAnalysisResult
 import com.langkraft.domain.ai.CorrectionResult
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
-import io.ktor.client.request.post
-import io.ktor.client.request.setBody
+import io.ktor.client.request.*
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.contentType
 import io.ktor.http.ContentType
@@ -37,14 +36,14 @@ class GeminiLinguisticAssistant(
     }
 
     override suspend fun translateSentence(text: String): String {
-        val prompt = "Translate this German sentence to English: \"$text\". Output only the translation."
+        val prompt = "Translate this German sentence to English: \"${text}\". Output only the translation."
         val response: GeminiResponse = callGeminiRaw(prompt)
         return response.candidates.firstOrNull()?.content?.parts?.firstOrNull()?.text?.trim() ?: "Translation failed"
     }
 
     override suspend fun analyzeSentence(text: String): DeepAnalysisResult {
         val prompt = """
-            Perform a professional grammatical analysis of this German sentence: "$text".
+            Perform a professional grammatical analysis of this German sentence: "${text}".
             Focus on the Ilis Immersion methodology (Deep Analysis).
             Provide the result as a JSON object with fields:
             "words": list of objects with:
@@ -62,7 +61,7 @@ class GeminiLinguisticAssistant(
 
     override suspend fun correctText(text: String): CorrectionResult {
         val prompt = """
-            Correct this German text as a supportive language teacher: "$text".
+            Correct this German text as a supportive language teacher: "${text}".
             Focus on the Ilis Immersion methodology (natural phrasing and pedagogical clarity).
             
             Provide the result as a JSON object with fields:
@@ -94,16 +93,14 @@ class GeminiLinguisticAssistant(
         return try {
             jsonIgnoreUnknown.decodeFromString(text)
         } catch (e: Exception) {
-            throw AiException("Failed to parse Gemini response: $text", e)
+            throw AiException("Failed to parse Gemini response: ${text}", e)
         }
     }
 
     private suspend fun callGeminiRaw(prompt: String): GeminiResponse {
         val response = try {
             httpClient.post(baseUrl) {
-                headers {
-                    append("x-goog-api-key", apiKey)
-                }
+                header("x-goog-api-key", apiKey)
                 contentType(ContentType.Application.Json)
                 setBody(GeminiRequest(listOf(GeminiContent(listOf(GeminiPart(prompt))))))
             }

@@ -21,9 +21,6 @@ import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 
 @Serializable
-data class IngestRequest(val url: String)
-
-@Serializable
 data class TranslateRequest(val word: String, val context: String)
 
 @Serializable

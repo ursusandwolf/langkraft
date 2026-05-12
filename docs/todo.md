@@ -1,6 +1,6 @@
 # Langkraft Development Roadmap
 
-## Phase 1: Foundation (Current)
+## Phase 1: Foundation (Done)
 - [x] Architecture design (KMP + Compose)
 - [x] SQLDelight schema for Content and Vocabulary
 - [x] Domain models and UseCases
@@ -13,27 +13,35 @@
 - [x] Audio streaming/downloading service (Opus format)
 - [x] Error handling for YouTube extraction
 
-## Phase 3: AI & Intelligence
-- [/] Integrate Google Gemini API for translations (Backend service implemented)
-- [x] **Deep Analysis Mode:** Grammatical breakdown of a specific subtitle line (cases, verb forms, syntax)
-- [x] **Contextual Lemmatization:** Link words to their base forms while keeping the sentence context
-- [x] **AI Correction:** Feature to correct user's "Active Writing" (diaries/summaries) based on content with pedagogical explanations
+## Phase 3: AI & Intelligence (Done)
+- [x] Integrate Google Gemini API for translations (with `CachingLinguisticAssistant` Decorator)
+- [x] **Deep Analysis Mode:** Grammatical breakdown of a specific subtitle line
+- [x] **Contextual Lemmatization:** Link words to their base forms
+- [x] **AI Correction:** Feature to correct user's "Active Writing"
 
-## Phase 4: Learning Experience (Done)
-- [x] **Spaced Repetition (SRS):** Algorithm for vocabulary (sentences, not isolated words)
-- [x] **Repeat Loop Mode:** Easy toggle to loop a specific audio/subtitle segment for "Deep Listening"
-- [x] **Prose Memorization Tool:** Hidden-text mode for practicing memorized fragments
-- [x] **Active Output:** Simple text editor to write summaries of listened content
-- [x] Progress tracking dashboard (listening hours, sentences mastered)
-- [x] Offline synchronization for Android
+## Phase 4: Learning Experience
+- [x] **Spaced Repetition (SRS):** SM-2 algorithm integrated via Dependency Injection
+- [x] **Repeat Loop Mode:** Easy toggle to loop a specific audio/subtitle segment
+- [x] **Prose Memorization Tool:** Hidden-text mode
+- [x] **Active Output:** Writing diaries
+- [x] Progress tracking dashboard
+- [ ] **SRS UX Improvement:** Move from 0-5 scale to a 4-button Anki-style system (AGAIN, HARD, GOOD, EASY)
+- [ ] Add `lapseCount` and `tags` tracking to `VocabularyWord` model
 
 ## Phase 5: UI/UX Polishing
 - [x] Content selection screen (URL input, library)
 - [x] Theming and design system (German immersion aesthetics)
-- [x] Waveform visualization for audio
 - [x] Speed control (0.75x, 1x, 1.25x)
+- [ ] Implement Waveform amplitude extraction on backend to power `WaveformVisualizer`
+- [ ] Fix state race condition in `SrsTrainingViewModel` when updating DB and UI state concurrently
 
-## Phase 6: Release & Scale
+## Phase 6: Release & Security
 - [x] Android APK/Bundle build configuration
 - [x] Web production deployment setup (Compose HTML/Wasm)
-- [x] User authentication and cloud sync (Exposed DB & Real Sync Protocol implemented)
+- [x] User authentication (BCrypt hashing) and JWT routing
+- [ ] Change Ktor `/api/ingest` to be asynchronous (polling/webhooks) to avoid HTTP timeouts during long downloads
+
+## Phase 7: Synchronization & Offline First
+- [x] Backend incremental synchronization protocol (Optimized with Batch Upserts)
+- [ ] Implement `SyncManager` on the KMP client with an Offline-First Queue (`PendingSyncChange`) to remove `NotImplementedError`
+- [ ] Extract offline downloading logic from `PlayerViewModel` into a dedicated `OfflineDownloadDelegate`

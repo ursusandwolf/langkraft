@@ -51,10 +51,45 @@ data class VocabularyWord(
     val nextReviewMs: Long = 0,
     val intervalDays: Int = 0,
     val easeFactor: Double = 2.5,
+    val lapseCount: Int = 0,
+    val tags: List<String> = emptyList(),
     val lastUpdated: Long = 0
 )
 
 @kotlinx.serialization.Serializable
 enum class WordStatus {
     NEW, LEARNING, MASTERED
+}
+
+@kotlinx.serialization.Serializable
+enum class ContentProcessingStatus {
+    IDLE,
+    FETCHING_METADATA,
+    DOWNLOADING_AUDIO,
+    PARSING_SUBTITLES,
+    GENERATING_WAVEFORM,
+    READY,
+    ERROR
+}
+
+@kotlinx.serialization.Serializable
+data class IngestionJob(
+    val jobId: String,
+    val status: ContentProcessingStatus,
+    val url: String,
+    val content: ImmersionContent? = null,
+    val error: String? = null
+)
+
+@kotlinx.serialization.Serializable
+data class IngestRequest(val url: String)
+
+@kotlinx.serialization.Serializable
+data class IngestResponse(val jobId: String)
+
+enum class ReviewQuality(val sm2Value: Int) {
+    AGAIN(0),
+    HARD(3),
+    GOOD(4),
+    EASY(5)
 }

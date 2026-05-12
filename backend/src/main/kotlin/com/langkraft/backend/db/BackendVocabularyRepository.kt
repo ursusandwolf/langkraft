@@ -26,6 +26,8 @@ class BackendVocabularyRepository : VocabularySyncRepository {
         this[VocabularySync.nextReviewAt] = word.nextReviewMs
         this[VocabularySync.intervalDays] = word.intervalDays.toLong()
         this[VocabularySync.easeFactor] = word.easeFactor
+        this[VocabularySync.lapseCount] = word.lapseCount
+        this[VocabularySync.tags] = word.tags.joinToString(",")
         this[VocabularySync.lastUpdated] = word.lastUpdated
     }
 
@@ -41,11 +43,13 @@ class BackendVocabularyRepository : VocabularySyncRepository {
         nextReviewMs = this[VocabularySync.nextReviewAt],
         intervalDays = this[VocabularySync.intervalDays].toInt(),
         easeFactor = this[VocabularySync.easeFactor],
+        lapseCount = this[VocabularySync.lapseCount],
+        tags = if (this[VocabularySync.tags].isEmpty()) emptyList() else this[VocabularySync.tags].split(","),
         status = WordStatus.valueOf(this[VocabularySync.status]),
         lastUpdated = this[VocabularySync.lastUpdated]
     )
 
-    fun sync(userId: String, clientChanges: List<VocabularyWord>, lastSyncTimestamp: Long): List<VocabularyWord> = transaction {
+    override fun sync(userId: String, clientChanges: List<VocabularyWord>, lastSyncTimestamp: Long): List<VocabularyWord> = transaction {
         // 1. Process client changes
         val existingIds = VocabularySync
             .slice(VocabularySync.id)

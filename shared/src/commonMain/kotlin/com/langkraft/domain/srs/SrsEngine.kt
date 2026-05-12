@@ -2,6 +2,7 @@ package com.langkraft.domain.srs
 
 import com.langkraft.domain.model.VocabularyWord
 import com.langkraft.domain.model.WordStatus
+import com.langkraft.domain.model.ReviewQuality
 import kotlinx.datetime.Clock
 import kotlin.math.max
 
@@ -9,7 +10,7 @@ import kotlin.math.max
  * Interface for Spaced Repetition Algorithms.
  */
 interface SpacedRepetitionAlgorithm {
-    fun calculateNextReview(word: VocabularyWord, quality: Int): VocabularyWord
+    fun calculateNextReview(word: VocabularyWord, quality: ReviewQuality): VocabularyWord
 }
 
 /**
@@ -30,21 +31,22 @@ class Sm2Algorithm : SpacedRepetitionAlgorithm {
         private const val SM2_EF_QUADRATIC_MODIFIER = 0.02
     }
     
-    override fun calculateNextReview(word: VocabularyWord, quality: Int): VocabularyWord {
+    override fun calculateNextReview(word: VocabularyWord, quality: ReviewQuality): VocabularyWord {
         val now = Clock.System.now().toEpochMilliseconds()
+        val qValue = quality.sm2Value
         
-        // Quality: 0-5 (0: total blackout, 5: perfect response)
-        if (quality < SUCCESS_THRESHOLD) {
+        if (qValue < SUCCESS_THRESHOLD) {
             // Reset interval on failure
             return word.copy(
                 intervalDays = 0,
                 nextReviewMs = now, // Review again soon
                 status = WordStatus.LEARNING,
+                lapseCount = word.lapseCount + 1,
                 lastUpdated = now
             )
         }
 
-        val qDiff = SM2_MAX_QUALITY - quality
+        val qDiff = SM2_MAX_QUALITY - qValue
         val newEaseFactor = max(
             MIN_EASE_FACTOR, 
             word.easeFactor + (SM2_EF_BASE_MODIFIER - qDiff * (SM2_EF_LINEAR_MODIFIER + qDiff * SM2_EF_QUADRATIC_MODIFIER))

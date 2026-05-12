@@ -29,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.langkraft.domain.model.VocabularyWord
+import com.langkraft.domain.model.ReviewQuality
 
 @Composable
 fun SrsTrainingView(
@@ -115,7 +116,7 @@ fun SrsTrainingView(
 }
 
 @Composable
-fun QualityButtons(onQualitySelected: (Int) -> Unit) {
+fun QualityButtons(onQualitySelected: (ReviewQuality) -> Unit) {
     Column {
         Text(
             "How well did you know this?",
@@ -125,10 +126,10 @@ fun QualityButtons(onQualitySelected: (Int) -> Unit) {
         )
         Spacer(modifier = Modifier.height(8.dp))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            QualityButton("0", "Forgot", Color.Red) { onQualitySelected(0) }
-            QualityButton("3", "Hard", Color(0xFFF57C00)) { onQualitySelected(3) }
-            QualityButton("4", "Good", Color.Green) { onQualitySelected(4) }
-            QualityButton("5", "Easy", MaterialTheme.colors.primary) { onQualitySelected(5) }
+            QualityButton("AGAIN", "Forgot", Color.Red) { onQualitySelected(ReviewQuality.AGAIN) }
+            QualityButton("HARD", "Struggled", Color(0xFFF57C00)) { onQualitySelected(ReviewQuality.HARD) }
+            QualityButton("GOOD", "Normal", Color.Green) { onQualitySelected(ReviewQuality.GOOD) }
+            QualityButton("EASY", "Perfect", MaterialTheme.colors.primary) { onQualitySelected(ReviewQuality.EASY) }
         }
     }
 }

@@ -83,8 +83,22 @@ fun Route.apiRoutes() {
         route("/api") {
             post("/ingest") {
                 val request = call.receive<IngestRequest>()
-                val content = ingestionService.ingest(request.url)
-                call.respond(content)
+                val jobId = ingestionService.startIngestion(request.url)
+                call.respond(IngestResponse(jobId))
+            }
+            
+            get("/ingest/{jobId}") {
+                val jobId = call.parameters["jobId"]
+                if (jobId == null) {
+                    call.respond(HttpStatusCode.BadRequest, "Missing jobId")
+                    return@get
+                }
+                val job = ingestionService.getJobStatus(jobId)
+                if (job == null) {
+                    call.respond(HttpStatusCode.NotFound, "Job not found")
+                    return@get
+                }
+                call.respond(job)
             }
 
             route("/ai") {

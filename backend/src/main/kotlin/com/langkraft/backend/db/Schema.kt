@@ -28,6 +28,8 @@ object VocabularySync : Table("vocabulary_sync") {
     val nextReviewAt = long("next_review_at")
     val intervalDays = long("interval_days")
     val easeFactor = double("ease_factor")
+    val lapseCount = integer("lapse_count")
+    val tags = text("tags")
     val lastUpdated = long("last_updated")
 
     override val primaryKey = PrimaryKey(id)

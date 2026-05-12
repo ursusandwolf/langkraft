@@ -1,6 +1,7 @@
 package com.langkraft.ui.srs
 
 import com.langkraft.domain.model.VocabularyWord
+import com.langkraft.domain.model.ReviewQuality
 import com.langkraft.domain.repository.VocabularyRepository
 import com.langkraft.domain.srs.SpacedRepetitionAlgorithm
 import com.langkraft.ui.BaseViewModel
@@ -50,22 +51,14 @@ class SrsTrainingViewModel(
         _state.update { it.copy(isAnswerVisible = true) }
     }
 
-    fun submitResult(quality: Int) {
+    fun submitResult(quality: ReviewQuality) {
         val word = _state.value.currentWord ?: return
         val updatedWord = srsAlgorithm.calculateNextReview(word, quality)
         
         scope.launch {
             vocabularyRepository.saveWord(updatedWord)
-            // The flow will automatically update the queue, but we can also manually move to next
-            _state.update { 
-                val nextQueue = it.queue.drop(1)
-                it.copy(
-                    queue = nextQueue,
-                    currentWord = nextQueue.firstOrNull(),
-                    remainingCount = nextQueue.size,
-                    isAnswerVisible = false
-                )
-            }
+            // SQLDelight flow will automatically emit the updated list
+            // without the completed word, and loadQueue() will update the UI.
         }
     }
 }

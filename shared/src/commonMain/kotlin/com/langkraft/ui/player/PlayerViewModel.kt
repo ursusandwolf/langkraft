@@ -32,6 +32,7 @@ class PlayerViewModel(
     val state: StateFlow<PlayerState> = _state.asStateFlow()
 
     private val linguisticDelegate = PlayerLinguisticDelegate(linguisticAssistant, scope, _state)
+    private val offlineDelegate = OfflineDownloadDelegate(audioDownloader, contentRepository, scope, _state)
 
     fun onEvent(event: PlayerEvent) {
         when (event) {
@@ -44,7 +45,7 @@ class PlayerViewModel(
                 _state.update { it.copy(isLooping = !it.isLooping) }
             }
             is PlayerEvent.ToggleOffline -> {
-                handleToggleOffline()
+                offlineDelegate.handleToggleOffline()
             }
             is PlayerEvent.SetPlaybackSpeed -> {
                 _state.update { it.copy(playbackSpeed = event.speed) }
@@ -83,25 +84,6 @@ class PlayerViewModel(
         scope.launch {
             vocabularyRepository.saveWord(word)
             _state.update { it.copy(selectedWord = null, wordTranslation = null) }
-        }
-    }
-
-    private fun handleToggleOffline() {
-        val currentContent = _state.value.content ?: return
-        if (currentContent.downloadStatus == DownloadStatus.DOWNLOADING) return
-
-        scope.launch {
-            try {
-                audioDownloader.downloadAudio(currentContent)
-                // The repository updates the DB, and since we might be observing it (or we just reload)
-                // For now, let's manually refresh the content in state
-                val updated = contentRepository.getContentById(currentContent.id)
-                if (updated != null) {
-                    _state.update { it.copy(content = updated) }
-                }
-            } catch (e: Exception) {
-                _state.update { it.copy(error = "Download failed: ${e.message}") }
-            }
         }
     }
 
