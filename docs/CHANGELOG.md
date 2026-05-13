@@ -1,9 +1,20 @@
 # Changelog
 
 ## [Unreleased]
-- Refactored Auth logic: extracted `AuthService` from `Routing.kt` for improved SRP and maintainability.
-- Initialized `SyncManager` in the shared module to handle offline-first synchronization queues.
-- Updated `PROJECT_CONTEXT.md` to reflect the Gradle upgrade to 8.14.
+### Added
+- **Backend Conflict Resolution:** Implemented "Last Write Wins" logic in `BackendVocabularyRepository` using `lastUpdated` timestamps to handle multi-device synchronization safely.
+- **Persistent Sync Queue:** Fully integrated the database-backed `PendingSyncChange` queue into the client synchronization workflow.
+- **selectWordById Query:** Added missing SQL query to `AppDatabase.sq` to support granular word retrieval during sync.
+
+### Changed
+- **SyncManager Refactoring:** Completely overhauled `SyncManager` to bridge the gap between UI and Repository. It now triggers the database-backed sync process instead of using an in-memory queue.
+- **Configurable Repository:** Updated `SqlDelightVocabularyRepository` to accept a `baseUrl`, removing hardcoded API endpoints and improving environment flexibility.
+- **Dashboard Sync Integration:** Integrated `SyncManager` into `DashboardViewModel` to automatically trigger synchronization when the user opens the dashboard.
+
+### Fixed
+- **Repository Syntax Error:** Fixed a critical syntax error in `SqlDelightVocabularyRepository.kt` caused by an accidental code insertion during a previous edit.
+
+## [0.5.0] - 2026-05-13
 ### Added
 - **Async Backend Ingestion:** Refactored `/api/ingest` on the backend to execute asynchronously, returning a `jobId` for client polling to prevent HTTP timeouts.
 - **Offline Sync Queue:** Implemented a robust offline-first synchronization strategy using `PendingSyncChange` tables in SQLDelight, replacing the previous `NotImplementedError` stub.
