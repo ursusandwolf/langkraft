@@ -14,12 +14,12 @@ The app follows a specific language acquisition methodology:
 
 ## Current State
 - **Security:** Critical vulnerabilities resolved. User passwords are secured with **BCrypt**. AI API keys are protected in headers. JWT logic is encapsulated in a dedicated service.
-- **Architecture:** The project strictly follows **Clean Architecture** principles. Introduced **Interface Segregation (ISP)** for content management and **Dependency Inversion (DIP)** for SRS logic. ViewModels are kept lean via the **Delegate Pattern** (`PlayerLinguisticDelegate`, `OfflineDownloadDelegate`), and AI responses are optimized using the **Decorator Pattern**.
+- **Architecture:** The project strictly follows **Clean Architecture** principles. Introduced **Interface Segregation (ISP)** for content management and **Dependency Inversion (DIP)** for SRS logic. ViewModels are kept lean via the **Delegate Pattern** (`PlayerLinguisticDelegate`, `OfflineDownloadDelegate`, `PlayerLinguisticDelegate`), and AI responses are optimized using the **Decorator Pattern**.
 - **Data Layer:** SQLDelight schema is fully robust, supporting incremental sync, `lapseCount`, and tags. The N+1 query issue in synchronization is resolved via batch upserts.
-- **Backend:** Modularized Ktor server with asynchronous YouTube ingestion (`/api/ingest` polling) and background processing for waveform generation.
-- **Offline-First Sync:** Implemented a `PendingSyncChange` queue on the client to seamlessly handle operations without network connectivity.
+- **Backend:** Modularized Ktor server with asynchronous YouTube ingestion (`/api/ingest` polling) and background processing for waveform generation (currently simulated).
+- **Offline-First Sync:** Implemented a `PendingSyncChange` persistent queue on the client to seamlessly handle operations without network connectivity. Core sync logic integrated into `SqlDelightVocabularyRepository`.
 - **Multi-platform:** Shared UI and business logic supporting Android, Web (Wasm), and Desktop.
-- **UI & UX:** Langkraft Design System implemented. The SRS module now utilizes an Anki-style 4-button system (AGAIN, HARD, GOOD, EASY) for better mobile UX. 
+- **UI & UX:** Langkraft Design System implemented. The SRS module utilizes an Anki-style 4-button system (AGAIN, HARD, GOOD, EASY).
 
 ## Tech Stack
 - **Build**: Gradle 8.14
@@ -30,13 +30,9 @@ The app follows a specific language acquisition methodology:
 - **Backend**: Ktor
 - **AI**: Gemini API (via `GeminiLinguisticAssistant`)
 - **Authentication**: JWT & BCrypt
-## Pending Items
-- [x] Deep Analysis Mode and Contextual Lemmatization
-- [x] Pedagogical AI Correction for Active Writing
-- [x] Theming and UI/UX Polishing (German aesthetics)
-- [x] Multi-platform Release Configuration (Android & Web)
-- [x] User authentication and cloud sync foundation
-- [x] Async Backend Ingestion & Offline Sync Queue
-- [ ] Production deployment and user scaling
-- [ ] Implement full network synchronization loop using the new Offline Sync Queue
 
+## Pending Items
+- [ ] Refactor `SyncManager` to bridge the gap between UI and Repository sync logic
+- [ ] Implement real Waveform extraction on backend using `audiowaveform` or `ffmpeg`
+- [ ] Add conflict resolution to backend synchronization (Last Write Wins)
+- [ ] Production deployment and user scaling

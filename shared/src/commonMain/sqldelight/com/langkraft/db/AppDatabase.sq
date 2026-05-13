@@ -76,6 +76,9 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 deleteWord:
 DELETE FROM Vocabulary WHERE id = ?;
 
+selectWordById:
+SELECT * FROM Vocabulary WHERE id = ?;
+
 selectWordsUpdatedAfter:
 SELECT * FROM Vocabulary WHERE lastUpdated > ?;
 
