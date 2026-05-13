@@ -1,39 +1,36 @@
 package com.langkraft.data.sync
 
-import com.langkraft.domain.model.PendingSyncChange
+import com.langkraft.domain.repository.VocabularyRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-class SyncManager {
+class SyncManager(
+    private val vocabularyRepository: VocabularyRepository
+) {
     private val mutex = Mutex()
-    private val queue = mutableListOf<PendingSyncChange>()
     
     private val _isSyncing = MutableStateFlow(false)
     val isSyncing: StateFlow<Boolean> = _isSyncing
 
-    suspend fun enqueue(change: PendingSyncChange) {
-        mutex.withLock {
-            queue.add(change)
-        }
-        trySync()
-    }
+    // In a real app, this would be persisted (e.g., using DataStore or a Settings table)
+    private var lastSyncTimestamp: Long = 0
 
-    private suspend fun trySync() {
+    suspend fun sync() {
         if (_isSyncing.value) return
         
         mutex.withLock {
-            if (queue.isEmpty()) return
+            if (_isSyncing.value) return
             _isSyncing.value = true
         }
 
-        // Implementation of sync logic would go here, 
-        // communicating with the API and clearing the queue.
-        // For now, this placeholder satisfies the architectural path.
-        
-        mutex.withLock {
-            queue.clear()
+        try {
+            val newTimestamp = vocabularyRepository.sync(lastSyncTimestamp)
+            lastSyncTimestamp = newTimestamp
+        } catch (e: Exception) {
+            println("SyncManager: Sync failed: ${e.message}")
+        } finally {
             _isSyncing.value = false
         }
     }

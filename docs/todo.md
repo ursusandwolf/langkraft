@@ -30,7 +30,7 @@
 
 ## Phase 5: UI/UX Polishing
 - [x] Content selection screen (URL input, library)
-- [x] Theming and design system (German immersion aesthetics)
+- [x] Theming and design system (German aesthetics)
 - [x] Speed control (0.75x, 1x, 1.25x)
 - [x] Extract offline downloading logic from `PlayerViewModel` into a dedicated `OfflineDownloadDelegate`
 - [ ] Implement Waveform amplitude extraction on backend to power `WaveformVisualizer` (currently simulated)
@@ -41,9 +41,10 @@
 - [x] User authentication (BCrypt hashing) and JWT routing
 - [x] Change Ktor `/api/ingest` to be asynchronous (polling/webhooks) to avoid HTTP timeouts during long downloads
 
-## Phase 7: Synchronization & Offline First
+## Phase 7: Synchronization & Offline First (Done)
 - [x] Backend incremental synchronization protocol (Optimized with Batch Upserts)
 - [x] Implement database-backed Offline-First Queue (`PendingSyncChange`)
-- [ ] Refactor `SyncManager` to use `VocabularyRepository.sync()` instead of in-memory queue
-- [ ] Remove hardcoded sync URL from `SqlDelightVocabularyRepository`
-- [ ] Implement conflict resolution logic on backend (Last Write Wins based on `lastUpdated`)
+- [x] Refactor `SyncManager` to use `VocabularyRepository.sync()` instead of in-memory queue
+- [x] Remove hardcoded sync URL from `SqlDelightVocabularyRepository`
+- [x] Implement conflict resolution logic on backend (Last Write Wins based on `lastUpdated`)
+- [x] Integrate `SyncManager` into `DashboardViewModel` to trigger sync on app start

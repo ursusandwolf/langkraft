@@ -20,7 +20,8 @@ import kotlinx.datetime.Clock
 
 class SqlDelightVocabularyRepository(
     private val db: AppDatabase,
-    private val httpClient: HttpClient
+    private val httpClient: HttpClient,
+    private val baseUrl: String = "https://api.langkraft.com"
 ) : VocabularyRepository {
 
 
@@ -92,7 +93,7 @@ class SqlDelightVocabularyRepository(
         }
 
         return try {
-            val response: SyncResponse = httpClient.post("https://api.langkraft.com/api/sync") {
+            val response: SyncResponse = httpClient.post("$baseUrl/api/sync") {
                 contentType(ContentType.Application.Json)
                 setBody(SyncRequest(lastSyncTimestamp, changedWords))
             }.body()

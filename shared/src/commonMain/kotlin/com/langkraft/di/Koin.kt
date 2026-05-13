@@ -18,6 +18,7 @@ import com.langkraft.io.FileSystem
 import com.langkraft.io.FileSystemImpl
 import com.langkraft.audio.AudioPlayer
 import com.langkraft.audio.AudioPlayerImpl
+import com.langkraft.data.sync.SyncManager
 import com.langkraft.domain.srs.SpacedRepetitionAlgorithm
 import com.langkraft.domain.srs.Sm2Algorithm
 import org.koin.core.context.startKoin
@@ -49,8 +50,8 @@ val commonModule = module {
     single<AudioDownloader> { get<SqlDelightContentRepository>() }
     single<VocabularyRepository> { SqlDelightVocabularyRepository(get(), get()) }
 
-
-
+    // Sync
+    single { SyncManager(get()) }
 
     // IO & Hardware
     single<FileSystem> { FileSystemImpl() }
@@ -70,5 +71,5 @@ val commonModule = module {
     factory { PlayerViewModel(get(), get(), get(), get(), get(), get()) }
     factory { SrsTrainingViewModel(get(), get()) }
     factory { WritingViewModel(get()) }
-    factory { DashboardViewModel(get(), get()) }
+    factory { DashboardViewModel(get(), get(), get()) }
 }

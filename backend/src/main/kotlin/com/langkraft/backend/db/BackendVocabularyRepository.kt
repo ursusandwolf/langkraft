@@ -68,8 +68,15 @@ class BackendVocabularyRepository : VocabularySyncRepository {
         }
 
         toUpdate.forEach { word ->
-            VocabularySync.update({ VocabularySync.id eq word.id }) {
-                it.applyWord(word, userId)
+            val existingLastUpdated = VocabularySync
+                .slice(VocabularySync.lastUpdated)
+                .select { VocabularySync.id eq word.id }
+                .singleOrNull()?.get(VocabularySync.lastUpdated) ?: 0L
+
+            if (word.lastUpdated > existingLastUpdated) {
+                VocabularySync.update({ VocabularySync.id eq word.id }) {
+                    it.applyWord(word, userId)
+                }
             }
         }
 
