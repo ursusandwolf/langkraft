@@ -21,6 +21,10 @@ import com.langkraft.audio.AudioPlayerImpl
 import com.langkraft.data.sync.SyncManager
 import com.langkraft.domain.srs.SpacedRepetitionAlgorithm
 import com.langkraft.domain.srs.Sm2Algorithm
+import io.ktor.client.HttpClient
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.serialization.kotlinx.json.json
+import kotlinx.serialization.json.Json
 import org.koin.core.context.startKoin
 import org.koin.dsl.KoinAppDeclaration
 import org.koin.dsl.module

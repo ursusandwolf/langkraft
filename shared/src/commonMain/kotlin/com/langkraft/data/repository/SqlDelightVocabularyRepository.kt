@@ -88,7 +88,7 @@ class SqlDelightVocabularyRepository(
             wordEntity?.toDomain() ?: VocabularyWord(
                 id = change.wordId, word = "", lemma = "", translation = "", contextSentence = "",
                 contentId = "", subtitleLineId = "", addedAt = 0, nextReviewMs = 0,
-                intervalDays = 0, easeFactor = 0f, status = WordStatus.NEW, lapseCount = 0, tags = emptyList(), lastUpdated = 0
+                intervalDays = 0, easeFactor = 0.0, status = WordStatus.NEW, lapseCount = 0, tags = emptyList(), lastUpdated = 0
             )
         }
 

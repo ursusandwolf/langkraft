@@ -11,7 +11,7 @@ interface VocabularySyncRepository {
     fun sync(userId: String, clientChanges: List<VocabularyWord>, lastSyncTimestamp: Long): List<VocabularyWord>
 }
 
-class BackendVocabularyRepository : VocabularySyncRepository {
+class BackendVocabularyRepository(private val db: Database? = null) : VocabularySyncRepository {
 
     private fun UpdateBuilder<*>.applyWord(word: VocabularyWord, userId: String) {
         this[VocabularySync.userId] = userId
@@ -49,7 +49,7 @@ class BackendVocabularyRepository : VocabularySyncRepository {
         lastUpdated = this[VocabularySync.lastUpdated]
     )
 
-    override fun sync(userId: String, clientChanges: List<VocabularyWord>, lastSyncTimestamp: Long): List<VocabularyWord> = transaction {
+    override fun sync(userId: String, clientChanges: List<VocabularyWord>, lastSyncTimestamp: Long): List<VocabularyWord> = transaction(db) {
         // 1. Process client changes
         val existingIds = VocabularySync
             .slice(VocabularySync.id)
