@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 ### Added
+- **Persistent Sync State:** `SyncManager` now persists the `lastSyncTimestamp` in the database using the new `SyncMetadata` table.
+- **Sync Throttling:** Implemented a minimum 1-minute interval between synchronization attempts in `SyncManager` to prevent redundant calls.
 - **Backend Conflict Resolution:** Implemented "Last Write Wins" logic in `BackendVocabularyRepository` using `lastUpdated` timestamps to handle multi-device synchronization safely.
 - **Persistent Sync Queue:** Fully integrated the database-backed `PendingSyncChange` queue into the client synchronization workflow.
 - **selectWordById Query:** Added missing SQL query to `AppDatabase.sq` to support granular word retrieval during sync.
@@ -12,6 +14,9 @@
 - **Dashboard Sync Integration:** Integrated `SyncManager` into `DashboardViewModel` to automatically trigger synchronization when the user opens the dashboard.
 
 ### Fixed
+- **N+1 Query Problem (Backend):** Optimized `BackendVocabularyRepository.sync()` by fetching all necessary timestamps in a single batch query instead of iterative calls.
+- **Wildcard Imports:** Removed wildcard imports in `DashboardViewModel` to comply with project coding standards.
+- **Race Condition (SyncManager):** Improved thread safety and state management in `SyncManager` by ensuring proper mutex usage and consistent flag resets.
 - **Repository Syntax Error:** Fixed a critical syntax error in `SqlDelightVocabularyRepository.kt` caused by an accidental code insertion during a previous edit.
 
 ## [0.5.0] - 2026-05-13
