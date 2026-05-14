@@ -36,6 +36,21 @@ The app implements a robust offline-first strategy:
 2. **Safe Download:** Audio is downloaded as a `.part` file. Upon completion, it is moved to the final destination and the `DownloadStatus` is updated to `COMPLETED`.
 3. **Playback Resolution:** The `ImmersionContent.getPlaybackUrl()` method automatically prefers local files if the download is successful and the file exists.
 
+## Synchronization Architecture
+
+Langkraft uses a custom incremental synchronization protocol:
+- **`SyncManager` (Shared):** Orchestrates the client-side sync flow.
+    - **Throttling:** Implements a minimum 1-minute interval between automatic syncs (configurable).
+    - **State Persistence:** Uses the `SyncMetadata` database table to persist `lastSyncTimestamp` across application sessions.
+    - **Thread Safety:** Utilizes a `Mutex` and `StateFlow` to manage concurrent sync attempts and UI state.
+- **`SqlDelightVocabularyRepository` (Client):** Implements the `VocabularyRepository` interface.
+    - **Pending Changes:** Tracks all local `UPSERT` and `DELETE` operations in a `PendingSyncChange` table.
+    - **Batch Processing:** Sends local changes to the backend and applies server changes in a single database transaction.
+- **`BackendVocabularyRepository` (Server):** 
+    - **Conflict Resolution:** Implements "Last Write Wins" (LWW) logic based on the `lastUpdated` timestamp.
+    - **Performance:** Optimized with batch-fetching of timestamps to avoid the N+1 query problem during large synchronizations.
+
+
 ## AI Integration
 
 Uses **Google Gemini 1.5 Flash** for linguistic tasks. Implementation features:

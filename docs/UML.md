@@ -50,10 +50,40 @@ classDiagram
         +db: AppDatabase
         +httpClient: HttpClient
     }
+    class VocabularyRepository {
+        <<interface>>
+        +sync(lastSyncTimestamp)
+        +getSyncMetadata(key)
+        +setSyncMetadata(key, value)
+    }
 
     SqlDelightContentRepository ..|> LocalContentRepository
     SqlDelightContentRepository ..|> RemoteContentSource
     SqlDelightContentRepository ..|> AudioDownloader
+    SqlDelightVocabularyRepository ..|> VocabularyRepository
+```
+
+## Synchronization Flow (Sequence)
+
+```mermaid
+sequenceDiagram
+    participant UI as DashboardViewModel
+    participant SM as SyncManager
+    participant VR as VocabularyRepository
+    participant API as Backend (Ktor)
+    
+    UI->>SM: sync()
+    SM->>SM: Check Throttle (1 min)
+    SM->>VR: getSyncMetadata("last_sync")
+    VR-->>SM: timestamp
+    SM->>VR: sync(timestamp)
+    VR->>API: POST /api/sync (changes + timestamp)
+    API->>API: Resolve Conflicts (LWW)
+    API-->>VR: Server Changes + New Timestamp
+    VR->>VR: Apply Changes (Transaction)
+    VR-->>SM: New Timestamp
+    SM->>VR: setSyncMetadata("last_sync", newTimestamp)
+    SM-->>UI: Sync Completed
 ```
 
 ## Spaced Repetition (SRS) Logic
