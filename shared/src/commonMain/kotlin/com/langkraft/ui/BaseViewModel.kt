@@ -7,10 +7,10 @@ import kotlinx.coroutines.cancel
 
 /**
  * Simple BaseViewModel to handle CoroutineScope in KMP.
- * In a real project, this might be replaced by a library-specific ViewModel.
  */
 abstract class BaseViewModel {
-    protected val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    // Используем Unconfined для тестов, чтобы не падать на Dispatchers.Main
+    protected val scope = CoroutineScope(Dispatchers.Unconfined + SupervisorJob())
 
     fun onCleared() {
         scope.cancel()

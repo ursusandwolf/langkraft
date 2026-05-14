@@ -7,13 +7,22 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.Clock
 
+interface ISyncManager {
+    val isSyncing: StateFlow<Boolean>
+    val syncError: StateFlow<String?>
+    suspend fun sync(force: Boolean = false)
+}
+
 class SyncManager(
     private val vocabularyRepository: VocabularyRepository
-) {
+) : ISyncManager {
     private val mutex = Mutex()
     
     private val _isSyncing = MutableStateFlow(false)
-    val isSyncing: StateFlow<Boolean> = _isSyncing
+    override val isSyncing: StateFlow<Boolean> = _isSyncing
+
+    private val _syncError = MutableStateFlow<String?>(null)
+    override val syncError: StateFlow<String?> = _syncError
 
     private companion object {
         const val KEY_LAST_SYNC = "last_sync_timestamp"
@@ -22,7 +31,7 @@ class SyncManager(
 
     private var lastAttemptTimestamp: Long = 0
 
-    suspend fun sync(force: Boolean = false) {
+    override suspend fun sync(force: Boolean) {
         val now = Clock.System.now().toEpochMilliseconds()
         if (!force && now - lastAttemptTimestamp < MIN_SYNC_INTERVAL_MS) return
         
@@ -31,6 +40,7 @@ class SyncManager(
         mutex.withLock {
             if (_isSyncing.value) return
             _isSyncing.value = true
+            _syncError.value = null
         }
 
         lastAttemptTimestamp = now
@@ -42,7 +52,7 @@ class SyncManager(
                 vocabularyRepository.setSyncMetadata(KEY_LAST_SYNC, newTimestamp.toString())
             }
         } catch (e: Exception) {
-            println("SyncManager: Sync failed: ${e.message}")
+            _syncError.value = e.message ?: "Unknown sync error"
         } finally {
             _isSyncing.value = false
         }

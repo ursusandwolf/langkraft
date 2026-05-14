@@ -6,15 +6,18 @@ import com.langkraft.domain.repository.VocabularyRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.joinAll
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertTrue
+import kotlin.test.assertNull
 
-class FakeVocabularyRepository : VocabularyRepository {
+open class FakeVocabularyRepository : VocabularyRepository {
     var syncCallCount = 0
     var lastSyncTimestampProvided: Long = -1
     var nextSyncResult: Long = 0
+    var syncResultOverride: Long? = null
     
     private val metadata = mutableMapOf<String, String>()
 
@@ -26,7 +29,7 @@ class FakeVocabularyRepository : VocabularyRepository {
     override suspend fun sync(lastSyncTimestamp: Long): Long {
         syncCallCount++
         lastSyncTimestampProvided = lastSyncTimestamp
-        return nextSyncResult
+        return syncResultOverride ?: nextSyncResult
     }
 
     override fun getWordCountsByStatus(): Flow<Map<WordStatus, Long>> = emptyFlow()
@@ -41,7 +44,7 @@ class FakeVocabularyRepository : VocabularyRepository {
 class SyncManagerTest {
 
     @Test
-    fun `test sync - success and persistence`() = runTest {
+    fun test_sync_success_and_persistence() = runTest {
         val repository = FakeVocabularyRepository()
         val syncManager = SyncManager(repository)
         
@@ -56,7 +59,7 @@ class SyncManagerTest {
     }
 
     @Test
-    fun `test sync - throttling`() = runTest {
+    fun test_sync_throttling() = runTest {
         val repository = FakeVocabularyRepository()
         val syncManager = SyncManager(repository)
         
@@ -76,7 +79,7 @@ class SyncManagerTest {
     }
 
     @Test
-    fun `test sync - uses persisted timestamp`() = runTest {
+    fun test_sync_uses_persisted_timestamp() = runTest {
         val repository = FakeVocabularyRepository()
         repository.setSyncMetadata("last_sync_timestamp", "999")
         val syncManager = SyncManager(repository)
@@ -87,5 +90,73 @@ class SyncManagerTest {
         
         assertEquals(999L, repository.lastSyncTimestampProvided)
         assertEquals("2000", repository.getSyncMetadata("last_sync_timestamp"))
+    }
+
+    @Test
+    fun test_sync_error_state_handling() = runTest {
+        var shouldThrow = true
+        val repository = object : FakeVocabularyRepository() {
+            override suspend fun sync(lastSyncTimestamp: Long): Long {
+                if (shouldThrow) throw Exception("Network error")
+                return 5000L
+            }
+        }
+        val syncManager = SyncManager(repository)
+        
+        // 1. Trigger error
+        syncManager.sync(force = true)
+        assertEquals("Network error", syncManager.syncError.value)
+        
+        // 2. Clear error on success
+        shouldThrow = false
+        syncManager.sync(force = true)
+        assertNull(syncManager.syncError.value)
+    }
+
+    @Test
+    fun test_sync_concurrent_calls_are_throttled() = runTest {
+        val repository = object : FakeVocabularyRepository() {
+            var isRunning = false
+            override suspend fun sync(lastSyncTimestamp: Long): Long {
+                if (isRunning) throw IllegalStateException("Concurrent sync detected")
+                isRunning = true
+                kotlinx.coroutines.delay(100) 
+                isRunning = false
+                syncCallCount++
+                return 1000L
+            }
+        }
+        val syncManager = SyncManager(repository)
+        
+        // Launch two syncs concurrently
+        val job1 = launch { syncManager.sync(force = true) }
+        val job2 = launch { syncManager.sync(force = true) }
+        
+        joinAll(job1, job2)
+        
+        assertEquals(1, repository.syncCallCount, "Sync should only be called once when concurrent")
+    }
+
+    @Test
+    fun test_sync_handles_null_metadata_gracefully() = runTest {
+        val repository = FakeVocabularyRepository()
+        val syncManager = SyncManager(repository)
+        
+        repository.nextSyncResult = 500L
+        syncManager.sync(force = true)
+        
+        assertEquals(0L, repository.lastSyncTimestampProvided, "Should sync from 0L if metadata is null")
+    }
+
+    @Test
+    fun test_sync_handles_invalid_metadata_gracefully() = runTest {
+        val repository = FakeVocabularyRepository()
+        repository.setSyncMetadata("last_sync_timestamp", "not-a-number")
+        val syncManager = SyncManager(repository)
+        
+        repository.nextSyncResult = 500L
+        syncManager.sync(force = true)
+        
+        assertEquals(0L, repository.lastSyncTimestampProvided, "Should sync from 0L if metadata is invalid")
     }
 }

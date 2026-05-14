@@ -74,7 +74,7 @@
 ---
 
 ### Итоговые рекомендации
-1. **Срочно:** Исправить N+1 в `BackendVocabularyRepository`.
-2. **Срочно:** Убрать wildcard импорты в `DashboardViewModel`.
+1. **Решено:** Исправлен N+1 в `BackendVocabularyRepository`.
+2. **Решено:** Убраны wildcard импорты в `DashboardViewModel`.
 3. **Важно:** Реализовать сохранение `lastSyncTimestamp`.
 4. **Важно:** Улучшить обработку ошибок в `SyncManager`, чтобы UI мог отображать статус (например, "Ошибка сети").

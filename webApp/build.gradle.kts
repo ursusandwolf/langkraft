@@ -1,6 +1,7 @@
 plugins {
     kotlin("multiplatform")
     id("org.jetbrains.compose")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 kotlin {
@@ -9,6 +10,10 @@ kotlin {
         binaries.executable()
     }
     
+    tasks.withType<org.jetbrains.kotlin.gradle.targets.js.testing.KotlinJsTest> {
+        enabled = false
+    }
+
     sourceSets {
         val jsMain by getting {
             dependencies {

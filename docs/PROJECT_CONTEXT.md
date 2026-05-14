@@ -32,5 +32,9 @@ The app follows a specific language acquisition methodology:
 - **Authentication**: JWT & BCrypt
 
 ## Pending Items
+- [x] Resolved: N+1 query issue in `BackendVocabularyRepository`
+- [x] Resolved: Wildcard imports in `DashboardViewModel`
+- [x] Resolved: Implement persistent `lastSyncTimestamp` in `SyncManager`
+- [x] Resolved: Improve error handling in `SyncManager` for UI status reporting
 - [ ] Implement real Waveform extraction on backend using `audiowaveform` or `ffmpeg`
 - [ ] Production deployment and user scaling

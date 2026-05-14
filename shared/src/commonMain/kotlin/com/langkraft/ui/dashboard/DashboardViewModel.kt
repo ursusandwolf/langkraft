@@ -1,10 +1,10 @@
 package com.langkraft.ui.dashboard
 
+import com.langkraft.data.sync.ISyncManager
+import com.langkraft.ui.BaseViewModel
 import com.langkraft.domain.model.WordStatus
 import com.langkraft.domain.repository.LocalContentRepository
 import com.langkraft.domain.repository.VocabularyRepository
-import com.langkraft.data.sync.SyncManager
-import com.langkraft.ui.BaseViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,13 +21,14 @@ data class DashboardState(
     val wordsLearning: Long = 0,
     val wordsNew: Long = 0,
     val wordsToReviewToday: Int = 0,
-    val wordsAddedThisWeek: Long = 0
+    val wordsAddedThisWeek: Long = 0,
+    val syncError: String? = null
 )
 
 class DashboardViewModel(
     private val contentRepository: LocalContentRepository,
     private val vocabularyRepository: VocabularyRepository,
-    private val syncManager: SyncManager
+    private val syncManager: ISyncManager
 ) : BaseViewModel() {
     private val _state = MutableStateFlow(DashboardState())
     val state: StateFlow<DashboardState> = _state.asStateFlow()
@@ -37,6 +38,11 @@ class DashboardViewModel(
         scope.launch {
             syncManager.sync()
         }
+        
+        // Observe sync errors
+        syncManager.syncError.onEach { error ->
+            _state.value = _state.value.copy(syncError = error)
+        }.launchIn(scope)
     }
 
     private fun loadStats() {
@@ -55,7 +61,8 @@ class DashboardViewModel(
                 wordsLearning = counts[WordStatus.LEARNING] ?: 0,
                 wordsNew = counts[WordStatus.NEW] ?: 0,
                 wordsToReviewToday = reviewCount,
-                wordsAddedThisWeek = recent
+                wordsAddedThisWeek = recent,
+                syncError = _state.value.syncError
             )
         }.onEach { newState ->
             _state.value = newState
