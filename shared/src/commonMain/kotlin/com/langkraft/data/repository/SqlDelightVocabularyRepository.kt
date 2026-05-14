@@ -131,6 +131,14 @@ class SqlDelightVocabularyRepository(
             .mapToOne(Dispatchers.Default)
     }
 
+    override suspend fun getSyncMetadata(key: String): String? {
+        return db.appDatabaseQueries.getSyncMetadata(key).executeAsOneOrNull()
+    }
+
+    override suspend fun setSyncMetadata(key: String, value: String) {
+        db.appDatabaseQueries.setSyncMetadata(key, value)
+    }
+
     private fun com.langkraft.db.Vocabulary.toDomain(): VocabularyWord {
         return VocabularyWord(
             id = id,

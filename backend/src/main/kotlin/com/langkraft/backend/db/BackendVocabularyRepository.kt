@@ -67,11 +67,13 @@ class BackendVocabularyRepository : VocabularySyncRepository {
             }
         }
 
+        val existingTimestamps = VocabularySync
+            .slice(VocabularySync.id, VocabularySync.lastUpdated)
+            .select { VocabularySync.id inList toUpdate.map { it.id } }
+            .associate { it[VocabularySync.id] to it[VocabularySync.lastUpdated] }
+
         toUpdate.forEach { word ->
-            val existingLastUpdated = VocabularySync
-                .slice(VocabularySync.lastUpdated)
-                .select { VocabularySync.id eq word.id }
-                .singleOrNull()?.get(VocabularySync.lastUpdated) ?: 0L
+            val existingLastUpdated = existingTimestamps[word.id] ?: 0L
 
             if (word.lastUpdated > existingLastUpdated) {
                 VocabularySync.update({ VocabularySync.id eq word.id }) {

@@ -125,3 +125,15 @@ DELETE FROM PendingSyncChange WHERE wordId IN ?;
 
 clearAllPendingChanges:
 DELETE FROM PendingSyncChange;
+
+-- Table for storing sync metadata (e.g., last successful sync time)
+CREATE TABLE SyncMetadata (
+    key TEXT NOT NULL PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
+getSyncMetadata:
+SELECT value FROM SyncMetadata WHERE key = ?;
+
+setSyncMetadata:
+INSERT OR REPLACE INTO SyncMetadata(key, value) VALUES (?, ?);

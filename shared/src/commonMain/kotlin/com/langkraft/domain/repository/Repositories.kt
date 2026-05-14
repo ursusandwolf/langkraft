@@ -43,4 +43,8 @@ interface VocabularyRepository {
     // Stats
     fun getWordCountsByStatus(): Flow<Map<WordStatus, Long>>
     fun getWordsAddedSince(timestamp: Long): Flow<Long>
+
+    // Metadata
+    suspend fun getSyncMetadata(key: String): String?
+    suspend fun setSyncMetadata(key: String, value: String)
 }

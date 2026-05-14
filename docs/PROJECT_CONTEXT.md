@@ -16,8 +16,8 @@ The app follows a specific language acquisition methodology:
 - **Security:** Critical vulnerabilities resolved. User passwords are secured with **BCrypt**. AI API keys are protected in headers. JWT logic is encapsulated in a dedicated service.
 - **Architecture:** The project strictly follows **Clean Architecture** principles. Introduced **Interface Segregation (ISP)** for content management and **Dependency Inversion (DIP)** for SRS logic. ViewModels are kept lean via the **Delegate Pattern** (`PlayerLinguisticDelegate`, `OfflineDownloadDelegate`), and AI responses are optimized using the **Decorator Pattern**.
 - **Data Layer:** SQLDelight schema is fully robust, supporting incremental sync, `lapseCount`, and tags. The N+1 query issue in synchronization is resolved via batch upserts.
-- **Backend:** Modularized Ktor server with asynchronous YouTube ingestion (`/api/ingest` polling) and background processing for waveform generation (currently simulated). Conflict resolution (Last Write Wins) implemented in synchronization.
-- **Offline-First Sync:** Implemented a `PendingSyncChange` persistent queue on the client. `SyncManager` is integrated with the UI (Dashboard) to bridge the gap between UI and Repository sync logic.
+- **Backend:** Modularized Ktor server with asynchronous YouTube ingestion (`/api/ingest` polling) and background processing for waveform generation (currently simulated). Conflict resolution (Last Write Wins) implemented in synchronization with optimized batch timestamp checks (no N+1).
+- **Offline-First Sync:** Implemented a `PendingSyncChange` persistent queue on the client. `SyncManager` is integrated with the UI (Dashboard), supports persistent sync state (metadata), and uses a throttle (1 min) to prevent redundant calls.
 - **Multi-platform:** Shared UI and business logic supporting Android, Web (Wasm), and Desktop.
 - **UI & UX:** Langkraft Design System implemented. The SRS module utilizes an Anki-style 4-button system (AGAIN, HARD, GOOD, EASY).
 
