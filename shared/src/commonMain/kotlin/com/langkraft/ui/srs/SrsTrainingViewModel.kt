@@ -21,8 +21,9 @@ data class SrsTrainingState(
 
 class SrsTrainingViewModel(
     private val vocabularyRepository: VocabularyRepository,
-    private val srsAlgorithm: SpacedRepetitionAlgorithm
-) : BaseViewModel() {
+    private val srsAlgorithm: SpacedRepetitionAlgorithm,
+    baseContext: kotlin.coroutines.CoroutineContext = kotlinx.coroutines.Dispatchers.Main
+) : BaseViewModel(baseContext) {
     private val _state = MutableStateFlow(SrsTrainingState())
     val state: StateFlow<SrsTrainingState> = _state.asStateFlow()
 

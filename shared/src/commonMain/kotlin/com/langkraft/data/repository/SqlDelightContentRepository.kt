@@ -5,31 +5,18 @@ import com.langkraft.domain.model.DownloadStatus
 import com.langkraft.domain.model.ImmersionContent
 import com.langkraft.domain.model.SubtitleLine
 import com.langkraft.domain.repository.LocalContentRepository
-import com.langkraft.domain.repository.RemoteContentSource
+import com.langkraft.domain.repository.ImmersionStats
 import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToList
 import app.cash.sqldelight.coroutines.mapToOne
-import io.ktor.client.HttpClient
-import io.ktor.client.call.body
-import io.ktor.client.request.get
-import io.ktor.client.request.post
-import io.ktor.client.request.setBody
-import io.ktor.http.ContentType
-import io.ktor.http.contentType
-import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.delay
 import kotlinx.datetime.Clock
 
-import com.langkraft.io.FileSystem
-
 class SqlDelightContentRepository(
-    private val db: AppDatabase,
-    private val httpClient: HttpClient,
-    private val fileSystem: FileSystem
-) : LocalContentRepository, RemoteContentSource, com.langkraft.domain.repository.AudioDownloader {
+    private val db: AppDatabase
+) : LocalContentRepository {
 
     override fun getAllContent(): Flow<List<ImmersionContent>> {
         return db.appDatabaseQueries.selectAllContent()
@@ -73,71 +60,12 @@ class SqlDelightContentRepository(
         }
     }
 
-    override suspend fun downloadAudio(content: ImmersionContent): String {
-        val fileName = "${content.id}.opus"
-        val tempFileName = "${content.id}.part"
-        val destinationPath = fileSystem.resolve(fileSystem.getAppDataDir(), fileName)
-        val tempPath = fileSystem.resolve(fileSystem.getAppDataDir(), tempFileName)
-        
-        if (fileSystem.exists(destinationPath)) {
-            db.appDatabaseQueries.updateDownloadStatus(DownloadStatus.COMPLETED.name, destinationPath, content.id)
-            return destinationPath
-        }
-
-        db.appDatabaseQueries.updateDownloadStatus(DownloadStatus.DOWNLOADING.name, null, content.id)
-
-        try {
-            val response = httpClient.get(content.audioUrl)
-            val body = response.body<ByteArray>()
-            
-            // Write to temporary file first
-            fileSystem.writeBytes(tempPath, body)
-            
-            // "Rename" by deleting existing (if any) and writing to final path
-            // Note: Our FileSystem abstraction is simple, so we just write the bytes to the new path
-            // In a real KMP app, FileSystem would have a rename() method.
-            fileSystem.writeBytes(destinationPath, body)
-            fileSystem.delete(tempPath)
-            
-            db.appDatabaseQueries.updateDownloadStatus(DownloadStatus.COMPLETED.name, destinationPath, content.id)
-            return destinationPath
-        } catch (e: Exception) {
-            db.appDatabaseQueries.updateDownloadStatus(DownloadStatus.ERROR.name, null, content.id)
-            throw e
-        }
-    }
-
-    override suspend fun fetchFromYouTube(url: String): ImmersionContent {
-        val request = com.langkraft.domain.model.IngestRequest(url)
-        val response = httpClient.post("http://localhost:8080/api/ingest") {
-            contentType(ContentType.Application.Json)
-            setBody(request)
-        }.body<com.langkraft.domain.model.IngestResponse>()
-
-        val jobId = response.jobId
-
-        while (true) {
-            delay(1000)
-            val jobResponse = httpClient.get("http://localhost:8080/api/ingest/$jobId")
-
-            if (jobResponse.status == HttpStatusCode.NotFound) {
-                throw Exception("Job not found")
-            }
-
-            val job = jobResponse.body<com.langkraft.domain.model.IngestionJob>()
-            if (job.status == com.langkraft.domain.model.ContentProcessingStatus.READY && job.content != null) {
-                return job.content
-            } else if (job.status == com.langkraft.domain.model.ContentProcessingStatus.ERROR) {
-                throw Exception("Ingestion failed: ${job.error}")
-            }
-        }
-    }
-    override fun getImmersionStats(): Flow<com.langkraft.domain.repository.ImmersionStats> {
+    override fun getImmersionStats(): Flow<ImmersionStats> {
         return db.appDatabaseQueries.getImmersionStats()
             .asFlow()
             .mapToOne(Dispatchers.Default)
             .map { 
-                com.langkraft.domain.repository.ImmersionStats(
+                ImmersionStats(
                     totalContent = it.totalContent,
                     totalDurationSeconds = it.totalDurationSeconds ?: 0L
                 )

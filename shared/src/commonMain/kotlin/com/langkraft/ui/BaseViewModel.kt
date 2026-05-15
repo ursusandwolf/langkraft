@@ -4,15 +4,17 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlin.coroutines.CoroutineContext
 
 /**
  * Simple BaseViewModel to handle CoroutineScope in KMP.
  */
-abstract class BaseViewModel {
-    // Используем Unconfined для тестов, чтобы не падать на Dispatchers.Main
-    protected val scope = CoroutineScope(Dispatchers.Unconfined + SupervisorJob())
+abstract class BaseViewModel(
+    baseContext: CoroutineContext = Dispatchers.Main
+) {
+    protected val scope = CoroutineScope(baseContext + SupervisorJob())
 
-    fun onCleared() {
+    open fun onCleared() {
         scope.cancel()
     }
 }

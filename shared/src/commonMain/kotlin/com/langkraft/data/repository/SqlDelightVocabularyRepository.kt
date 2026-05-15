@@ -17,13 +17,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.datetime.Clock
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
 class SqlDelightVocabularyRepository(
     private val db: AppDatabase,
     private val httpClient: HttpClient,
-    private val baseUrl: String = "https://api.langkraft.com"
+    private val baseUrl: String
 ) : VocabularyRepository {
 
+    private val json = Json { ignoreUnknownKeys = true }
 
     override fun getWordsToReview(): Flow<List<VocabularyWord>> {
         val now = Clock.System.now().toEpochMilliseconds()
@@ -59,7 +62,7 @@ class SqlDelightVocabularyRepository(
                 intervalDays = word.intervalDays.toLong(),
                 easeFactor = word.easeFactor,
                 lapseCount = word.lapseCount.toLong(),
-                tags = word.tags.joinToString(","),
+                tags = json.encodeToString(word.tags),
                 lastUpdated = Clock.System.now().toEpochMilliseconds()
             )
             db.appDatabaseQueries.insertPendingChange(
@@ -83,15 +86,36 @@ class SqlDelightVocabularyRepository(
 
     override suspend fun sync(lastSyncTimestamp: Long): Long {
         val pendingChanges = db.appDatabaseQueries.getAllPendingChanges().executeAsList()
-        val changedWords = pendingChanges.map { change ->
-            val wordEntity = db.appDatabaseQueries.selectWordById(change.wordId).executeAsOneOrNull()
-            wordEntity?.toDomain() ?: VocabularyWord(
-                id = change.wordId, word = "", lemma = "", translation = "", contextSentence = "",
-                contentId = "", subtitleLineId = "", addedAt = 0, nextReviewMs = 0,
-                intervalDays = 0, easeFactor = 0.0, status = WordStatus.NEW, lapseCount = 0, tags = emptyList(), lastUpdated = 0
-            )
+        if (pendingChanges.isEmpty()) {
+            // Even if no local changes, we should fetch server changes
+            return fetchServerChanges(lastSyncTimestamp, emptyList())
         }
 
+        val upsertIds = pendingChanges.filter { it.changeType == "UPSERT" }.map { it.wordId }
+        val wordsById = if (upsertIds.isNotEmpty()) {
+            db.appDatabaseQueries.selectWordsByIds(upsertIds).executeAsList()
+                .associate { it.id to it.toDomain() }
+        } else {
+            emptyMap()
+        }
+
+        val changedWords = pendingChanges.map { change ->
+            if (change.changeType == "DELETE") {
+                // Represent deleted word for sync. 
+                VocabularyWord(
+                    id = change.wordId, word = "", lemma = "", translation = "", contextSentence = "",
+                    contentId = "", subtitleLineId = "", addedAt = 0, nextReviewMs = 0,
+                    intervalDays = 0, easeFactor = 0.0, status = WordStatus.NEW, lapseCount = -1, tags = emptyList(), lastUpdated = change.timestamp
+                )
+            } else {
+                wordsById[change.wordId]
+            }
+        }.filterNotNull()
+
+        return fetchServerChanges(lastSyncTimestamp, changedWords)
+    }
+
+    private suspend fun fetchServerChanges(lastSyncTimestamp: Long, changedWords: List<VocabularyWord>): Long {
         return try {
             val response: SyncResponse = httpClient.post("$baseUrl/api/sync") {
                 contentType(ContentType.Application.Json)
@@ -100,12 +124,17 @@ class SqlDelightVocabularyRepository(
 
             db.appDatabaseQueries.transaction {
                 response.serverChanges.forEach { word ->
-                    db.appDatabaseQueries.upsertWord(
-                        word.id, word.word, word.lemma, word.translation, word.contextSentence,
-                        word.contentId, word.subtitleLineId, word.addedAt, word.nextReviewMs,
-                        word.intervalDays.toLong(), word.easeFactor, word.status.name,
-                        word.lapseCount.toLong(), word.tags.joinToString(","), word.lastUpdated
-                    )
+                    // If lapseCount is -1, it's a deletion marker
+                    if (word.lapseCount == -1) {
+                        db.appDatabaseQueries.deleteWord(word.id)
+                    } else {
+                        db.appDatabaseQueries.upsertWord(
+                            word.id, word.word, word.lemma, word.translation, word.contextSentence,
+                            word.contentId, word.subtitleLineId, word.addedAt, word.nextReviewMs,
+                            word.intervalDays.toLong(), word.easeFactor, word.status.name,
+                            word.lapseCount.toLong(), json.encodeToString(word.tags), word.lastUpdated
+                        )
+                    }
                 }
                 db.appDatabaseQueries.clearAllPendingChanges()
             }
@@ -154,7 +183,7 @@ class SqlDelightVocabularyRepository(
             easeFactor = easeFactor,
             status = WordStatus.valueOf(status),
             lapseCount = lapseCount.toInt(),
-            tags = if (tags.isEmpty()) emptyList() else tags.split(","),
+            tags = try { json.decodeFromString<List<String>>(tags) } catch (e: Exception) { emptyList() },
             lastUpdated = lastUpdated
         )
     }

@@ -79,6 +79,9 @@ DELETE FROM Vocabulary WHERE id = ?;
 selectWordById:
 SELECT * FROM Vocabulary WHERE id = ?;
 
+selectWordsByIds:
+SELECT * FROM Vocabulary WHERE id IN ?;
+
 selectWordsUpdatedAfter:
 SELECT * FROM Vocabulary WHERE lastUpdated > ?;
 

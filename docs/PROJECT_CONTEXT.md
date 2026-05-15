@@ -13,13 +13,13 @@ The app follows a specific language acquisition methodology:
 6. **Memorization:** Features to help internalize corrected prose.
 
 ## Current State
-- **Security:** Critical vulnerabilities resolved. User passwords are secured with **BCrypt**. AI API keys are protected in headers. JWT logic is encapsulated in a dedicated service.
-- **Architecture:** The project strictly follows **Clean Architecture** principles. Introduced **Interface Segregation (ISP)** for content management and **Dependency Inversion (DIP)** for SRS logic. ViewModels are kept lean via the **Delegate Pattern** (`PlayerLinguisticDelegate`, `OfflineDownloadDelegate`), and AI responses are optimized using the **Decorator Pattern**.
-- **Data Layer:** SQLDelight schema is fully robust, supporting incremental sync, `lapseCount`, and tags. The N+1 query issue in synchronization is resolved via batch upserts.
-- **Backend:** Modularized Ktor server with asynchronous YouTube ingestion (`/api/ingest` polling) and background processing for waveform generation (currently simulated). Conflict resolution (Last Write Wins) implemented in synchronization with optimized batch timestamp checks (no N+1).
-- **Offline-First Sync:** Implemented a `PendingSyncChange` persistent queue on the client. `SyncManager` is integrated with the UI (Dashboard), supports persistent sync state (metadata), and uses a throttle (1 min) to prevent redundant calls.
-- **Multi-platform:** Shared UI and business logic supporting Android, Web (Wasm), and Desktop.
-- **UI & UX:** Langkraft Design System implemented. The SRS module utilizes an Anki-style 4-button system (AGAIN, HARD, GOOD, EASY).
+- **Security:** User passwords are secured with **BCrypt**. Client-side sends raw passwords in a field named `password` (renamed from `passwordHash` to avoid ambiguity).
+- **Architecture:** Strictly follows **Clean Architecture**. Content management is split into `LocalContentRepository` (SQLDelight), `AudioDownloader`, and `RemoteContentSource` (Backend API). Hardcoded URLs are removed; backend URL is now configurable via Koin.
+- **Data Layer:** SQLDelight schema supports incremental sync and JSON-serialized tags. N+1 query issue in synchronization is resolved via batch retrieval (`selectWordsByIds`).
+- **Backend:** Modularized Ktor server with asynchronous YouTube ingestion. `YouTubeIngestionService` now includes an hourly cleanup task for expired jobs. `CachingLinguisticAssistant` uses an LRU cache (max 1000 entries) to prevent memory leaks.
+- **Player:** `PlayerViewModel` is reactively connected to `AudioPlayer`, ensuring synchronized state for playback and looping.
+- **SRS:** SM-2 algorithm uses proper rounding (`roundToInt`) for interval calculations. Covered with unit tests.
+- **Testing:** Introduced unit tests for `Sm2Algorithm` and `SrsTrainingViewModel` with fake repositories and test dispatchers.
 
 ## Tech Stack
 - **Build**: Gradle 8.14
@@ -32,9 +32,5 @@ The app follows a specific language acquisition methodology:
 - **Authentication**: JWT & BCrypt
 
 ## Pending Items
-- [x] Resolved: N+1 query issue in `BackendVocabularyRepository`
-- [x] Resolved: Wildcard imports in `DashboardViewModel`
-- [x] Resolved: Implement persistent `lastSyncTimestamp` in `SyncManager`
-- [x] Resolved: Improve error handling in `SyncManager` for UI status reporting
 - [ ] Implement real Waveform extraction on backend using `audiowaveform` or `ffmpeg`
 - [ ] Production deployment and user scaling

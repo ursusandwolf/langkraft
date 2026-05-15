@@ -17,13 +17,13 @@ data class SyncResponse(
 @Serializable
 data class AuthRequest(
     val email: String,
-    val passwordHash: String
+    val password: String
 )
 
 @Serializable
 data class RegisterRequest(
     val email: String,
-    val passwordHash: String,
+    val password: String,
     val displayName: String
 )
 

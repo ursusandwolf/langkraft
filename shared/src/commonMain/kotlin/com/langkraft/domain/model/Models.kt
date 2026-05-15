@@ -1,5 +1,8 @@
 package com.langkraft.domain.model
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 data class ImmersionContent(
     val id: String,
     val title: String,
@@ -22,12 +25,15 @@ data class ImmersionContent(
     }
 }
 
+@Serializable
 enum class Language { DE, EN, ES, RU, FR }
 
+@Serializable
 enum class DownloadStatus {
     IDLE, DOWNLOADING, COMPLETED, ERROR
 }
 
+@Serializable
 data class SubtitleLine(
     val id: String,
     val contentId: String,
@@ -37,7 +43,7 @@ data class SubtitleLine(
     val translationText: String?
 )
 
-@kotlinx.serialization.Serializable
+@Serializable
 data class VocabularyWord(
     val id: String,
     val word: String,
@@ -56,12 +62,12 @@ data class VocabularyWord(
     val lastUpdated: Long = 0
 )
 
-@kotlinx.serialization.Serializable
+@Serializable
 enum class WordStatus {
     NEW, LEARNING, MASTERED
 }
 
-@kotlinx.serialization.Serializable
+@Serializable
 enum class ContentProcessingStatus {
     IDLE,
     FETCHING_METADATA,
@@ -72,7 +78,7 @@ enum class ContentProcessingStatus {
     ERROR
 }
 
-@kotlinx.serialization.Serializable
+@Serializable
 data class IngestionJob(
     val jobId: String,
     val status: ContentProcessingStatus,
@@ -81,12 +87,13 @@ data class IngestionJob(
     val error: String? = null
 )
 
-@kotlinx.serialization.Serializable
+@Serializable
 data class IngestRequest(val url: String)
 
-@kotlinx.serialization.Serializable
+@Serializable
 data class IngestResponse(val jobId: String)
 
+@Serializable
 enum class ReviewQuality(val sm2Value: Int) {
     AGAIN(0),
     HARD(3),

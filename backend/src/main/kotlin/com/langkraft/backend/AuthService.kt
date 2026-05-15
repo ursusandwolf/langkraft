@@ -14,7 +14,7 @@ class AuthService(
     fun register(request: RegisterRequest): AuthResponse? {
         if (userRepository.findByEmail(request.email) != null) return null
 
-        val passwordHash = BCrypt.withDefaults().hashToString(12, request.passwordHash.toCharArray())
+        val passwordHash = BCrypt.withDefaults().hashToString(12, request.password.toCharArray())
         val userId = userRepository.createUser(request.email, passwordHash, request.displayName)
         
         return AuthResponse(
@@ -26,7 +26,7 @@ class AuthService(
     fun login(request: AuthRequest): AuthResponse? {
         val user = userRepository.findByEmail(request.email) ?: return null
         
-        val result = BCrypt.verifyer().verify(request.passwordHash.toCharArray(), user.passwordHash)
+        val result = BCrypt.verifyer().verify(request.password.toCharArray(), user.passwordHash)
         if (!result.verified) return null
         
         return AuthResponse(

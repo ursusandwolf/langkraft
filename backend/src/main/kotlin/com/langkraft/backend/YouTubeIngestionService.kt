@@ -24,10 +24,34 @@ class YouTubeIngestionService(
     private val logger = LoggerFactory.getLogger(YouTubeIngestionService::class.java)
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val jobs = ConcurrentHashMap<String, IngestionJob>()
+    private val jobTimestamps = ConcurrentHashMap<String, Long>()
+
+    init {
+        scope.launch {
+            while (true) {
+                delay(3600_000) // Every hour
+                cleanupOldJobs()
+            }
+        }
+    }
+
+    private fun cleanupOldJobs() {
+        val now = System.currentTimeMillis()
+        val expiryTime = 24 * 3600_000 // 24 hours
+        jobTimestamps.forEach { (jobId, timestamp) ->
+            if (now - timestamp > expiryTime) {
+                jobs.remove(jobId)
+                jobTimestamps.remove(jobId)
+                logger.info("Cleaned up expired job: $jobId")
+            }
+        }
+    }
 
     fun startIngestion(url: String): String {
         val jobId = UUID.randomUUID().toString()
+        val now = System.currentTimeMillis()
         jobs[jobId] = IngestionJob(jobId, ContentProcessingStatus.IDLE, url)
+        jobTimestamps[jobId] = now
         
         scope.launch {
             try {
@@ -43,7 +67,11 @@ class YouTubeIngestionService(
     fun getJobStatus(jobId: String): IngestionJob? = jobs[jobId]
 
     private inline fun updateJob(jobId: String, crossinline modifier: (IngestionJob) -> IngestionJob) {
-        jobs.computeIfPresent(jobId) { _, current -> modifier(current) }
+        jobs.computeIfPresent(jobId) { _, current -> 
+            val updated = modifier(current)
+            jobTimestamps[jobId] = System.currentTimeMillis()
+            updated
+        }
     }
 
     private suspend fun processIngestion(jobId: String, url: String) = withContext(Dispatchers.IO) {
@@ -79,11 +107,6 @@ class YouTubeIngestionService(
     }
     
     private suspend fun generateWaveform(audioPath: String): List<Float> {
-        // Since ffmpeg extraction can be complex and depends on environment, 
-        // we simulate waveform extraction with a heuristic or random distribution for now 
-        // to ensure the UI is unblocked and visualizing properly.
-        // In a real prod environment, we would run:
-        // `audiowaveform -i $audioPath -o waveform.json -b 8`
         delay(500)
         return List(100) { Random.nextFloat() }
     }

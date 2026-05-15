@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -17,6 +18,7 @@ class DashboardViewModelTest {
 
     @Test
     fun test_should_update_state_when_SyncManager_reports_error() = runTest {
+        val testDispatcher = UnconfinedTestDispatcher()
         val fakeSyncManager = object : ISyncManager {
             override val isSyncing = MutableStateFlow(false)
             override val syncError = MutableStateFlow<String?>(null)
@@ -44,7 +46,7 @@ class DashboardViewModelTest {
             override fun getImmersionStats(): Flow<ImmersionStats> = flowOf(ImmersionStats(0, 0))
         }
 
-        val vm = DashboardViewModel(fakeContentRepo, fakeRepo, fakeSyncManager)
+        val vm = DashboardViewModel(fakeContentRepo, fakeRepo, fakeSyncManager, testDispatcher)
 
         // Act
         fakeSyncManager.setError("Connection error")

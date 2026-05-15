@@ -2,10 +2,7 @@ package com.langkraft.ui.player
 
 import com.langkraft.domain.repository.LocalContentRepository
 import com.langkraft.domain.repository.AudioDownloader
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -34,12 +31,26 @@ class PlayerViewModel(
     private val linguisticDelegate = PlayerLinguisticDelegate(linguisticAssistant, scope, _state)
     private val offlineDelegate = OfflineDownloadDelegate(audioDownloader, contentRepository, scope, _state)
 
+    init {
+        // Observe player state
+        scope.launch {
+            audioPlayer.currentTimeMs.collect { timeMs ->
+                handleTimeUpdate(timeMs)
+            }
+        }
+        scope.launch {
+            audioPlayer.isPlaying.collect { isPlaying ->
+                _state.update { it.copy(isPlaying = isPlaying) }
+            }
+        }
+    }
+
     fun onEvent(event: PlayerEvent) {
         when (event) {
             is PlayerEvent.LoadContent -> loadContent(event.contentId)
             is PlayerEvent.PlayPause -> {
-                if (_state.value.isPlaying) audioPlayer.pause() else audioPlayer.play()
-                _state.update { it.copy(isPlaying = !it.isPlaying) }
+                if (audioPlayer.isPlaying.value) audioPlayer.pause() else audioPlayer.play()
+                // isPlaying will be updated via collect in init
             }
             is PlayerEvent.ToggleLoop -> {
                 _state.update { it.copy(isLooping = !it.isLooping) }
@@ -51,6 +62,7 @@ class PlayerViewModel(
                 _state.update { it.copy(playbackSpeed = event.speed) }
             }
             is PlayerEvent.SeekTo -> {
+                audioPlayer.seekTo(event.timeMs)
                 _state.update { it.copy(currentTimeMs = event.timeMs) }
             }
             is PlayerEvent.WordClicked -> {
@@ -101,15 +113,15 @@ class PlayerViewModel(
         }
     }
     
-    // This will be called by the actual audio player implementation
-    fun updateTime(timeMs: Long) {
+    private fun handleTimeUpdate(timeMs: Long) {
         val currentState = _state.value
         if (currentState.isLooping) {
+            // Check if we passed the end of the current subtitle line
             val currentLine = currentState.content?.subtitles?.find { 
                 currentState.currentTimeMs in it.startMs..it.endMs 
             }
             if (currentLine != null && timeMs > currentLine.endMs) {
-                // Seek back to start of current line
+                audioPlayer.seekTo(currentLine.startMs)
                 _state.update { it.copy(currentTimeMs = currentLine.startMs) }
                 return
             }

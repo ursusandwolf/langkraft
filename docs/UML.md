@@ -12,6 +12,7 @@ classDiagram
     }
     class YouTubeIngestionService {
         +ingest(url: String) ImmersionContent
+        -cleanupOldJobs()
     }
     class YtdlpClient {
         +getVideoInfo(url: String) YtdlpInfo
@@ -38,17 +39,24 @@ classDiagram
         +saveContent(content)
         +getImmersionStats() Flow
     }
-    class RemoteContentSource {
-        <<interface>>
-        +fetchFromYouTube(url)
-    }
     class AudioDownloader {
         <<interface>>
         +downloadAudio(content)
     }
+    class RemoteContentSource {
+        <<interface>>
+        +fetchFromYouTube(url)
+    }
+    class BackendRemoteSource {
+        +httpClient: HttpClient
+        +baseUrl: String
+    }
+    class AudioDownloaderImpl {
+        +httpClient: HttpClient
+        +fileSystem: FileSystem
+    }
     class SqlDelightContentRepository {
         +db: AppDatabase
-        +httpClient: HttpClient
     }
     class VocabularyRepository {
         <<interface>>
@@ -58,8 +66,8 @@ classDiagram
     }
 
     SqlDelightContentRepository ..|> LocalContentRepository
-    SqlDelightContentRepository ..|> RemoteContentSource
-    SqlDelightContentRepository ..|> AudioDownloader
+    BackendRemoteSource ..|> RemoteContentSource
+    AudioDownloaderImpl ..|> AudioDownloader
     SqlDelightVocabularyRepository ..|> VocabularyRepository
 ```
 
@@ -74,16 +82,42 @@ sequenceDiagram
     
     UI->>SM: sync()
     SM->>SM: Check Throttle (1 min)
+    SM->>SM: Mutex.lock()
     SM->>VR: getSyncMetadata("last_sync")
     VR-->>SM: timestamp
     SM->>VR: sync(timestamp)
+    VR->>VR: Batch fetch updated words
     VR->>API: POST /api/sync (changes + timestamp)
     API->>API: Resolve Conflicts (LWW)
     API-->>VR: Server Changes + New Timestamp
     VR->>VR: Apply Changes (Transaction)
     VR-->>SM: New Timestamp
     SM->>VR: setSyncMetadata("last_sync", newTimestamp)
+    SM->>SM: Mutex.unlock()
     SM-->>UI: Sync Completed
+```
+
+## AI Decorator with LRU Cache
+
+```mermaid
+classDiagram
+    class LinguisticAssistant {
+        <<interface>>
+        +translateWord()
+        +analyzeSentence()
+    }
+    class GeminiLinguisticAssistant {
+        +apiKey: String
+    }
+    class CachingLinguisticAssistant {
+        -delegate: LinguisticAssistant
+        -wordCache: LRU_Cache
+        -analysisCache: LRU_Cache
+    }
+
+    CachingLinguisticAssistant ..|> LinguisticAssistant
+    GeminiLinguisticAssistant ..|> LinguisticAssistant
+    CachingLinguisticAssistant --> LinguisticAssistant : delegate
 ```
 
 ## Spaced Repetition (SRS) Logic
@@ -95,8 +129,8 @@ classDiagram
         +calculateNextReview(word, quality)
     }
     class Sm2Algorithm {
-        +MIN_EASE_FACTOR
-        +SUCCESS_THRESHOLD
+        +calculateNextReview()
+        -roundToInt()
     }
     class SrsTrainingViewModel {
         -srsAlgorithm: SpacedRepetitionAlgorithm
@@ -136,9 +170,8 @@ classDiagram
     class VocabularyWord {
         +String id
         +String word
-        +String lemma
-        +String translation
-        +String contextSentence
+        +List~String~ tags
+        +Int lapseCount
         +Long nextReviewMs
         +Double easeFactor
         +WordStatus status
@@ -148,21 +181,4 @@ classDiagram
     ImmersionContent --> DownloadStatus
     VocabularyWord ..> SubtitleLine : context
     VocabularyWord ..> ImmersionContent : source
-```
-
-## UI State Machine
-
-```mermaid
-stateDiagram-v2
-    [*] --> Loading
-    Loading --> Idle: Content Loaded
-    Idle --> Playing: Play Event
-    Playing --> Idle: Pause Event
-    Playing --> Playing: Update Time
-    Playing --> DeepAnalysis: Analysis Event
-    DeepAnalysis --> Playing: Dismiss
-    Playing --> Lemmatization: Toggle Lemma
-    Lemmatization --> Playing: Toggle Lemma
-    Playing --> WordDetails: Word Clicked
-    WordDetails --> Playing: Save/Dismiss
 ```

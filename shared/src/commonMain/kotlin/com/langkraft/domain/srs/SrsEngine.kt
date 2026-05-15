@@ -5,6 +5,7 @@ import com.langkraft.domain.model.WordStatus
 import com.langkraft.domain.model.ReviewQuality
 import kotlinx.datetime.Clock
 import kotlin.math.max
+import kotlin.math.roundToInt
 
 /**
  * Interface for Spaced Repetition Algorithms.
@@ -55,7 +56,7 @@ class Sm2Algorithm : SpacedRepetitionAlgorithm {
         val newInterval = when (word.intervalDays) {
             0 -> 1
             1 -> 6
-            else -> (word.intervalDays * newEaseFactor).toInt()
+            else -> (word.intervalDays * newEaseFactor).roundToInt()
         }
 
         val nextReviewMs = now + (newInterval * MS_IN_DAY)

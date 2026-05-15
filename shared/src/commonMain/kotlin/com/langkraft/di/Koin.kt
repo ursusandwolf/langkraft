@@ -2,8 +2,7 @@ package com.langkraft.di
 
 import com.langkraft.domain.ai.LinguisticAssistant
 import com.langkraft.domain.ai.MockLinguisticAssistant
-import com.langkraft.data.repository.SqlDelightContentRepository
-import com.langkraft.data.repository.SqlDelightVocabularyRepository
+import com.langkraft.data.repository.*
 import com.langkraft.domain.repository.LocalContentRepository
 import com.langkraft.domain.repository.RemoteContentSource
 import com.langkraft.domain.repository.AudioDownloader
@@ -37,7 +36,13 @@ fun initKoin(appDeclaration: KoinAppDeclaration = {}) =
 
 fun initKoin() = initKoin {}
 
+data class AppConfig(
+    val backendUrl: String = "http://localhost:8080"
+)
+
 val commonModule = module {
+    single { AppConfig() }
+
     // Network
     single { 
         HttpClient {
@@ -48,11 +53,11 @@ val commonModule = module {
     }
 
     // Repositories
-    single { SqlDelightContentRepository(get(), get(), get()) }
+    single { SqlDelightContentRepository(get()) }
     single<LocalContentRepository> { get<SqlDelightContentRepository>() }
-    single<RemoteContentSource> { get<SqlDelightContentRepository>() }
-    single<AudioDownloader> { get<SqlDelightContentRepository>() }
-    single<VocabularyRepository> { SqlDelightVocabularyRepository(get(), get()) }
+    single<RemoteContentSource> { BackendRemoteSource(get(), get<AppConfig>().backendUrl) }
+    single<AudioDownloader> { AudioDownloaderImpl(get(), get(), get()) }
+    single<VocabularyRepository> { SqlDelightVocabularyRepository(get(), get(), get<AppConfig>().backendUrl) }
 
     // Sync
     single { SyncManager(get()) }

@@ -35,26 +35,24 @@ class SyncManager(
         val now = Clock.System.now().toEpochMilliseconds()
         if (!force && now - lastAttemptTimestamp < MIN_SYNC_INTERVAL_MS) return
         
-        if (_isSyncing.value) return
-        
+        if (mutex.isLocked) return
+
         mutex.withLock {
-            if (_isSyncing.value) return
             _isSyncing.value = true
             _syncError.value = null
-        }
+            lastAttemptTimestamp = now
 
-        lastAttemptTimestamp = now
-
-        try {
-            val lastSyncTimestamp = vocabularyRepository.getSyncMetadata(KEY_LAST_SYNC)?.toLongOrNull() ?: 0L
-            val newTimestamp = vocabularyRepository.sync(lastSyncTimestamp)
-            if (newTimestamp > lastSyncTimestamp) {
-                vocabularyRepository.setSyncMetadata(KEY_LAST_SYNC, newTimestamp.toString())
+            try {
+                val lastSyncTimestamp = vocabularyRepository.getSyncMetadata(KEY_LAST_SYNC)?.toLongOrNull() ?: 0L
+                val newTimestamp = vocabularyRepository.sync(lastSyncTimestamp)
+                if (newTimestamp > lastSyncTimestamp) {
+                    vocabularyRepository.setSyncMetadata(KEY_LAST_SYNC, newTimestamp.toString())
+                }
+            } catch (e: Exception) {
+                _syncError.value = e.message ?: "Unknown sync error"
+            } finally {
+                _isSyncing.value = false
             }
-        } catch (e: Exception) {
-            _syncError.value = e.message ?: "Unknown sync error"
-        } finally {
-            _isSyncing.value = false
         }
     }
 }
