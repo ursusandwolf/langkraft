@@ -21,13 +21,13 @@ import com.langkraft.ui.writing.WritingView
 import com.langkraft.ui.writing.WritingViewModel
 import com.langkraft.ui.Screen
 import com.langkraft.di.initKoin
-import com.langkraft.di.desktopModule
+import com.langkraft.di.createDesktopModule
 import org.koin.compose.koinInject
 import com.langkraft.ui.theme.LangkraftTheme
 
 fun main() {
     initKoin {
-        modules(desktopModule)
+        modules(createDesktopModule(isTui = false))
     }
 
     application {

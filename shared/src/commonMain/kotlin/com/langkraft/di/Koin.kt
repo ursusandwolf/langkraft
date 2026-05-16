@@ -63,7 +63,8 @@ val commonModule = module {
 
     // IO & Hardware
     single<FileSystem> { FileSystemImpl() }
-    single<AudioPlayer> { AudioPlayerImpl() }
+    // Removed: single<AudioPlayer> { AudioPlayerImpl() }
+
 
     // UseCases
     single { IngestContentUseCase(get(), get()) }

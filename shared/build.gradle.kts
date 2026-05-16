@@ -60,13 +60,27 @@ kotlin {
         }
         */
         val desktopMain by getting {
-
+            val osName = System.getProperty("os.name").lowercase()
+            val targetOs = when {
+                osName.contains("mac") -> "mac"
+                osName.contains("win") -> "win"
+                else -> "linux"
+            }
+            
             dependencies {
                 implementation(compose.desktop.currentOs)
                 implementation("app.cash.sqldelight:sqlite-driver:2.0.0")
                 implementation("io.ktor:ktor-client-cio:2.3.5")
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.7.3")
-                implementation("javazoom:jlayer:1.0.1")
+                
+                // JavaFX for real audio playback with speed and seeking
+                val javafxVersion = "21.0.1"
+                implementation("org.openjfx:javafx-media:$javafxVersion:$targetOs")
+                implementation("org.openjfx:javafx-graphics:$javafxVersion:$targetOs")
+                implementation("org.openjfx:javafx-base:$javafxVersion:$targetOs")
+                
+                // Lanterna TUI
+                implementation("com.googlecode.lanterna:lanterna:3.1.2")
             }
         }
         val jsMain by getting {
@@ -93,5 +107,20 @@ compose.desktop {
             packageName = "Langkraft"
             packageVersion = "1.0.0"
         }
+    }
+}
+
+tasks.register<JavaExec>("runTui") {
+    group = "application"
+    mainClass.set("com.langkraft.CliMainKt")
+    val desktopJvm = kotlin.targets.getByName<org.jetbrains.kotlin.gradle.targets.jvm.KotlinJvmTarget>("desktop")
+    classpath = desktopJvm.compilations["main"].output.allOutputs + desktopJvm.compilations["main"].runtimeDependencyFiles
+    standardInput = System.`in`
+    
+    // Pass JavaFX native library path to JVM
+    val javafxJars = classpath.filter { it.name.contains("javafx") }
+    if (!javafxJars.isEmpty) {
+        val javafxDir = javafxJars.first().parent
+        systemProperty("java.library.path", javafxDir)
     }
 }
