@@ -1,8 +1,5 @@
 package com.langkraft.data.repository
 
-import app.cash.sqldelight.coroutines.asFlow
-import app.cash.sqldelight.coroutines.mapToList
-import app.cash.sqldelight.coroutines.mapToOne
 import com.langkraft.db.AppDatabase
 import com.langkraft.domain.model.*
 import com.langkraft.domain.repository.VocabularyRepository
@@ -11,7 +8,6 @@ import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.request.*
 import io.ktor.http.*
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.datetime.Clock
@@ -22,26 +18,18 @@ class SqlDelightVocabularyRepository(
     private val db: AppDatabase,
     private val httpClient: HttpClient,
     private val baseUrl: String
-) : VocabularyRepository {
+) : BaseSqlDelightRepository(), VocabularyRepository {
 
     private val json = Json { ignoreUnknownKeys = true }
 
     override fun getWordsToReview(): Flow<List<VocabularyWord>> {
         val now = Clock.System.now().toEpochMilliseconds()
-        return db.appDatabaseQueries.selectVocabularyToReview(now)
-            .asFlow()
-            .mapToList(Dispatchers.Default)
-            .map { list ->
-                list.map { it.toDomain() }
-            }
+        return db.appDatabaseQueries.selectVocabularyToReview(now).asFlowList { it.toDomain() }
     }
 
     override fun getReviewCount(): Flow<Int> {
         val now = Clock.System.now().toEpochMilliseconds()
-        return db.appDatabaseQueries.countVocabularyToReview(now)
-            .asFlow()
-            .mapToOne(Dispatchers.Default)
-            .map { it.toInt() }
+        return db.appDatabaseQueries.countVocabularyToReview(now).asFlowOne { it.toInt() }
     }
 
     override suspend fun saveWord(word: VocabularyWord) {
@@ -85,7 +73,6 @@ class SqlDelightVocabularyRepository(
     override suspend fun sync(lastSyncTimestamp: Long): Long {
         val pendingChanges = db.appDatabaseQueries.getAllPendingChanges().executeAsList()
         if (pendingChanges.isEmpty()) {
-            // Even if no local changes, we should fetch server changes
             return fetchServerChanges(lastSyncTimestamp, emptyList())
         }
 
@@ -146,18 +133,13 @@ class SqlDelightVocabularyRepository(
     }
 
     override fun getWordCountsByStatus(): Flow<Map<WordStatus, Long>> {
-        return db.appDatabaseQueries.countWordsByStatus()
-            .asFlow()
-            .mapToList(Dispatchers.Default)
-            .map { list ->
-                list.associate { WordStatus.valueOf(it.status) to it.count }
-            }
+        return db.appDatabaseQueries.countWordsByStatus().asFlowList { 
+            WordStatus.valueOf(it.status) to it.count 
+        }.map { it.toMap() }
     }
 
     override fun getWordsAddedSince(timestamp: Long): Flow<Long> {
-        return db.appDatabaseQueries.getWordsAddedRecently(timestamp)
-            .asFlow()
-            .mapToOne(Dispatchers.Default)
+        return db.appDatabaseQueries.getWordsAddedRecently(timestamp).asFlowOne { it }
     }
 
     override suspend fun getSyncMetadata(key: String): String? {

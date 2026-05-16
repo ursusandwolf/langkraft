@@ -2,12 +2,16 @@
 
 ## [Unreleased]
 ### Added
+- **StateViewModel:** Introduced a generic `StateViewModel<S>` abstract class to standardize state management across all ViewModels, significantly reducing boilerplate.
+- **BaseSqlDelightRepository:** Added an abstract base class for SQLDelight repositories with helper functions for mapping queries to domain models.
 - **Desktop Koin Module:** Created `DesktopModule` to provide platform-specific `AppDatabase` via `JdbcSqliteDriver`.
 - **Ktor CIO Engine:** Added `ktor-client-cio` dependency for Desktop JVM.
 - **Multiplatform Logger:** Introduced a unified `Logger` object to replace raw `println` calls.
 - **FileSystem Rename:** Added `rename` support to `FileSystem` abstraction for atomic file operations.
 
 ### Changed
+- **ViewModel Refactoring:** All ViewModels (`Dashboard`, `ContentSelection`, `Player`, `SrsTraining`, `Writing`) now inherit from `StateViewModel`.
+- **Repository Refactoring:** `SqlDelightContentRepository` and `SqlDelightVocabularyRepository` now inherit from `BaseSqlDelightRepository`, resulting in cleaner and more concise data mapping logic.
 - **Sync Protocol Refactoring:** Introduced `SyncEntry` with explicit `UPSERT`/`DELETE` change tracking. Removed the hacky `lapseCount = -1` deletion marker.
 - **Backend Deletion Support:** `BackendVocabularyRepository` now processes `DELETE` entries in the sync request.
 - **DI Initialization:** Refactored `initKoin` usage to ensure it's called before Compose initialization on Desktop.

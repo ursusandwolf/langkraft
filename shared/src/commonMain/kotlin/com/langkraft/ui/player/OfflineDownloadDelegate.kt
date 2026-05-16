@@ -12,11 +12,12 @@ class OfflineDownloadDelegate(
     private val audioDownloader: AudioDownloader,
     private val contentRepository: LocalContentRepository,
     private val scope: CoroutineScope,
-    private val state: MutableStateFlow<PlayerState>
+    private val updateState: ((PlayerState) -> PlayerState) -> Unit,
+    private val getState: () -> PlayerState
 ) {
 
     fun handleToggleOffline() {
-        val currentContent = state.value.content ?: return
+        val currentContent = getState().content ?: return
         if (currentContent.downloadStatus == DownloadStatus.DOWNLOADING) return
 
         scope.launch {
@@ -24,10 +25,10 @@ class OfflineDownloadDelegate(
                 audioDownloader.downloadAudio(currentContent)
                 val updated = contentRepository.getContentById(currentContent.id)
                 if (updated != null) {
-                    state.update { it.copy(content = updated) }
+                    updateState { it.copy(content = updated) }
                 }
             } catch (e: Exception) {
-                state.update { it.copy(error = "Download failed: ${e.message}") }
+                updateState { it.copy(error = "Download failed: ${e.message}") }
             }
         }
     }

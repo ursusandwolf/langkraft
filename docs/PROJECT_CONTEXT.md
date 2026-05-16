@@ -14,7 +14,7 @@ The app follows a specific language acquisition methodology:
 
 ## Current State
 - **Security:** User passwords are secured with **BCrypt**. Client-side sends raw passwords in a field named `password`.
-- **Architecture:** Strictly follows **Clean Architecture**. Desktop version now uses a platform-specific Koin module for database initialization and Ktor CIO engine.
+- **Architecture:** Strictly follows **Clean Architecture**. Introduced `StateViewModel` for standardized, boilerplate-free state management in all ViewModels. Data layer uses `BaseSqlDelightRepository` to encapsulate SQLDelight-to-Domain mapping logic.
 - **Sync Protocol:** Refactored to use `SyncEntry` with explicit `UPSERT` and `DELETE` change types, replacing the previous `lapseCount = -1` hack. Backend now supports deletion processing.
 - **Data Layer:** SQLDelight schema supports incremental sync and JSON-serialized tags. File system operations optimized with atomic `rename` for downloads.
 - **Sync Manager:** Uses `Dispatchers.IO` (or `Dispatchers.Default` on common) to ensure UI responsiveness during sync.

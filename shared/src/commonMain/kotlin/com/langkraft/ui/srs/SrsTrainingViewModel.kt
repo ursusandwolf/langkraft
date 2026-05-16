@@ -23,9 +23,7 @@ class SrsTrainingViewModel(
     private val vocabularyRepository: VocabularyRepository,
     private val srsAlgorithm: SpacedRepetitionAlgorithm,
     baseContext: kotlin.coroutines.CoroutineContext = kotlinx.coroutines.Dispatchers.Main
-) : BaseViewModel(baseContext) {
-    private val _state = MutableStateFlow(SrsTrainingState())
-    val state: StateFlow<SrsTrainingState> = _state.asStateFlow()
+) : StateViewModel<SrsTrainingState>(SrsTrainingState(), baseContext) {
 
     init {
         loadQueue()
@@ -33,9 +31,9 @@ class SrsTrainingViewModel(
 
     private fun loadQueue() {
         scope.launch {
-            _state.update { it.copy(isLoading = true) }
+            updateState { it.copy(isLoading = true) }
             vocabularyRepository.getWordsToReview().collect { words ->
-                _state.update { 
+                updateState { 
                     it.copy(
                         queue = words,
                         currentWord = words.firstOrNull(),
@@ -49,17 +47,15 @@ class SrsTrainingViewModel(
     }
 
     fun showAnswer() {
-        _state.update { it.copy(isAnswerVisible = true) }
+        updateState { it.copy(isAnswerVisible = true) }
     }
 
     fun submitResult(quality: ReviewQuality) {
-        val word = _state.value.currentWord ?: return
+        val word = currentState.currentWord ?: return
         val updatedWord = srsAlgorithm.calculateNextReview(word, quality)
         
         scope.launch {
             vocabularyRepository.saveWord(updatedWord)
-            // SQLDelight flow will automatically emit the updated list
-            // without the completed word, and loadQueue() will update the UI.
         }
     }
 }

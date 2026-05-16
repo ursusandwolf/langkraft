@@ -30,9 +30,7 @@ class DashboardViewModel(
     private val vocabularyRepository: VocabularyRepository,
     private val syncManager: ISyncManager,
     baseContext: kotlin.coroutines.CoroutineContext = kotlinx.coroutines.Dispatchers.Main
-) : BaseViewModel(baseContext) {
-    private val _state = MutableStateFlow(DashboardState())
-    val state: StateFlow<DashboardState> = _state.asStateFlow()
+) : StateViewModel<DashboardState>(DashboardState(), baseContext) {
 
     init {
         loadStats()
@@ -42,7 +40,7 @@ class DashboardViewModel(
         
         // Observe sync errors
         syncManager.syncError.onEach { error ->
-            _state.value = _state.value.copy(syncError = error)
+            updateState { it.copy(syncError = error) }
         }.launchIn(scope)
     }
 
@@ -63,10 +61,10 @@ class DashboardViewModel(
                 wordsNew = counts[WordStatus.NEW] ?: 0,
                 wordsToReviewToday = reviewCount,
                 wordsAddedThisWeek = recent,
-                syncError = _state.value.syncError
+                syncError = currentState.syncError
             )
         }.onEach { newState ->
-            _state.value = newState
+            updateState { newState }
         }.launchIn(scope)
     }
 }

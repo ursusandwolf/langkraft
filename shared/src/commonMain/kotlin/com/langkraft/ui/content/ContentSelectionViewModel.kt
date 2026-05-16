@@ -20,9 +20,7 @@ data class ContentSelectionState(
 class ContentSelectionViewModel(
     private val contentRepository: LocalContentRepository,
     private val ingestContentUseCase: IngestContentUseCase
-) : BaseViewModel() {
-    private val _state = MutableStateFlow(ContentSelectionState())
-    val state: StateFlow<ContentSelectionState> = _state.asStateFlow()
+) : StateViewModel<ContentSelectionState>(ContentSelectionState()) {
 
     init {
         loadLibrary()
@@ -30,21 +28,21 @@ class ContentSelectionViewModel(
 
     private fun loadLibrary() {
         scope.launch {
-            _state.update { it.copy(isLoading = true) }
+            updateState { it.copy(isLoading = true) }
             contentRepository.getAllContent().collect { items ->
-                _state.update { it.copy(library = items, isLoading = false) }
+                updateState { it.copy(library = items, isLoading = false) }
             }
         }
     }
 
     fun importContent(url: String) {
         scope.launch {
-            _state.update { it.copy(isImporting = true) }
+            updateState { it.copy(isImporting = true) }
             val result = ingestContentUseCase(url)
-            _state.update { it.copy(isImporting = false) }
+            updateState { it.copy(isImporting = false) }
             
             result.onFailure { e ->
-                _state.update { it.copy(error = e.message) }
+                updateState { it.copy(error = e.message) }
             }
         }
     }

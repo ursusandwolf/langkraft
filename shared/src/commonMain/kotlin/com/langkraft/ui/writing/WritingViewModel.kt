@@ -19,34 +19,32 @@ data class WritingState(
 
 class WritingViewModel(
     private val linguisticAssistant: LinguisticAssistant
-) : BaseViewModel() {
-    private val _state = MutableStateFlow(WritingState())
-    val state: StateFlow<WritingState> = _state.asStateFlow()
+) : StateViewModel<WritingState>(WritingState()) {
 
     fun onTextChanged(text: String) {
-        _state.update { it.copy(inputText = text) }
+        updateState { it.copy(inputText = text) }
     }
 
     fun submitForCorrection() {
-        val text = _state.value.inputText.trim()
+        val text = currentState.inputText.trim()
         if (text.isBlank()) return
 
-        _state.update { it.copy(isAnalyzing = true, error = null) }
+        updateState { it.copy(isAnalyzing = true, error = null) }
         scope.launch {
             try {
                 val result = linguisticAssistant.correctText(text)
-                _state.update { it.copy(correction = result, isAnalyzing = false) }
+                updateState { it.copy(correction = result, isAnalyzing = false) }
             } catch (e: Exception) {
-                _state.update { it.copy(isAnalyzing = false, error = "Korrektur fehlgeschlagen: ${e.message}") }
+                updateState { it.copy(isAnalyzing = false, error = "Korrektur fehlgeschlagen: ${e.message}") }
             }
         }
     }
 
     fun toggleMemorization(show: Boolean) {
-        _state.update { it.copy(showMemorization = show) }
+        updateState { it.copy(showMemorization = show) }
     }
 
     fun clearCorrection() {
-        _state.update { it.copy(correction = null, showMemorization = false) }
+        updateState { it.copy(correction = null, showMemorization = false) }
     }
 }

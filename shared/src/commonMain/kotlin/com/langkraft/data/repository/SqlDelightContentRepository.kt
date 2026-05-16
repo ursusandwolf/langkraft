@@ -16,15 +16,10 @@ import kotlinx.datetime.Clock
 
 class SqlDelightContentRepository(
     private val db: AppDatabase
-) : LocalContentRepository {
+) : BaseSqlDelightRepository(), LocalContentRepository {
 
     override fun getAllContent(): Flow<List<ImmersionContent>> {
-        return db.appDatabaseQueries.selectAllContent()
-            .asFlow()
-            .mapToList(Dispatchers.Default)
-            .map { list ->
-                list.map { it.toDomain() }
-            }
+        return db.appDatabaseQueries.selectAllContent().asFlowList { it.toDomain() }
     }
 
     override suspend fun getContentById(id: String): ImmersionContent? {
@@ -61,15 +56,12 @@ class SqlDelightContentRepository(
     }
 
     override fun getImmersionStats(): Flow<ImmersionStats> {
-        return db.appDatabaseQueries.getImmersionStats()
-            .asFlow()
-            .mapToOne(Dispatchers.Default)
-            .map { 
-                ImmersionStats(
-                    totalContent = it.totalContent,
-                    totalDurationSeconds = it.totalDurationSeconds ?: 0L
-                )
-            }
+        return db.appDatabaseQueries.getImmersionStats().asFlowOne { 
+            ImmersionStats(
+                totalContent = it.totalContent,
+                totalDurationSeconds = it.totalDurationSeconds ?: 0L
+            )
+        }
     }
 
     private fun com.langkraft.db.Content.toDomain(): ImmersionContent {

@@ -32,49 +32,53 @@ classDiagram
 
 ```mermaid
 classDiagram
+    class BaseSqlDelightRepository {
+        <<abstract>>
+        #asFlowList()
+        #asFlowOne()
+    }
     class LocalContentRepository {
         <<interface>>
         +getAllContent() Flow
-        +getContentById(id)
-        +saveContent(content)
-        +getImmersionStats() Flow
-    }
-    class AudioDownloader {
-        <<interface>>
-        +downloadAudio(content)
-    }
-    class RemoteContentSource {
-        <<interface>>
-        +fetchFromYouTube(url)
-    }
-    class FileSystem {
-        <<interface>>
-        +writeBytes()
-        +rename(from, to)
-    }
-    class BackendRemoteSource {
-        +httpClient: HttpClient
-        +baseUrl: String
-    }
-    class AudioDownloaderImpl {
-        +httpClient: HttpClient
-        +fileSystem: FileSystem
     }
     class SqlDelightContentRepository {
         +db: AppDatabase
     }
     class VocabularyRepository {
         <<interface>>
-        +sync(lastSyncTimestamp)
-        +getSyncMetadata(key)
-        +setSyncMetadata(key, value)
+        +sync()
+    }
+    class SqlDelightVocabularyRepository {
+        +db: AppDatabase
     }
 
+    SqlDelightContentRepository --|> BaseSqlDelightRepository
     SqlDelightContentRepository ..|> LocalContentRepository
-    BackendRemoteSource ..|> RemoteContentSource
-    AudioDownloaderImpl ..|> AudioDownloader
-    AudioDownloaderImpl --> FileSystem
+    SqlDelightVocabularyRepository --|> BaseSqlDelightRepository
     SqlDelightVocabularyRepository ..|> VocabularyRepository
+```
+
+## UI Architecture (MVI-ish)
+
+```mermaid
+classDiagram
+    class BaseViewModel {
+        <<abstract>>
+        #scope: CoroutineScope
+    }
+    class StateViewModel~S~ {
+        <<abstract>>
+        +state: StateFlow~S~
+        #updateState()
+    }
+    class DashboardViewModel {
+    }
+    class PlayerViewModel {
+    }
+
+    StateViewModel --|> BaseViewModel
+    DashboardViewModel --|> StateViewModel
+    PlayerViewModel --|> StateViewModel
 ```
 
 ## Synchronization Flow (Sequence)
