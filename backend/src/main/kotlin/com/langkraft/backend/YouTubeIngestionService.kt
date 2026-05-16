@@ -81,7 +81,7 @@ class YouTubeIngestionService(
 
         updateJob(jobId) { it.copy(status = ContentProcessingStatus.DOWNLOADING_AUDIO) }
         val files = ytdlpClient.downloadContent(url, videoId)
-        val audioFile = files.find { it.extension == "opus" } 
+        val audioFile = files.find { it.extension == "mp3" } 
             ?: throw IngestionException("Audio file missing")
         val srtFile = files.find { it.extension == "srt" }
             ?: throw IngestionException("Subtitles file missing")
@@ -95,7 +95,7 @@ class YouTubeIngestionService(
         val content = ImmersionContent(
             id = videoId,
             title = info.title ?: "Extracted Content",
-            audioUrl = "/api/media/$videoId.opus",
+            audioUrl = "/api/media/$videoId.mp3",
             localAudioPath = audioFile.absolutePath,
             sourceUrl = url,
             durationSeconds = info.duration ?: 0L,

@@ -57,7 +57,7 @@ class YtdlpClient(private val downloadsDir: String) {
         request.setOption("sub-lang", "de")
         request.setOption("convert-subs", "srt")
         request.setOption("extract-audio")
-        request.setOption("audio-format", "opus")
+        request.setOption("audio-format", "mp3")
         request.setOption("output", "$videoId.%(ext)s")
 
         try {
@@ -69,7 +69,7 @@ class YtdlpClient(private val downloadsDir: String) {
 
             // Find downloaded files
             val downloadsFolder = File(downloadsDir)
-            val audioFile = downloadsFolder.listFiles()?.find { it.name == "$videoId.opus" }
+            val audioFile = downloadsFolder.listFiles()?.find { it.name == "$videoId.mp3" }
             val srtFile = downloadsFolder.listFiles()?.find { it.name == "$videoId.de.srt" || it.name == "$videoId.srt" }
 
             if (audioFile == null || srtFile == null) {

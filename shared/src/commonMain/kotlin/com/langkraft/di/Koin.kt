@@ -55,7 +55,7 @@ val commonModule = module {
     single { SqlDelightContentRepository(get()) }
     single<LocalContentRepository> { get<SqlDelightContentRepository>() }
     single<RemoteContentSource> { BackendRemoteSource(get(), get<AppConfig>().backendUrl) }
-    single<AudioDownloader> { AudioDownloaderImpl(get(), get(), get()) }
+    single<AudioDownloader> { AudioDownloaderImpl(get(), get(), get(), get<AppConfig>().backendUrl) }
     single<VocabularyRepository> { SqlDelightVocabularyRepository(get(), get(), get<AppConfig>().backendUrl) }
 
     // Sync
@@ -76,7 +76,7 @@ val commonModule = module {
 
     // ViewModels
     factory { ContentSelectionViewModel(get(), get()) }
-    factory { PlayerViewModel(get(), get(), get(), get(), get(), get()) }
+    factory { PlayerViewModel(get(), get(), get(), get(), get(), get(), get()) }
     factory { SrsTrainingViewModel(get(), get()) }
     factory { WritingViewModel(get()) }
     factory { DashboardViewModel(get(), get(), get()) }

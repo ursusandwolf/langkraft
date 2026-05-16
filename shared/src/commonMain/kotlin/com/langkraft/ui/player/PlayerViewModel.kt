@@ -17,6 +17,7 @@ import com.langkraft.domain.model.VocabularyWord
 import com.langkraft.domain.model.SubtitleLine
 import com.langkraft.io.FileSystem
 import com.langkraft.audio.AudioPlayer
+import com.langkraft.di.AppConfig
 
 class PlayerViewModel(
     private val contentRepository: LocalContentRepository,
@@ -24,7 +25,8 @@ class PlayerViewModel(
     private val vocabularyRepository: VocabularyRepository,
     linguisticAssistant: LinguisticAssistant,
     private val audioPlayer: AudioPlayer,
-    private val fileSystem: FileSystem
+    private val fileSystem: FileSystem,
+    private val appConfig: AppConfig
 ) : StateViewModel<PlayerState>(PlayerState()) {
 
     private val linguisticDelegate = PlayerLinguisticDelegate(linguisticAssistant, scope, ::updateState)
@@ -107,7 +109,7 @@ class PlayerViewModel(
             }
             updateState { it.copy(isLoading = false, content = content) }
             
-            audioPlayer.load(content.getPlaybackUrl())
+            audioPlayer.load(content.getPlaybackUrl(appConfig.backendUrl))
         }
     }
     

@@ -59,10 +59,19 @@ fun ContentSelectionView(
                     Button(
                         onClick = { viewModel.importContent(urlInput) },
                         modifier = Modifier.align(Alignment.End),
-                        enabled = !state.isImporting
+                        enabled = !state.isImporting && urlInput.isNotBlank()
                     ) {
                         if (state.isImporting) CircularProgressIndicator(modifier = Modifier.size(20.dp))
                         else Text("IMPORT")
+                    }
+
+                    state.error?.let {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = it,
+                            color = MaterialTheme.colors.error,
+                            style = MaterialTheme.typography.caption
+                        )
                     }
                 }
             }

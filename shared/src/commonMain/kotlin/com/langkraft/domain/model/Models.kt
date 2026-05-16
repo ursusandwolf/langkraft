@@ -16,11 +16,11 @@ data class ImmersionContent(
     val contentLanguage: Language = Language.DE,
     val translationLanguage: Language = Language.EN
 ) {
-    fun getPlaybackUrl(): String {
+    fun getPlaybackUrl(baseUrl: String = "http://localhost:8080"): String {
         return if (downloadStatus == DownloadStatus.COMPLETED && localAudioPath != null) {
             localAudioPath
         } else {
-            audioUrl
+            if (audioUrl.startsWith("http")) audioUrl else "$baseUrl$audioUrl"
         }
     }
 }

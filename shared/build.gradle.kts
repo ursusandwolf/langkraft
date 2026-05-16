@@ -66,6 +66,7 @@ kotlin {
                 implementation("app.cash.sqldelight:sqlite-driver:2.0.0")
                 implementation("io.ktor:ktor-client-cio:2.3.5")
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.7.3")
+                implementation("javazoom:jlayer:1.0.1")
             }
         }
         val jsMain by getting {
@@ -86,7 +87,7 @@ sqldelight {
 
 compose.desktop {
     application {
-        mainClass = "MainKt"
+        mainClass = "com.langkraft.MainKt"
         nativeDistributions {
             targetFormats(org.jetbrains.compose.desktop.application.dsl.TargetFormat.Dmg, org.jetbrains.compose.desktop.application.dsl.TargetFormat.Msi, org.jetbrains.compose.desktop.application.dsl.TargetFormat.Deb)
             packageName = "Langkraft"

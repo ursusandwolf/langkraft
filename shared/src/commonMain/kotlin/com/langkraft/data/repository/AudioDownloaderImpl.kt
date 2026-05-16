@@ -12,7 +12,8 @@ import io.ktor.client.request.get
 class AudioDownloaderImpl(
     private val httpClient: HttpClient,
     private val fileSystem: FileSystem,
-    private val db: AppDatabase
+    private val db: AppDatabase,
+    private val baseUrl: String
 ) : AudioDownloader {
 
     override suspend fun downloadAudio(content: ImmersionContent): String {
@@ -29,7 +30,8 @@ class AudioDownloaderImpl(
         db.appDatabaseQueries.updateDownloadStatus(DownloadStatus.DOWNLOADING.name, null, content.id)
 
         try {
-            val response = httpClient.get(content.audioUrl)
+            val downloadUrl = if (content.audioUrl.startsWith("http")) content.audioUrl else "$baseUrl${content.audioUrl}"
+            val response = httpClient.get(downloadUrl)
             val body = response.body<ByteArray>()
             
             // Write to temporary file first
