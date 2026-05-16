@@ -23,4 +23,8 @@ actual class FileSystemImpl(private val context: Context) : FileSystem {
     actual override fun resolve(base: String, child: String): String {
         return File(base, child).absolutePath
     }
+
+    actual override fun rename(from: String, to: String) {
+        File(from).renameTo(File(to))
     }
+}

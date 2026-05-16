@@ -47,6 +47,11 @@ classDiagram
         <<interface>>
         +fetchFromYouTube(url)
     }
+    class FileSystem {
+        <<interface>>
+        +writeBytes()
+        +rename(from, to)
+    }
     class BackendRemoteSource {
         +httpClient: HttpClient
         +baseUrl: String
@@ -68,6 +73,7 @@ classDiagram
     SqlDelightContentRepository ..|> LocalContentRepository
     BackendRemoteSource ..|> RemoteContentSource
     AudioDownloaderImpl ..|> AudioDownloader
+    AudioDownloaderImpl --> FileSystem
     SqlDelightVocabularyRepository ..|> VocabularyRepository
 ```
 
@@ -85,12 +91,13 @@ sequenceDiagram
     SM->>SM: Mutex.lock()
     SM->>VR: getSyncMetadata("last_sync")
     VR-->>SM: timestamp
+    SM->>SM: withContext(Dispatchers.IO)
     SM->>VR: sync(timestamp)
-    VR->>VR: Batch fetch updated words
-    VR->>API: POST /api/sync (changes + timestamp)
-    API->>API: Resolve Conflicts (LWW)
-    API-->>VR: Server Changes + New Timestamp
-    VR->>VR: Apply Changes (Transaction)
+    VR->>VR: Collect SyncEntry (UPSERT/DELETE)
+    VR->>API: POST /api/sync (SyncRequest)
+    API->>API: Process SyncEntry (Atomic)
+    API-->>VR: SyncResponse (Server SyncEntries)
+    VR->>VR: Apply Server Changes (Transaction)
     VR-->>SM: New Timestamp
     SM->>VR: setSyncMetadata("last_sync", newTimestamp)
     SM->>SM: Mutex.unlock()

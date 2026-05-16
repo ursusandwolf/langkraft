@@ -34,8 +34,6 @@ fun initKoin(appDeclaration: KoinAppDeclaration = {}) =
         modules(commonModule)
     }
 
-fun initKoin() = initKoin {}
-
 data class AppConfig(
     val backendUrl: String = "http://localhost:8080"
 )

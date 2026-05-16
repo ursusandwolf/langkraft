@@ -35,9 +35,8 @@ class AudioDownloaderImpl(
             // Write to temporary file first
             fileSystem.writeBytes(tempPath, body)
             
-            // "Rename" by writing to final path
-            fileSystem.writeBytes(destinationPath, body)
-            fileSystem.delete(tempPath)
+            // Move to final path
+            fileSystem.rename(tempPath, destinationPath)
             
             db.appDatabaseQueries.updateDownloadStatus(DownloadStatus.COMPLETED.name, destinationPath, content.id)
             return destinationPath

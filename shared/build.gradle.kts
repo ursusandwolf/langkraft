@@ -63,6 +63,7 @@ kotlin {
             dependencies {
                 implementation(compose.desktop.currentOs)
                 implementation("app.cash.sqldelight:sqlite-driver:2.0.0")
+                implementation("io.ktor:ktor-client-cio:2.3.5")
             }
         }
         val jsMain by getting {

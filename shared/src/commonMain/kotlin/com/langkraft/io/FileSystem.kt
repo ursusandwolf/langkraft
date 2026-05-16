@@ -6,6 +6,7 @@ interface FileSystem {
     fun delete(path: String)
     fun writeBytes(path: String, bytes: ByteArray)
     fun resolve(base: String, child: String): String
+    fun rename(from: String, to: String)
 }
 
 expect class FileSystemImpl() : FileSystem {
@@ -14,4 +15,5 @@ expect class FileSystemImpl() : FileSystem {
     override fun delete(path: String)
     override fun writeBytes(path: String, bytes: ByteArray)
     override fun resolve(base: String, child: String): String
+    override fun rename(from: String, to: String)
 }

@@ -13,22 +13,23 @@ The app follows a specific language acquisition methodology:
 6. **Memorization:** Features to help internalize corrected prose.
 
 ## Current State
-- **Security:** User passwords are secured with **BCrypt**. Client-side sends raw passwords in a field named `password` (renamed from `passwordHash` to avoid ambiguity).
-- **Architecture:** Strictly follows **Clean Architecture**. Content management is split into `LocalContentRepository` (SQLDelight), `AudioDownloader`, and `RemoteContentSource` (Backend API). Hardcoded URLs are removed; backend URL is now configurable via Koin.
-- **Data Layer:** SQLDelight schema supports incremental sync and JSON-serialized tags. N+1 query issue in synchronization is resolved via batch retrieval (`selectWordsByIds`).
-- **Backend:** Modularized Ktor server with asynchronous YouTube ingestion. `YouTubeIngestionService` now includes an hourly cleanup task for expired jobs. `CachingLinguisticAssistant` uses an LRU cache (max 1000 entries) to prevent memory leaks.
-- **Player:** `PlayerViewModel` is reactively connected to `AudioPlayer`, ensuring synchronized state for playback and looping.
-- **SRS:** SM-2 algorithm uses proper rounding (`roundToInt`) for interval calculations. Covered with unit tests.
-- **Testing:** Introduced unit tests for `Sm2Algorithm` and `SrsTrainingViewModel` with fake repositories and test dispatchers.
+- **Security:** User passwords are secured with **BCrypt**. Client-side sends raw passwords in a field named `password`.
+- **Architecture:** Strictly follows **Clean Architecture**. Desktop version now uses a platform-specific Koin module for database initialization and Ktor CIO engine.
+- **Sync Protocol:** Refactored to use `SyncEntry` with explicit `UPSERT` and `DELETE` change types, replacing the previous `lapseCount = -1` hack. Backend now supports deletion processing.
+- **Data Layer:** SQLDelight schema supports incremental sync and JSON-serialized tags. File system operations optimized with atomic `rename` for downloads.
+- **Sync Manager:** Uses `Dispatchers.IO` (or `Dispatchers.Default` on common) to ensure UI responsiveness during sync.
+- **Logging:** Unified multiplatform `Logger` replaces raw `println` calls in the data layer.
+- **Testing:** Unit tests cover `Sm2Algorithm` and `SrsTrainingViewModel`.
 
 ## Tech Stack
 - **Build**: Gradle 8.14
 - **Language**: Kotlin 2.0.21
 - **Platform**: Multi-platform (Android, Web/Wasm, Desktop)
 - **UI**: Compose Multiplatform
-- **Database**: SQLDelight
-- **Backend**: Ktor
-- **AI**: Gemini API (via `GeminiLinguisticAssistant`)
+- **Database**: SQLDelight (Client), Exposed/SQLite (Backend)
+- **Ktor**: 2.3.5 (Client & Server)
+- **DI**: Koin 3.5.0
+- **AI**: Gemini API
 - **Authentication**: JWT & BCrypt
 
 ## Pending Items

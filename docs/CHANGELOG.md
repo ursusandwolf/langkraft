@@ -2,25 +2,23 @@
 
 ## [Unreleased]
 ### Added
-- **Unit Tests for SRS:** Added `Sm2AlgorithmTest` and `SrsTrainingViewModelTest` to cover critical learning logic and UI interactions.
-- **LRU Cache for AI:** Implemented a thread-safe LRU cache (max 1000 entries) in `CachingLinguisticAssistant` to prevent memory leaks in the backend.
-- **Ingestion Job Cleanup:** Added an hourly cleanup task in `YouTubeIngestionService` to remove ingestion jobs older than 24 hours.
-- **Batch Vocabulary Retrieval:** Introduced `selectWordsByIds` query in SQLDelight to support high-performance batch operations.
+- **Desktop Koin Module:** Created `DesktopModule` to provide platform-specific `AppDatabase` via `JdbcSqliteDriver`.
+- **Ktor CIO Engine:** Added `ktor-client-cio` dependency for Desktop JVM.
+- **Multiplatform Logger:** Introduced a unified `Logger` object to replace raw `println` calls.
+- **FileSystem Rename:** Added `rename` support to `FileSystem` abstraction for atomic file operations.
 
 ### Changed
-- **Content Repository Refactoring (ISP):** Split the monolithic `SqlDelightContentRepository` into three specialized components: `SqlDelightContentRepository` (local DB), `AudioDownloaderImpl` (media), and `BackendRemoteSource` (remote API).
-- **Security Semantics:** Renamed `passwordHash` to `password` in `AuthRequest` and `RegisterRequest`. Backend now handles hashing raw passwords.
-- **JSON Tags:** Switched vocabulary tags from CSV format to **JSON serialization** for better data integrity and support for commas in tags.
-- **ViewModel Threading:** `BaseViewModel` now uses `Dispatchers.Main` by default and supports `CoroutineContext` injection for reliable unit testing.
-- **SRS Precision:** Updated `Sm2Algorithm` to use `roundToInt()` for interval calculations, preventing systematic progress truncation.
-- **Sync Concurrency:** Refactored `SyncManager` to hold the `Mutex` for the entire duration of the sync operation, resolving a potential race condition.
-- **Reactive Player UI:** `PlayerViewModel` now reactively observes `AudioPlayer` state, ensuring synchronized playback and looping logic.
+- **Sync Protocol Refactoring:** Introduced `SyncEntry` with explicit `UPSERT`/`DELETE` change tracking. Removed the hacky `lapseCount = -1` deletion marker.
+- **Backend Deletion Support:** `BackendVocabularyRepository` now processes `DELETE` entries in the sync request.
+- **DI Initialization:** Refactored `initKoin` usage to ensure it's called before Compose initialization on Desktop.
+- **Sync Performance:** Moved sync operations to `Dispatchers.IO` (or `Dispatchers.Default` on common) to avoid blocking the main thread.
+- **Download Optimization:** `AudioDownloaderImpl` now uses atomic `rename` instead of double-writing file bytes, reducing memory and disk I/O.
 
 ### Fixed
-- **Serialization Bug:** Added missing `@Serializable` to `ImmersionContent` and related enums, fixing the READY state response in the ingestion API.
-- **Hardcoded URLs:** Removed `localhost:8080` from repositories; the backend URL is now configurable via Koin `AppConfig`.
-- **N+1 Query (Sync):** Optimized client-side sync by using batch retrieval of updated words.
-- **Dashboard Test Failure:** Fixed `DashboardViewModelTest` by injecting `UnconfinedTestDispatcher`.
+- **Desktop Crash (DI):** Fixed `NoBeanDefFoundException` for `AppDatabase` on Desktop.
+- **Desktop Crash (Ktor):** Fixed `No HTTP client engine found` error on JVM.
+- **Redundant DI Overloads:** Cleaned up `initKoin` signatures to avoid ambiguity.
+- **Sync Logging:** Replaced raw `println` in `SqlDelightVocabularyRepository` with `Logger.e`.
 
 ## [0.5.0] - 2026-05-13
 ### Added

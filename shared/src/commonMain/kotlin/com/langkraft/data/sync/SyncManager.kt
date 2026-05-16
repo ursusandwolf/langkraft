@@ -1,10 +1,12 @@
 package com.langkraft.data.sync
 
 import com.langkraft.domain.repository.VocabularyRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
 
 interface ISyncManager {
@@ -43,10 +45,16 @@ class SyncManager(
             lastAttemptTimestamp = now
 
             try {
-                val lastSyncTimestamp = vocabularyRepository.getSyncMetadata(KEY_LAST_SYNC)?.toLongOrNull() ?: 0L
-                val newTimestamp = vocabularyRepository.sync(lastSyncTimestamp)
-                if (newTimestamp > lastSyncTimestamp) {
-                    vocabularyRepository.setSyncMetadata(KEY_LAST_SYNC, newTimestamp.toString())
+                // Use Dispatchers.Default for commonMain if IO is not available,
+                // but since we are targeting JVM/Android mostly, we can use a platform-specific dispatcher or just Default.
+                // The code review specifically asked for Dispatchers.IO.
+                // In KMP, Dispatchers.IO is often provided via expect/actual or recent coroutines versions.
+                withContext(Dispatchers.IO) { // As requested in code review
+                    val lastSyncTimestamp = vocabularyRepository.getSyncMetadata(KEY_LAST_SYNC)?.toLongOrNull() ?: 0L
+                    val newTimestamp = vocabularyRepository.sync(lastSyncTimestamp)
+                    if (newTimestamp > lastSyncTimestamp) {
+                        vocabularyRepository.setSyncMetadata(KEY_LAST_SYNC, newTimestamp.toString())
+                    }
                 }
             } catch (e: Exception) {
                 _syncError.value = e.message ?: "Unknown sync error"

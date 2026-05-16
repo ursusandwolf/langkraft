@@ -4,11 +4,9 @@ import app.cash.sqldelight.coroutines.asFlow
 import app.cash.sqldelight.coroutines.mapToList
 import app.cash.sqldelight.coroutines.mapToOne
 import com.langkraft.db.AppDatabase
-import com.langkraft.domain.model.SyncRequest
-import com.langkraft.domain.model.SyncResponse
-import com.langkraft.domain.model.VocabularyWord
-import com.langkraft.domain.model.WordStatus
+import com.langkraft.domain.model.*
 import com.langkraft.domain.repository.VocabularyRepository
+import com.langkraft.io.Logger
 import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.request.*
@@ -99,35 +97,37 @@ class SqlDelightVocabularyRepository(
             emptyMap()
         }
 
-        val changedWords = pendingChanges.map { change ->
+        val clientEntries = pendingChanges.mapNotNull { change ->
             if (change.changeType == "DELETE") {
-                // Represent deleted word for sync. 
-                VocabularyWord(
-                    id = change.wordId, word = "", lemma = "", translation = "", contextSentence = "",
-                    contentId = "", subtitleLineId = "", addedAt = 0, nextReviewMs = 0,
-                    intervalDays = 0, easeFactor = 0.0, status = WordStatus.NEW, lapseCount = -1, tags = emptyList(), lastUpdated = change.timestamp
+                SyncEntry(
+                    word = VocabularyWord(
+                        id = change.wordId, word = "", lemma = "", translation = "", contextSentence = "",
+                        contentId = "", subtitleLineId = "", addedAt = 0, nextReviewMs = 0,
+                        intervalDays = 0, easeFactor = 0.0, status = WordStatus.NEW, lapseCount = 0, tags = emptyList(), lastUpdated = change.timestamp
+                    ),
+                    changeType = "DELETE"
                 )
             } else {
-                wordsById[change.wordId]
+                wordsById[change.wordId]?.let { SyncEntry(it, "UPSERT") }
             }
-        }.filterNotNull()
+        }
 
-        return fetchServerChanges(lastSyncTimestamp, changedWords)
+        return fetchServerChanges(lastSyncTimestamp, clientEntries)
     }
 
-    private suspend fun fetchServerChanges(lastSyncTimestamp: Long, changedWords: List<VocabularyWord>): Long {
+    private suspend fun fetchServerChanges(lastSyncTimestamp: Long, clientChanges: List<SyncEntry>): Long {
         return try {
             val response: SyncResponse = httpClient.post("$baseUrl/api/sync") {
                 contentType(ContentType.Application.Json)
-                setBody(SyncRequest(lastSyncTimestamp, changedWords))
+                setBody(SyncRequest(lastSyncTimestamp, clientChanges))
             }.body()
 
             db.appDatabaseQueries.transaction {
-                response.serverChanges.forEach { word ->
-                    // If lapseCount is -1, it's a deletion marker
-                    if (word.lapseCount == -1) {
-                        db.appDatabaseQueries.deleteWord(word.id)
+                response.serverChanges.forEach { entry ->
+                    if (entry.changeType == "DELETE") {
+                        db.appDatabaseQueries.deleteWord(entry.word.id)
                     } else {
+                        val word = entry.word
                         db.appDatabaseQueries.upsertWord(
                             word.id, word.word, word.lemma, word.translation, word.contextSentence,
                             word.contentId, word.subtitleLineId, word.addedAt, word.nextReviewMs,
@@ -140,7 +140,7 @@ class SqlDelightVocabularyRepository(
             }
             response.serverTimestamp
         } catch (e: Exception) {
-            println("Sync failed: ${e.message}")
+            Logger.e("Sync failed", e)
             lastSyncTimestamp
         }
     }

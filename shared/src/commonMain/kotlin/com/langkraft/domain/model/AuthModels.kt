@@ -3,15 +3,21 @@ package com.langkraft.domain.model
 import kotlinx.serialization.Serializable
 
 @Serializable
+data class SyncEntry(
+    val word: VocabularyWord,
+    val changeType: String // "UPSERT" or "DELETE"
+)
+
+@Serializable
 data class SyncRequest(
     val lastSyncTimestamp: Long,
-    val clientChanges: List<VocabularyWord>
+    val clientChanges: List<SyncEntry>
 )
 
 @Serializable
 data class SyncResponse(
     val serverTimestamp: Long,
-    val serverChanges: List<VocabularyWord>
+    val serverChanges: List<SyncEntry>
 )
 
 @Serializable
