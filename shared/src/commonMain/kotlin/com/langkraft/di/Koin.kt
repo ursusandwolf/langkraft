@@ -17,6 +17,7 @@ import com.langkraft.io.FileSystem
 import com.langkraft.io.FileSystemImpl
 import com.langkraft.audio.AudioPlayer
 import com.langkraft.audio.AudioPlayerImpl
+import com.langkraft.data.sync.ISyncManager
 import com.langkraft.data.sync.SyncManager
 import com.langkraft.domain.srs.SpacedRepetitionAlgorithm
 import com.langkraft.domain.srs.Sm2Algorithm
@@ -58,7 +59,7 @@ val commonModule = module {
     single<VocabularyRepository> { SqlDelightVocabularyRepository(get(), get(), get<AppConfig>().backendUrl) }
 
     // Sync
-    single { SyncManager(get()) }
+    single<ISyncManager> { SyncManager(get()) }
 
     // IO & Hardware
     single<FileSystem> { FileSystemImpl() }

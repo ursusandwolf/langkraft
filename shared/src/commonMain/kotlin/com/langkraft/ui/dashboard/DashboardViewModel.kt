@@ -2,6 +2,7 @@ package com.langkraft.ui.dashboard
 
 import com.langkraft.data.sync.ISyncManager
 import com.langkraft.ui.BaseViewModel
+import com.langkraft.ui.StateViewModel
 import com.langkraft.domain.model.WordStatus
 import com.langkraft.domain.repository.LocalContentRepository
 import com.langkraft.domain.repository.VocabularyRepository

@@ -4,6 +4,7 @@ import com.langkraft.domain.model.ImmersionContent
 import com.langkraft.domain.repository.LocalContentRepository
 import com.langkraft.domain.usecase.IngestContentUseCase
 import com.langkraft.ui.BaseViewModel
+import com.langkraft.ui.StateViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

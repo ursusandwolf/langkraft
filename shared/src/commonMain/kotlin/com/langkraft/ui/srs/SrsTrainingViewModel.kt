@@ -5,6 +5,7 @@ import com.langkraft.domain.model.ReviewQuality
 import com.langkraft.domain.repository.VocabularyRepository
 import com.langkraft.domain.srs.SpacedRepetitionAlgorithm
 import com.langkraft.ui.BaseViewModel
+import com.langkraft.ui.StateViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow

@@ -8,6 +8,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 
 import com.langkraft.ui.BaseViewModel
+import com.langkraft.ui.StateViewModel
 
 import com.langkraft.domain.repository.VocabularyRepository
 import com.langkraft.domain.ai.LinguisticAssistant

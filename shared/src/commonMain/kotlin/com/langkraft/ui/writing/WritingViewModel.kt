@@ -3,6 +3,7 @@ package com.langkraft.ui.writing
 import com.langkraft.domain.ai.CorrectionResult
 import com.langkraft.domain.ai.LinguisticAssistant
 import com.langkraft.ui.BaseViewModel
+import com.langkraft.ui.StateViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
