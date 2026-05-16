@@ -3,6 +3,7 @@ plugins {
     id("org.jetbrains.compose")
     id("org.jetbrains.kotlin.plugin.compose")
     id("app.cash.sqldelight")
+    kotlin("plugin.serialization") version "2.0.21"
 }
 
 /*
