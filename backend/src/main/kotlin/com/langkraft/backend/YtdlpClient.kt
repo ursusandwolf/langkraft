@@ -27,6 +27,7 @@ class YtdlpClient(private val downloadsDir: String) {
 
     init {
         File(downloadsDir).mkdirs()
+        YoutubeDL.setExecutablePath("yt-dlp")
     }
 
     suspend fun getVideoInfo(url: String): YtdlpInfo = withContext(Dispatchers.IO) {
@@ -52,7 +53,7 @@ class YtdlpClient(private val downloadsDir: String) {
     suspend fun downloadContent(url: String, videoId: String): List<File> = withContext(Dispatchers.IO) {
         logger.info("Starting download for videoId: $videoId, URL: $url")
         val request = YoutubeDLRequest(url, downloadsDir)
-        request.setOption("write-auto-sub")
+        request.setOption("write-sub")
         request.setOption("sub-lang", "de")
         request.setOption("convert-subs", "srt")
         request.setOption("extract-audio")
@@ -66,11 +67,13 @@ class YtdlpClient(private val downloadsDir: String) {
                 throw IngestionException("yt-dlp download failed: ${response.out}")
             }
 
-            val audioFile = File(downloadsDir, "$videoId.opus")
-            val srtFile = File(downloadsDir, "$videoId.de.srt")
+            // Find downloaded files
+            val downloadsFolder = File(downloadsDir)
+            val audioFile = downloadsFolder.listFiles()?.find { it.name == "$videoId.opus" }
+            val srtFile = downloadsFolder.listFiles()?.find { it.name == "$videoId.de.srt" || it.name == "$videoId.srt" }
 
-            if (!audioFile.exists() || !srtFile.exists()) {
-                logger.error("Missing files after download. Audio: ${audioFile.exists()}, SRT: ${srtFile.exists()}")
+            if (audioFile == null || srtFile == null) {
+                logger.error("Missing files after download. Audio: ${audioFile != null}, SRT: ${srtFile != null}")
                 throw IngestionException("Required files missing after download for video ID: $videoId")
             }
 
