@@ -174,36 +174,63 @@ class TuiApp : KoinComponent {
         
         val statusLabel = Label("Loading...")
         val timeLabel = Label("0:00 / 0:00")
+        val subtitleList = ActionListBox()
+        subtitleList.setLayoutData(LinearLayout.createLayoutData(LinearLayout.Alignment.Fill))
         
         panel.addComponent(statusLabel)
         panel.addComponent(timeLabel)
-        panel.addComponent(Button("Play/Pause", Runnable {
-            playerViewModel.onEvent(PlayerEvent.PlayPause)
-        }))
-        panel.addComponent(Button("Toggle Loop", Runnable {
-            playerViewModel.onEvent(PlayerEvent.ToggleLoop)
-        }))
-        panel.addComponent(Button("Speed 0.75x", Runnable {
-            playerViewModel.onEvent(PlayerEvent.SetPlaybackSpeed(0.75f))
-        }))
-        panel.addComponent(Button("Speed 1.0x", Runnable {
-            playerViewModel.onEvent(PlayerEvent.SetPlaybackSpeed(1.0f))
-        }))
-        panel.addComponent(Button("Close", Runnable { window.close() }))
+        panel.addComponent(subtitleList)
+        
+        val controls = Panel(LinearLayout(Direction.HORIZONTAL))
+        controls.addComponent(Button("Play/Pause", Runnable { playerViewModel.onEvent(PlayerEvent.PlayPause) }))
+        controls.addComponent(Button("Loop", Runnable { playerViewModel.onEvent(PlayerEvent.ToggleLoop) }))
+        controls.addComponent(Button("Close", Runnable { window.close() }))
+        panel.addComponent(controls)
         
         window.component = panel
         
         val job = scope.launch {
             playerViewModel.state.collect { state ->
                 gui.guiThread.invokeLater {
-                    statusLabel.text = "${if (state.isPlaying) "Playing" else "Paused"} (Loop: ${state.isLooping}, Speed: ${state.playbackSpeed}x) - ${state.content?.title ?: ""}"
-                    timeLabel.text = "${state.currentTimeMs / 1000}s"
+                    renderPlayerState(state, statusLabel, timeLabel, subtitleList)
                 }
             }
         }
 
         gui.addWindowAndWait(window)
         job.cancel()
+    }
+
+    private fun renderPlayerState(
+        state: com.langkraft.ui.player.PlayerState,
+        statusLabel: Label,
+        timeLabel: Label,
+        subtitleList: ActionListBox
+    ) {
+        statusLabel.text = "${if (state.isPlaying) "Playing" else "Paused"} (Loop: ${state.isLooping}) - ${state.content?.title ?: ""}"
+        timeLabel.text = "${state.currentTimeMs / 1000}s"
+        
+        val subtitles = state.content?.subtitles ?: return
+        
+        if (subtitleList.itemCount == 0) {
+            subtitles.forEach { subtitleList.addItem("  ${it.originalText}", {}) }
+        }
+
+        subtitles.forEachIndexed { index, line ->
+            val isActive = state.currentTimeMs in line.startMs..line.endMs
+            val marker = if (isActive) "> " else "  "
+            val expectedText = "$marker${line.originalText}"
+            
+            if (subtitleList.getItemAt(index).toString() != expectedText) {
+                subtitleList.clearItems()
+                subtitles.forEachIndexed { i, l ->
+                    val m = if (state.currentTimeMs in l.startMs..l.endMs) "> " else "  "
+                    subtitleList.addItem("$m${l.originalText}", {})
+                }
+                subtitleList.selectedIndex = index
+                return
+            }
+        }
     }
 
     private fun showDashboard(parent: Window) {

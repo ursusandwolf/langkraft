@@ -19,78 +19,53 @@ import kotlin.random.Random
  * Performs operations asynchronously and tracks job state.
  */
 class YouTubeIngestionService(
-    private val ytdlpClient: YtdlpClient
+    private val ytdlpClient: YtdlpClient,
+    private val jobRepository: IngestionJobRepository
 ) {
     private val logger = LoggerFactory.getLogger(YouTubeIngestionService::class.java)
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private val jobs = ConcurrentHashMap<String, IngestionJob>()
-    private val jobTimestamps = ConcurrentHashMap<String, Long>()
+
+    companion object {
+        private const val CLEANUP_INTERVAL_MS = 3600_000L // 1 hour
+        private const val JOB_EXPIRY_MS = 24 * 3600_000L // 24 hours
+    }
 
     init {
         scope.launch {
             while (true) {
-                delay(3600_000) // Every hour
-                cleanupOldJobs()
-            }
-        }
-    }
-
-    private fun cleanupOldJobs() {
-        val now = System.currentTimeMillis()
-        val expiryTime = 24 * 3600_000 // 24 hours
-        jobTimestamps.forEach { (jobId, timestamp) ->
-            if (now - timestamp > expiryTime) {
-                jobs.remove(jobId)
-                jobTimestamps.remove(jobId)
-                logger.info("Cleaned up expired job: $jobId")
+                delay(CLEANUP_INTERVAL_MS)
+                jobRepository.cleanup(JOB_EXPIRY_MS)
+                logger.info("Executed job cleanup")
             }
         }
     }
 
     fun startIngestion(url: String): String {
         val jobId = UUID.randomUUID().toString()
-        val now = System.currentTimeMillis()
-        jobs[jobId] = IngestionJob(jobId, ContentProcessingStatus.IDLE, url)
-        jobTimestamps[jobId] = now
+        jobRepository.save(IngestionJob(jobId, ContentProcessingStatus.IDLE, url))
         
         scope.launch {
             try {
                 processIngestion(jobId, url)
             } catch (e: Exception) {
                 logger.error("Ingestion failed for $jobId", e)
-                updateJob(jobId) { it.copy(status = ContentProcessingStatus.ERROR, error = e.message) }
+                jobRepository.update(jobId) { it.copy(status = ContentProcessingStatus.ERROR, error = e.message) }
             }
         }
         return jobId
     }
 
-    fun getJobStatus(jobId: String): IngestionJob? = jobs[jobId]
-
-    private inline fun updateJob(jobId: String, crossinline modifier: (IngestionJob) -> IngestionJob) {
-        jobs.computeIfPresent(jobId) { _, current -> 
-            val updated = modifier(current)
-            jobTimestamps[jobId] = System.currentTimeMillis()
-            updated
-        }
-    }
+    fun getJobStatus(jobId: String): IngestionJob? = jobRepository.get(jobId)
 
     private suspend fun processIngestion(jobId: String, url: String) = withContext(Dispatchers.IO) {
-        updateJob(jobId) { it.copy(status = ContentProcessingStatus.FETCHING_METADATA) }
-        val info = ytdlpClient.getVideoInfo(url)
+        val info = fetchMetadata(jobId, url)
         val videoId = info.id ?: throw IngestionException("Could not determine video ID")
 
-        updateJob(jobId) { it.copy(status = ContentProcessingStatus.DOWNLOADING_AUDIO) }
-        val files = ytdlpClient.downloadContent(url, videoId)
-        val audioFile = files.find { it.extension == "mp3" } 
-            ?: throw IngestionException("Audio file missing")
-        val srtFile = files.find { it.extension == "srt" }
-            ?: throw IngestionException("Subtitles file missing")
+        val (audioFile, srtFile) = downloadContent(jobId, url, videoId)
 
-        updateJob(jobId) { it.copy(status = ContentProcessingStatus.PARSING_SUBTITLES) }
-        val subtitles = SrtParser.parse(videoId, srtFile.readText())
+        val subtitles = parseSubtitles(jobId, videoId, srtFile)
 
-        updateJob(jobId) { it.copy(status = ContentProcessingStatus.GENERATING_WAVEFORM) }
-        val waveform = generateWaveform(audioFile.absolutePath)
+        val waveform = generateWaveform(jobId, audioFile.absolutePath)
 
         val content = ImmersionContent(
             id = videoId,
@@ -103,10 +78,29 @@ class YouTubeIngestionService(
             waveform = waveform
         )
 
-        updateJob(jobId) { it.copy(status = ContentProcessingStatus.READY, content = content) }
+        jobRepository.update(jobId) { it.copy(status = ContentProcessingStatus.READY, content = content) }
     }
-    
-    private suspend fun generateWaveform(audioPath: String): List<Float> {
+
+    private suspend fun fetchMetadata(jobId: String, url: String) = withContext(Dispatchers.IO) {
+        jobRepository.update(jobId) { it.copy(status = ContentProcessingStatus.FETCHING_METADATA) }
+        ytdlpClient.getVideoInfo(url)
+    }
+
+    private suspend fun downloadContent(jobId: String, url: String, videoId: String) = withContext(Dispatchers.IO) {
+        jobRepository.update(jobId) { it.copy(status = ContentProcessingStatus.DOWNLOADING_AUDIO) }
+        val files = ytdlpClient.downloadContent(url, videoId)
+        val audio = files.find { it.extension == "mp3" } ?: throw IngestionException("Audio missing")
+        val srt = files.find { it.extension == "srt" } ?: throw IngestionException("Subtitles missing")
+        Pair(audio, srt)
+    }
+
+    private suspend fun parseSubtitles(jobId: String, videoId: String, srtFile: java.io.File) = withContext(Dispatchers.Default) {
+        jobRepository.update(jobId) { it.copy(status = ContentProcessingStatus.PARSING_SUBTITLES) }
+        SrtParser.parse(videoId, srtFile.readText())
+    }
+
+    private suspend fun generateWaveform(jobId: String, audioPath: String): List<Float> {
+        jobRepository.update(jobId) { it.copy(status = ContentProcessingStatus.GENERATING_WAVEFORM) }
         delay(500)
         return List(100) { Random.nextFloat() }
     }

@@ -1,5 +1,6 @@
 package com.langkraft.backend.db
 
+import com.langkraft.domain.model.SyncEntry
 import com.langkraft.domain.model.VocabularyWord
 import com.langkraft.domain.model.WordStatus
 import org.jetbrains.exposed.sql.*
@@ -55,7 +56,7 @@ class BackendVocabularyRepositoryTest {
             lastUpdated = 1000
         )
 
-        val serverChanges = repository.sync(userId, listOf(word), 0L)
+        val serverChanges = repository.sync(userId, listOf(SyncEntry(word, "UPSERT")), 0L)
         
         assertTrue(serverChanges.isEmpty(), "Server should not have any changes for new user")
         
@@ -99,7 +100,7 @@ class BackendVocabularyRepositoryTest {
             lastUpdated = 1000L
         )
 
-        repository.sync(userId, listOf(newerWord), 0L)
+        repository.sync(userId, listOf(SyncEntry(newerWord, "UPSERT")), 0L)
 
         // 3. Verify server was updated
         transaction(database) {
@@ -117,7 +118,7 @@ class BackendVocabularyRepositoryTest {
             lastUpdated = 700L
         )
 
-        repository.sync(userId, listOf(olderWord), 1000L)
+        repository.sync(userId, listOf(SyncEntry(olderWord, "UPSERT")), 1000L)
 
         transaction(database) {
             val final = VocabularySync.select { VocabularySync.id eq wordId }.single()
@@ -152,12 +153,14 @@ class BackendVocabularyRepositoryTest {
 
         // Client updates all 50 words
         val clientChanges = (1..50).map { i ->
-            VocabularyWord(
-                id = "w$i",
-                word = "Word $i updated",
-                contextSentence = "Context $i",
-                addedAt = 10L,
-                lastUpdated = 200L
+            SyncEntry(
+                VocabularyWord(
+                    id = "w$i",
+                    word = "Word $i updated",
+                    contextSentence = "Context $i",
+                    addedAt = 10L,
+                    lastUpdated = 200L
+                ), "UPSERT"
             )
         }
 

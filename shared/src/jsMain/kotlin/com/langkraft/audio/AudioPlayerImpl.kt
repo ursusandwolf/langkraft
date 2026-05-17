@@ -60,6 +60,10 @@ actual class AudioPlayerImpl : AudioPlayer {
         audio.currentTime = timeMs / 1000.0
     }
 
+    actual override fun setPlaybackSpeed(speed: Double) {
+        audio.playbackRate = speed
+    }
+
     actual override fun release() {
         stopTimer()
         audio.pause()

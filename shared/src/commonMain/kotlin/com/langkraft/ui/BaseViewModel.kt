@@ -38,5 +38,5 @@ abstract class StateViewModel<S>(
         _state.update(updater)
     }
 
-    protected val currentState: S get() = _state.value
+    val currentState: S get() = _state.value
 }

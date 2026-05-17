@@ -84,6 +84,7 @@ fun ImmersionPlayerView(
         },
         bottomBar = {
             PlayerControlBar(
+                viewModel = viewModel,
                 isPlaying = state.isPlaying,
                 isLooping = state.isLooping,
                 currentSpeed = state.playbackSpeed,
@@ -371,6 +372,7 @@ fun DeepAnalysisDialog(
 
 @Composable
 fun PlayerControlBar(
+    viewModel: PlayerViewModel,
     isPlaying: Boolean,
     isLooping: Boolean,
     currentSpeed: Float,
@@ -390,6 +392,10 @@ fun PlayerControlBar(
                     style = MaterialTheme.typography.h6,
                     color = if (isLooping) MaterialTheme.colors.primary else Color.Gray
                 )
+            }
+            
+            IconButton(onClick = { viewModel.onEvent(PlayerEvent.StepBack) }) {
+                Text(text = "⏪", style = MaterialTheme.typography.h6)
             }
             
             Button(onClick = onPlayPause) {

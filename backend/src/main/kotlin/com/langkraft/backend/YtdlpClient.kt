@@ -54,6 +54,7 @@ class YtdlpClient(private val downloadsDir: String) {
         logger.info("Starting download for videoId: $videoId, URL: $url")
         val request = YoutubeDLRequest(url, downloadsDir)
         request.setOption("write-sub")
+        request.setOption("write-auto-sub") // Fallback to auto-captions
         request.setOption("sub-lang", "de")
         request.setOption("convert-subs", "srt")
         request.setOption("extract-audio")

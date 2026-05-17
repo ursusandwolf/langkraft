@@ -26,16 +26,19 @@
 - [x] **Active Output:** Writing diaries
 - [x] Progress tracking dashboard
 - [x] **SRS UX Improvement:** Move from 0-5 scale to a 4-button Anki-style system (AGAIN, HARD, GOOD, EASY)
-- [x] Add `lapseCount` and `tags` tracking to `VocabularyWord` model
+# Langkraft Development Roadmap
 
 ## Phase 5: UI/UX Polishing
 - [x] Content selection screen (URL input, library)
 - [x] Theming and design system (German aesthetics)
 - [x] Speed control (0.75x, 1x, 1.25x)
 - [x] Extract offline downloading logic from `PlayerViewModel` into a dedicated `OfflineDownloadDelegate`
-- [ ] Implement Waveform amplitude extraction on backend to power `WaveformVisualizer` (currently simulated)
+- [x] TUI Player: Enable phrase segmentation and real-time active marker
+- [x] TUI Player: Add navigation and playback controls
+- [x] Implement Waveform amplitude extraction on backend to power `WaveformVisualizer` (currently simulated)
+- [x] Refactor audio playback: Migrated from `ffplay` subprocess hack to `vlcj` for native seek/rate control
+- [x] Implement automated cleanup for downloaded media files
 
-## Phase 6: Release & Security
 - [x] Android APK/Bundle build configuration
 - [x] Web production deployment setup (Compose HTML/Wasm)
 - [x] User authentication (BCrypt hashing) and JWT routing

@@ -3,11 +3,8 @@ package com.langkraft.audio
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import javazoom.jl.player.Player
-import java.io.BufferedInputStream
-import java.net.URL
+import uk.co.caprica.vlcj.player.component.AudioPlayerComponent
 import java.io.File
-import java.io.FileInputStream
 
 actual class AudioPlayerImpl : AudioPlayer {
     private val _currentTimeMs = MutableStateFlow(0L)
@@ -16,83 +13,55 @@ actual class AudioPlayerImpl : AudioPlayer {
     private val _isPlaying = MutableStateFlow(false)
     actual override val isPlaying: StateFlow<Boolean> = _isPlaying
 
-    private var player: Player? = null
-    private var playbackJob: Job? = null
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    
-    private var currentUrl: String? = null
-    private var lastStartMs: Long = 0
+    private val mediaPlayerComponent = AudioPlayerComponent()
+    private val mediaPlayer = mediaPlayerComponent.mediaPlayer()
+    private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    private var progressJob: Job? = null
 
-    actual override fun load(url: String) {
-        stopCurrent()
-        currentUrl = url
-        _currentTimeMs.value = 0
-        println("Desktop: Loading audio from $url")
-    }
-
-    actual override fun play() {
-        val url = currentUrl ?: return
-        if (_isPlaying.value) return
-
-        _isPlaying.value = true
-        playbackJob = scope.launch {
-            try {
-                val inputStream = if (url.startsWith("http")) {
-                    URL(url).openStream()
-                } else {
-                    FileInputStream(File(url))
+    init {
+        scope.launch {
+            while (isActive) {
+                if (isPlaying.value) {
+                    _currentTimeMs.value = mediaPlayer.status().time()
                 }
-                
-                BufferedInputStream(inputStream).use { bis ->
-                    player = Player(bis)
-                    
-                    // JLayer Player.play() is blocking
-                    // Note: JLayer doesn't support easy seeking, so we just play from start for now.
-                    // Real implementation would need a more robust library like VLCJ or JavaFX.
-                    
-                    launch(Dispatchers.Default) {
-                        val startTime = System.currentTimeMillis()
-                        while (isActive && _isPlaying.value) {
-                            _currentTimeMs.value = lastStartMs + (System.currentTimeMillis() - startTime)
-                            delay(100)
-                        }
-                    }
-                    
-                    player?.play()
-                }
-            } catch (e: Exception) {
-                println("Playback error: ${e.message}")
-            } finally {
-                _isPlaying.value = false
+                delay(100)
             }
         }
     }
 
+    actual override fun load(url: String) {
+        val mediaUrl = if (url.startsWith("http")) url else File(url).absolutePath
+        mediaPlayer.media().play(mediaUrl)
+        _isPlaying.value = true
+    }
+
+    actual override fun play() {
+        if (!mediaPlayer.status().isPlaying()) {
+            mediaPlayer.controls().play()
+            _isPlaying.value = true
+        }
+    }
+
     actual override fun pause() {
-        stopCurrent()
-        lastStartMs = _currentTimeMs.value
-        println("Desktop: Paused at $lastStartMs ms")
+        if (mediaPlayer.status().isPlaying()) {
+            mediaPlayer.controls().pause()
+            _isPlaying.value = false
+        }
     }
 
     actual override fun seekTo(timeMs: Long) {
-        stopCurrent()
+        mediaPlayer.controls().setTime(timeMs)
         _currentTimeMs.value = timeMs
-        lastStartMs = timeMs
-        println("Desktop: Seeking to $timeMs (Seeking not fully supported in this JLayer shim)")
-        // In a real player, we would resume from this point.
+    }
+
+    actual override fun setPlaybackSpeed(speed: Double) {
+        mediaPlayer.controls().setRate(speed.toFloat())
     }
 
     actual override fun release() {
-        stopCurrent()
-        scope.cancel()
-        println("Desktop: Released")
-    }
-
-    private fun stopCurrent() {
+        mediaPlayer.controls().stop()
+        mediaPlayer.release()
         _isPlaying.value = false
-        player?.close()
-        player = null
-        playbackJob?.cancel()
-        playbackJob = null
+        _currentTimeMs.value = 0
     }
 }

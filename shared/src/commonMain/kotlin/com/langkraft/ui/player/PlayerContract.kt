@@ -30,6 +30,7 @@ sealed class PlayerEvent {
     data class LoadContent(val contentId: String) : PlayerEvent()
     object PlayPause : PlayerEvent()
     object ToggleLoop : PlayerEvent()
+    object StepBack : PlayerEvent()
     object ToggleOffline : PlayerEvent()
     data class SetPlaybackSpeed(val speed: Float) : PlayerEvent()
     data class SeekTo(val timeMs: Long) : PlayerEvent()

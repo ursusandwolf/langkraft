@@ -60,6 +60,12 @@ class PlayerViewModel(
             }
             is PlayerEvent.SetPlaybackSpeed -> {
                 updateState { it.copy(playbackSpeed = event.speed) }
+                audioPlayer.setPlaybackSpeed(event.speed.toDouble())
+            }
+            is PlayerEvent.StepBack -> {
+                val newTime = (currentState.currentTimeMs - 5000).coerceAtLeast(0)
+                audioPlayer.seekTo(newTime)
+                updateState { it.copy(currentTimeMs = newTime) }
             }
             is PlayerEvent.SeekTo -> {
                 audioPlayer.seekTo(event.timeMs)
@@ -115,15 +121,26 @@ class PlayerViewModel(
     
     private fun handleTimeUpdate(timeMs: Long) {
         val state = currentState
-        if (state.isLooping) {
-            // Check if we passed the end of the current subtitle line
-            val currentLine = state.content?.subtitles?.find { 
-                state.currentTimeMs in it.startMs..it.endMs 
-            }
-            if (currentLine != null && timeMs > currentLine.endMs) {
-                audioPlayer.seekTo(currentLine.startMs)
-                updateState { it.copy(currentTimeMs = currentLine.startMs) }
-                return
+        if (state.isLooping && state.content != null) {
+            val subtitles = state.content.subtitles
+            val currentLine = subtitles.find { timeMs >= it.startMs && timeMs <= it.endMs }
+            
+            if (currentLine != null) {
+                if (timeMs >= currentLine.endMs - 300) {
+                    println("Looping triggered for line: ${currentLine.id}. Seeking to ${currentLine.startMs}. Current time: $timeMs")
+                    audioPlayer.seekTo(currentLine.startMs)
+                    updateState { it.copy(currentTimeMs = currentLine.startMs) }
+                    return
+                }
+            } else {
+                // If not in a specific line, check if we are just past a line end and should loop it
+                val lastLine = subtitles.findLast { it.endMs < timeMs && timeMs < it.endMs + 300 }
+                if (lastLine != null) {
+                    println("Looping fallback for line: ${lastLine.id}. Seeking to ${lastLine.startMs}")
+                    audioPlayer.seekTo(lastLine.startMs)
+                    updateState { it.copy(currentTimeMs = lastLine.startMs) }
+                    return
+                }
             }
         }
         updateState { it.copy(currentTimeMs = timeMs) }

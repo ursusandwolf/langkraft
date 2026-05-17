@@ -2,6 +2,7 @@ package com.langkraft.audio
 
 import android.content.Context
 import androidx.media3.common.MediaItem
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import kotlinx.coroutines.CoroutineScope
@@ -64,6 +65,10 @@ actual class AudioPlayerImpl(context: Context) : AudioPlayer {
 
     actual override fun seekTo(timeMs: Long) {
         exoPlayer.seekTo(timeMs)
+    }
+
+    actual override fun setPlaybackSpeed(speed: Double) {
+        exoPlayer.playbackParameters = PlaybackParameters(speed.toFloat())
     }
 
     actual override fun release() {

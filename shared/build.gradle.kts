@@ -73,11 +73,8 @@ kotlin {
                 implementation("io.ktor:ktor-client-cio:2.3.5")
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.7.3")
                 
-                // JavaFX for real audio playback with speed and seeking
-                val javafxVersion = "21.0.1"
-                implementation("org.openjfx:javafx-media:$javafxVersion:$targetOs")
-                implementation("org.openjfx:javafx-graphics:$javafxVersion:$targetOs")
-                implementation("org.openjfx:javafx-base:$javafxVersion:$targetOs")
+                // VLCj for robust audio playback
+                implementation("uk.co.caprica:vlcj:4.8.0")
                 
                 // Lanterna TUI
                 implementation("com.googlecode.lanterna:lanterna:3.1.2")

@@ -33,7 +33,8 @@ val backendModule = module {
     single { com.langkraft.backend.AuthService(get(), get()) }
 
     single { YtdlpClient("downloads") }
-    single { YouTubeIngestionService(get()) }
+    single { com.langkraft.backend.IngestionJobRepository() }
+    single { YouTubeIngestionService(get(), get()) }
     
     single {
         HttpClient(CIO) {
