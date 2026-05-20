@@ -8,12 +8,13 @@ import com.langkraft.io.FileSystem
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
+import io.ktor.http.*
 
 class AudioDownloaderImpl(
     private val httpClient: HttpClient,
     private val fileSystem: FileSystem,
     private val db: AppDatabase,
-    private val baseUrl: String
+    private val baseUrl: io.ktor.http.Url
 ) : AudioDownloader {
 
     override suspend fun downloadAudio(content: ImmersionContent): String {
@@ -30,7 +31,13 @@ class AudioDownloaderImpl(
         db.appDatabaseQueries.updateDownloadStatus(DownloadStatus.DOWNLOADING.name, null, content.id)
 
         try {
-            val downloadUrl = if (content.audioUrl.startsWith("http")) content.audioUrl else "$baseUrl${content.audioUrl}"
+            val downloadUrl = if (content.audioUrl.startsWith("http")) {
+                content.audioUrl
+            } else {
+                URLBuilder(baseUrl).apply {
+                    pathSegments = content.audioUrl.split("/").filter { it.isNotEmpty() }
+                }.buildString()
+            }
             val response = httpClient.get(downloadUrl)
             val body = response.body<ByteArray>()
             

@@ -25,6 +25,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
+import io.ktor.http.*
 import org.koin.core.context.startKoin
 import org.koin.dsl.KoinAppDeclaration
 import org.koin.dsl.module
@@ -36,14 +37,14 @@ fun initKoin(appDeclaration: KoinAppDeclaration = {}) =
     }
 
 data class AppConfig(
-    val backendUrl: String = "http://localhost:8080"
+    val backendUrl: Url = Url("http://localhost:8080")
 )
 
 val commonModule = module {
     single { AppConfig() }
 
     // Network
-    single { 
+    single {
         HttpClient {
             install(ContentNegotiation) {
                 json(Json { ignoreUnknownKeys = true })
@@ -57,7 +58,6 @@ val commonModule = module {
     single<RemoteContentSource> { BackendRemoteSource(get(), get<AppConfig>().backendUrl) }
     single<AudioDownloader> { AudioDownloaderImpl(get(), get(), get(), get<AppConfig>().backendUrl) }
     single<VocabularyRepository> { SqlDelightVocabularyRepository(get(), get(), get<AppConfig>().backendUrl) }
-
     // Sync
     single<ISyncManager> { SyncManager(get()) }
 

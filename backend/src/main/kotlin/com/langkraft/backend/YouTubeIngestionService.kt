@@ -20,10 +20,11 @@ import kotlin.random.Random
  */
 class YouTubeIngestionService(
     private val ytdlpClient: YtdlpClient,
-    private val jobRepository: IngestionJobRepository
+    private val jobRepository: IngestionJobRepository,
+    private val externalScope: CoroutineScope? = null
 ) {
     private val logger = LoggerFactory.getLogger(YouTubeIngestionService::class.java)
-    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val scope = externalScope ?: CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     companion object {
         private const val CLEANUP_INTERVAL_MS = 3600_000L // 1 hour
@@ -31,11 +32,19 @@ class YouTubeIngestionService(
     }
 
     init {
+        startCleanupLoop()
+    }
+
+    private fun startCleanupLoop() {
         scope.launch {
             while (true) {
                 delay(CLEANUP_INTERVAL_MS)
-                jobRepository.cleanup(JOB_EXPIRY_MS)
-                logger.info("Executed job cleanup")
+                try {
+                    jobRepository.cleanup(JOB_EXPIRY_MS)
+                    logger.info("Executed job cleanup")
+                } catch (e: Exception) {
+                    logger.error("Job cleanup failed", e)
+                }
             }
         }
     }

@@ -17,7 +17,7 @@ import kotlinx.serialization.json.Json
 class SqlDelightVocabularyRepository(
     private val db: AppDatabase,
     private val httpClient: HttpClient,
-    private val baseUrl: String
+    private val baseUrl: io.ktor.http.Url
 ) : BaseSqlDelightRepository(), VocabularyRepository {
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -72,8 +72,10 @@ class SqlDelightVocabularyRepository(
 
     override suspend fun sync(lastSyncTimestamp: Long): Long {
         val pendingChanges = db.appDatabaseQueries.getAllPendingChanges().executeAsList()
+        val processedIds = pendingChanges.map { it.wordId }
+
         if (pendingChanges.isEmpty()) {
-            return fetchServerChanges(lastSyncTimestamp, emptyList())
+            return fetchServerChanges(lastSyncTimestamp, emptyList(), emptyList())
         }
 
         val upsertIds = pendingChanges.filter { it.changeType == "UPSERT" }.map { it.wordId }
@@ -99,12 +101,17 @@ class SqlDelightVocabularyRepository(
             }
         }
 
-        return fetchServerChanges(lastSyncTimestamp, clientEntries)
+        return fetchServerChanges(lastSyncTimestamp, clientEntries, processedIds)
     }
 
-    private suspend fun fetchServerChanges(lastSyncTimestamp: Long, clientChanges: List<SyncEntry>): Long {
+    private suspend fun fetchServerChanges(
+        lastSyncTimestamp: Long, 
+        clientChanges: List<SyncEntry>,
+        processedIds: List<String>
+    ): Long {
         return try {
-            val response: SyncResponse = httpClient.post("$baseUrl/api/sync") {
+            val response: SyncResponse = httpClient.post(baseUrl) {
+                url { appendEncodedPathSegments("api", "sync") }
                 contentType(ContentType.Application.Json)
                 setBody(SyncRequest(lastSyncTimestamp, clientChanges))
             }.body()
@@ -123,7 +130,9 @@ class SqlDelightVocabularyRepository(
                         )
                     }
                 }
-                db.appDatabaseQueries.clearAllPendingChanges()
+                if (processedIds.isNotEmpty()) {
+                    db.appDatabaseQueries.deletePendingChanges(processedIds)
+                }
             }
             response.serverTimestamp
         } catch (e: Exception) {

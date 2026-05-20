@@ -10,6 +10,10 @@
 - **FileSystem Rename:** Added `rename` support to `FileSystem` abstraction for atomic file operations.
 
 ### Changed
+- **Sync Integrity:** Improved `SqlDelightVocabularyRepository` to clear pending changes only after successful server confirmation, preventing data loss.
+- **Service Lifecycle:** Refactored `YouTubeIngestionService` to support external `CoroutineScope`, improving resource management on the backend.
+- **Sync Resilience:** `SyncManager` now allows immediate retries on network failures, improving UX during intermittent connectivity.
+- **Typification:** Transitioned from `String` to `io.ktor.http.Url` for all backend endpoint configurations across the shared and backend modules.
 - **ViewModel Refactoring:** All ViewModels (`Dashboard`, `ContentSelection`, `Player`, `SrsTraining`, `Writing`) now inherit from `StateViewModel`.
 - **Repository Refactoring:** `SqlDelightContentRepository` and `SqlDelightVocabularyRepository` now inherit from `BaseSqlDelightRepository`, resulting in cleaner and more concise data mapping logic.
 - **Sync Protocol Refactoring:** Introduced `SyncEntry` with explicit `UPSERT`/`DELETE` change tracking. Removed the hacky `lapseCount = -1` deletion marker.

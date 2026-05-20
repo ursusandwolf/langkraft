@@ -12,14 +12,17 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.contentType
 import kotlinx.coroutines.delay
 
+import io.ktor.http.*
+
 class BackendRemoteSource(
     private val httpClient: HttpClient,
-    private val baseUrl: String
+    private val baseUrl: io.ktor.http.Url
 ) : RemoteContentSource {
 
     override suspend fun fetchFromYouTube(url: String): ImmersionContent {
         val request = IngestRequest(url)
-        val response = httpClient.post("$baseUrl/api/ingest") {
+        val response = httpClient.post(baseUrl) {
+            url { appendEncodedPathSegments("api", "ingest") }
             contentType(ContentType.Application.Json)
             setBody(request)
         }.body<IngestResponse>()
@@ -28,7 +31,9 @@ class BackendRemoteSource(
 
         while (true) {
             delay(1000)
-            val jobResponse = httpClient.get("$baseUrl/api/ingest/$jobId")
+            val jobResponse = httpClient.get(baseUrl) {
+                url { appendEncodedPathSegments("api", "ingest", jobId) }
+            }
 
             if (jobResponse.status == HttpStatusCode.NotFound) {
                 throw Exception("Job not found")
