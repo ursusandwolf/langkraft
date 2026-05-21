@@ -31,12 +31,20 @@ import androidx.compose.ui.unit.dp
 import com.langkraft.domain.model.VocabularyWord
 import com.langkraft.domain.model.ReviewQuality
 
+import androidx.compose.runtime.LaunchedEffect
+
 @Composable
 fun SrsTrainingView(
     viewModel: SrsTrainingViewModel,
     onFinish: () -> Unit
 ) {
     val state by viewModel.state.collectAsState()
+
+    LaunchedEffect(state.isFinished) {
+        if (state.isFinished) {
+            onFinish()
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -101,13 +109,13 @@ fun SrsTrainingView(
 
                     if (!state.isAnswerVisible) {
                         Button(
-                            onClick = { viewModel.showAnswer() },
+                            onClick = { viewModel.onEvent(SrsEvent.ShowAnswer) },
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text("SHOW ANSWER")
                         }
                     } else {
-                        QualityButtons(onQualitySelected = { viewModel.submitResult(it) })
+                        QualityButtons(onQualitySelected = { viewModel.onEvent(SrsEvent.SubmitResult(it)) })
                     }
                 }
             }

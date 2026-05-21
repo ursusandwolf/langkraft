@@ -154,13 +154,23 @@ classDiagram
         +calculateNextReview()
         -roundToInt()
     }
+    class SrsEvent {
+        <<sealed>>
+        LoadQueue
+        ShowAnswer
+        SubmitResult(quality)
+        Restart
+    }
     class SrsTrainingViewModel {
         -srsAlgorithm: SpacedRepetitionAlgorithm
-        +submitResult(quality)
+        -queue: List~VocabularyWord~
+        +onEvent(SrsEvent)
+        -handleSubmitResult(quality)
     }
 
     Sm2Algorithm ..|> SpacedRepetitionAlgorithm
     SrsTrainingViewModel --> SpacedRepetitionAlgorithm
+    SrsTrainingViewModel ..> SrsEvent : processes
 ```
 
 ## Domain Model Relationships

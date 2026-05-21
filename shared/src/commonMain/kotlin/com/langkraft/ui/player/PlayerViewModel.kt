@@ -29,7 +29,7 @@ class PlayerViewModel(
     private val appConfig: AppConfig
 ) : StateViewModel<PlayerState>(PlayerState()) {
 
-    private val linguisticDelegate = PlayerLinguisticDelegate(linguisticAssistant, scope, ::updateState)
+    private val linguisticDelegate = PlayerLinguisticDelegate(linguisticAssistant, scope, ::updateState, { currentState })
     private val offlineDelegate = OfflineDownloadDelegate(audioDownloader, contentRepository, scope, ::updateState, { currentState })
 
     init {
@@ -65,11 +65,14 @@ class PlayerViewModel(
             is PlayerEvent.StepBack -> {
                 val newTime = (currentState.currentTimeMs - 5000).coerceAtLeast(0)
                 audioPlayer.seekTo(newTime)
-                updateState { it.copy(currentTimeMs = newTime) }
+                updateState { it.copy(currentTimeMs = newTime, isUserScrolling = false) }
             }
             is PlayerEvent.SeekTo -> {
                 audioPlayer.seekTo(event.timeMs)
-                updateState { it.copy(currentTimeMs = event.timeMs) }
+                updateState { it.copy(currentTimeMs = event.timeMs, isUserScrolling = false) }
+            }
+            is PlayerEvent.UserScrollStarted -> {
+                updateState { it.copy(isUserScrolling = true, lastUserInteractionTime = System.currentTimeMillis()) }
             }
             is PlayerEvent.WordClicked -> {
                 linguisticDelegate.handleWordClicked(event.word, event.line)
@@ -121,28 +124,40 @@ class PlayerViewModel(
     
     private fun handleTimeUpdate(timeMs: Long) {
         val state = currentState
+        
+        // Handle User Scroll timeout (3 seconds)
+        val shouldResetScroll = state.isUserScrolling && 
+            (System.currentTimeMillis() - state.lastUserInteractionTime > 3000)
+
+        val subtitles = state.content?.subtitles ?: emptyList()
+        val newIndex = subtitles.indexOfFirst { timeMs >= it.startMs && timeMs <= it.endMs }
+
         if (state.isLooping && state.content != null) {
-            val subtitles = state.content.subtitles
-            val currentLine = subtitles.find { timeMs >= it.startMs && timeMs <= it.endMs }
+            val currentLine = if (newIndex != -1) subtitles[newIndex] else null
             
             if (currentLine != null) {
                 if (timeMs >= currentLine.endMs - 300) {
-                    println("Looping triggered for line: ${currentLine.id}. Seeking to ${currentLine.startMs}. Current time: $timeMs")
                     audioPlayer.seekTo(currentLine.startMs)
-                    updateState { it.copy(currentTimeMs = currentLine.startMs) }
+                    updateState { it.copy(currentTimeMs = currentLine.startMs, currentSubtitleIndex = newIndex) }
                     return
                 }
             } else {
-                // If not in a specific line, check if we are just past a line end and should loop it
                 val lastLine = subtitles.findLast { it.endMs < timeMs && timeMs < it.endMs + 300 }
                 if (lastLine != null) {
-                    println("Looping fallback for line: ${lastLine.id}. Seeking to ${lastLine.startMs}")
                     audioPlayer.seekTo(lastLine.startMs)
-                    updateState { it.copy(currentTimeMs = lastLine.startMs) }
+                    val lastLineIndex = subtitles.indexOf(lastLine)
+                    updateState { it.copy(currentTimeMs = lastLine.startMs, currentSubtitleIndex = lastLineIndex) }
                     return
                 }
             }
         }
-        updateState { it.copy(currentTimeMs = timeMs) }
+
+        updateState { 
+            it.copy(
+                currentTimeMs = timeMs,
+                currentSubtitleIndex = newIndex,
+                isUserScrolling = if (shouldResetScroll) false else it.isUserScrolling
+            ) 
+        }
     }
 }

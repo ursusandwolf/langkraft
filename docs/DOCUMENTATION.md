@@ -42,7 +42,7 @@ The app implements a robust offline-first strategy:
 
 Langkraft uses a custom incremental synchronization protocol:
 - **`SyncManager` (Shared):** Orchestrates the client-side sync flow.
-    - **Throttling:** Implements a minimum 1-minute interval between automatic syncs (configurable).
+    - **Throttling:** Implements a minimum 1-minute interval between automatic syncs (configurable). This interval is strictly enforced even if a synchronization attempt fails due to network errors, preventing battery and data exhaustion.
     - **State Persistence:** Uses the `SyncMetadata` database table to persist `lastSyncTimestamp` across application sessions.
     - **Thread Safety:** Utilizes a `Mutex` held for the **entire duration** of the sync to manage concurrent attempts and UI state.
 - **`SqlDelightVocabularyRepository` (Client):** Implements the `VocabularyRepository` interface.
@@ -72,5 +72,7 @@ The project uses **Compose Multiplatform** for the UI and a custom `BaseViewMode
 
 The app implements the **Ilis Immersion Method**:
 - **SRS Engine:** Pluggable `SpacedRepetitionAlgorithm` interface. Default implementation is `Sm2Algorithm`, which implements the SuperMemo-2 algorithm with **rounded interval calculations** for mathematical accuracy.
+- **Stable Review Sessions:** `SrsTrainingViewModel` implements a local queue management strategy that isolates the current learning session from background database updates. This prevents UI "jumps" and state resets during reviews.
+- **Re-learning Phase:** Words marked with poor quality (AGAIN) are automatically re-queued at the end of the current session for immediate reinforcement, ensuring the user masters difficult vocabulary before the session ends.
 - **Repeat Loop:** Player feature for rhythmic immersion.
 - **Memorization Tool:** Interactive UI for memorizing prose by hiding words.

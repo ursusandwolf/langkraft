@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
@@ -33,14 +34,18 @@ fun ImmersionPlayerView(
     val listState = rememberLazyListState()
     val scaffoldState = rememberScaffoldState()
 
-    // Auto-scroll logic
-    LaunchedEffect(state.currentTimeMs) {
-        val currentIndex = state.content?.subtitles?.indexOfFirst { 
-            state.currentTimeMs in it.startMs..it.endMs 
-        } ?: -1
-        
-        if (currentIndex != -1 && !listState.isScrollInProgress) {
-            listState.animateScrollToItem(currentIndex)
+    // Sync isUserScrolling state with listState
+    LaunchedEffect(listState.isScrollInProgress) {
+        if (listState.isScrollInProgress) {
+            viewModel.onEvent(PlayerEvent.UserScrollStarted)
+        }
+    }
+
+    // Auto-scroll logic tied to index changes
+    LaunchedEffect(state.currentSubtitleIndex) {
+        val index = state.currentSubtitleIndex
+        if (index != -1 && !state.isUserScrolling) {
+            listState.animateScrollToItem(index)
         }
     }
 
@@ -98,9 +103,13 @@ fun ImmersionPlayerView(
             Column(modifier = Modifier.fillMaxSize()) {
                 // Waveform visualization at the top
                 state.content?.let { content ->
-                    val progress = if (content.durationSeconds > 0) {
-                        state.currentTimeMs.toFloat() / (content.durationSeconds * 1000)
-                    } else 0f
+                    val progress by remember {
+                        derivedStateOf {
+                            if (content.durationSeconds > 0) {
+                                state.currentTimeMs.toFloat() / (content.durationSeconds * 1000)
+                            } else 0f
+                        }
+                    }
 
                     WaveformVisualizer(
                         amplitudes = content.waveform.ifEmpty { List(50) { 0.2f + (it % 5) * 0.1f } },
@@ -117,10 +126,10 @@ fun ImmersionPlayerView(
                         modifier = Modifier.weight(1f)
                     ) {
                         state.content?.subtitles?.let { subtitles ->
-                            items(subtitles) { line ->
+                            itemsIndexed(subtitles) { index, line ->
                                 SubtitleRow(
                                     line = line,
-                                    isCurrent = state.currentTimeMs in line.startMs..line.endMs,
+                                    isCurrent = index == state.currentSubtitleIndex,
                                     translation = state.sentenceTranslations[line.id],
                                     lemmas = state.lemmatizedSentences[line.id],
                                     isTranslating = state.analyzingSentenceId == line.id,

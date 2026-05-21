@@ -35,7 +35,7 @@ class SrsTrainingViewModelTest {
 
     private class FakeSrsAlgorithm : SpacedRepetitionAlgorithm {
         override fun calculateNextReview(word: VocabularyWord, quality: ReviewQuality): VocabularyWord {
-            return word.copy(intervalDays = 1)
+            return word.copy(intervalDays = if (quality.sm2Value >= 3) 1 else 0)
         }
     }
 
@@ -47,10 +47,39 @@ class SrsTrainingViewModelTest {
 
         val viewModel = SrsTrainingViewModel(repo, FakeSrsAlgorithm(), testDispatcher)
         
-        // Wait for flow to emit
-        assertEquals(word, viewModel.state.value.currentWord)
-        assertEquals(1, viewModel.state.value.remainingCount)
-        assertFalse(viewModel.state.value.isAnswerVisible)
+        assertEquals(word, viewModel.currentState.currentWord)
+        assertEquals(1, viewModel.currentState.remainingCount)
+        assertFalse(viewModel.currentState.isAnswerVisible)
+    }
+
+    @Test
+    fun testSessionFlowWithReLearning() = runTest {
+        val repo = FakeVocabularyRepository()
+        val word1 = VocabularyWord(id = "1", word = "Haus", contextSentence = "Haus")
+        val word2 = VocabularyWord(id = "2", word = "Auto", contextSentence = "Auto")
+        repo.words.value = listOf(word1, word2)
+
+        val viewModel = SrsTrainingViewModel(repo, FakeSrsAlgorithm(), testDispatcher)
+        
+        // 1. Current word is word1
+        assertEquals(word1, viewModel.currentState.currentWord)
+        
+        // 2. Answer GOOD -> move to word2
+        viewModel.onEvent(SrsEvent.SubmitResult(ReviewQuality.GOOD))
+        assertEquals(word2, viewModel.currentState.currentWord)
+        assertEquals(1, viewModel.currentState.remainingCount)
+        assertEquals(1, repo.savedWords.size)
+        
+        // 3. Answer AGAIN (Failure) on word2 -> word2 stays in queue (moves to end)
+        viewModel.onEvent(SrsEvent.SubmitResult(ReviewQuality.AGAIN))
+        assertEquals(word2, viewModel.currentState.currentWord) // Only word2 left, so it's still current
+        assertEquals(1, viewModel.currentState.remainingCount)
+        
+        // 4. Answer GOOD on word2 -> session finished
+        viewModel.onEvent(SrsEvent.SubmitResult(ReviewQuality.GOOD))
+        assertTrue(viewModel.currentState.isFinished)
+        assertEquals(0, viewModel.currentState.remainingCount)
+        assertEquals(3, repo.savedWords.size) // word1(good), word2(again), word2(good)
     }
 
     @Test
@@ -58,20 +87,7 @@ class SrsTrainingViewModelTest {
         val repo = FakeVocabularyRepository()
         val viewModel = SrsTrainingViewModel(repo, FakeSrsAlgorithm(), testDispatcher)
         
-        viewModel.showAnswer()
-        assertTrue(viewModel.state.value.isAnswerVisible)
-    }
-
-    @Test
-    fun testSubmitResult() = runTest {
-        val repo = FakeVocabularyRepository()
-        val word = VocabularyWord(id = "1", word = "Haus", contextSentence = "Das Haus ist gross")
-        repo.words.value = listOf(word)
-        val viewModel = SrsTrainingViewModel(repo, FakeSrsAlgorithm(), testDispatcher)
-
-        viewModel.submitResult(ReviewQuality.GOOD)
-        
-        assertEquals(1, repo.savedWords.size)
-        assertEquals(1, repo.savedWords.first().intervalDays)
+        viewModel.onEvent(SrsEvent.ShowAnswer)
+        assertTrue(viewModel.currentState.isAnswerVisible)
     }
 }

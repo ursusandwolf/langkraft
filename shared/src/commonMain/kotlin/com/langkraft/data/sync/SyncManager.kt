@@ -37,6 +37,8 @@ class SyncManager(
         val now = Clock.System.now().toEpochMilliseconds()
         if (!force && now - lastAttemptTimestamp < MIN_SYNC_INTERVAL_MS) return
         
+        lastAttemptTimestamp = now
+        
         if (mutex.isLocked) return
 
         mutex.withLock {
@@ -51,8 +53,6 @@ class SyncManager(
                         vocabularyRepository.setSyncMetadata(KEY_LAST_SYNC, newTimestamp.toString())
                     }
                 }
-                // Only update timestamp on success to allow retry on network failure
-                lastAttemptTimestamp = Clock.System.now().toEpochMilliseconds()
             } catch (e: Exception) {
                 _syncError.value = e.message ?: "Unknown sync error"
             } finally {

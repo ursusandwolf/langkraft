@@ -9,6 +9,7 @@ data class PlayerState(
     val isLoading: Boolean = false,
     val content: ImmersionContent? = null,
     val currentTimeMs: Long = 0,
+    val currentSubtitleIndex: Int = -1,
     val isPlaying: Boolean = false,
     val isLooping: Boolean = false,
     val playbackSpeed: Float = 1.0f,
@@ -23,6 +24,8 @@ data class PlayerState(
     val analyzingSentenceId: String? = null,
     val lemmatizingSentenceId: String? = null,
     val memorizationText: String? = null,
+    val isUserScrolling: Boolean = false,
+    val lastUserInteractionTime: Long = 0,
     val error: String? = null
 )
 
@@ -34,6 +37,7 @@ sealed class PlayerEvent {
     object ToggleOffline : PlayerEvent()
     data class SetPlaybackSpeed(val speed: Float) : PlayerEvent()
     data class SeekTo(val timeMs: Long) : PlayerEvent()
+    object UserScrollStarted : PlayerEvent()
     data class WordClicked(val word: String, val line: SubtitleLine) : PlayerEvent()
     data class DeepAnalysisClicked(val line: SubtitleLine) : PlayerEvent()
     data class ToggleTranslation(val line: SubtitleLine) : PlayerEvent()

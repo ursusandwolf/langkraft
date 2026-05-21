@@ -12,6 +12,7 @@ import com.langkraft.ui.content.ContentSelectionViewModel
 import com.langkraft.ui.player.PlayerViewModel
 import com.langkraft.ui.player.PlayerEvent
 import com.langkraft.ui.srs.SrsTrainingViewModel
+import com.langkraft.ui.srs.SrsEvent
 import com.langkraft.ui.writing.WritingViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -111,13 +112,13 @@ class TuiApp : KoinComponent {
         
         val buttonPanel = Panel(LinearLayout(Direction.HORIZONTAL))
         buttonPanel.addComponent(Button("Show Answer", Runnable {
-            srsTrainingViewModel.showAnswer()
+            srsTrainingViewModel.onEvent(SrsEvent.ShowAnswer)
         }))
         buttonPanel.addComponent(Button("Easy", Runnable {
-            srsTrainingViewModel.submitResult(com.langkraft.domain.model.ReviewQuality.EASY)
+            srsTrainingViewModel.onEvent(SrsEvent.SubmitResult(com.langkraft.domain.model.ReviewQuality.EASY))
         }))
         buttonPanel.addComponent(Button("Hard", Runnable {
-            srsTrainingViewModel.submitResult(com.langkraft.domain.model.ReviewQuality.HARD)
+            srsTrainingViewModel.onEvent(SrsEvent.SubmitResult(com.langkraft.domain.model.ReviewQuality.HARD))
         }))
         buttonPanel.addComponent(Button("Close", Runnable { window.close() }))
         

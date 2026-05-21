@@ -6,10 +6,7 @@ import com.langkraft.domain.repository.VocabularyRepository
 import com.langkraft.domain.srs.SpacedRepetitionAlgorithm
 import com.langkraft.ui.BaseViewModel
 import com.langkraft.ui.StateViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 data class SrsTrainingState(
@@ -17,8 +14,16 @@ data class SrsTrainingState(
     val currentWord: VocabularyWord? = null,
     val isAnswerVisible: Boolean = false,
     val remainingCount: Int = 0,
-    val isLoading: Boolean = false
+    val isLoading: Boolean = false,
+    val isFinished: Boolean = false
 )
+
+sealed class SrsEvent {
+    object LoadQueue : SrsEvent()
+    object ShowAnswer : SrsEvent()
+    data class SubmitResult(val quality: ReviewQuality) : SrsEvent()
+    object Restart : SrsEvent()
+}
 
 class SrsTrainingViewModel(
     private val vocabularyRepository: VocabularyRepository,
@@ -27,36 +32,71 @@ class SrsTrainingViewModel(
 ) : StateViewModel<SrsTrainingState>(SrsTrainingState(), baseContext) {
 
     init {
-        loadQueue()
+        onEvent(SrsEvent.LoadQueue)
+    }
+
+    fun onEvent(event: SrsEvent) {
+        when (event) {
+            SrsEvent.LoadQueue -> loadQueue()
+            SrsEvent.ShowAnswer -> updateState { it.copy(isAnswerVisible = true) }
+            is SrsEvent.SubmitResult -> handleSubmitResult(event.quality)
+            SrsEvent.Restart -> {
+                updateState { SrsTrainingState() }
+                loadQueue()
+            }
+        }
     }
 
     private fun loadQueue() {
         scope.launch {
             updateState { it.copy(isLoading = true) }
-            vocabularyRepository.getWordsToReview().collect { words ->
+            try {
+                // Take only first emission to avoid UI jumps during session
+                val words = vocabularyRepository.getWordsToReview().first()
                 updateState { 
                     it.copy(
                         queue = words,
                         currentWord = words.firstOrNull(),
                         remainingCount = words.size,
                         isLoading = false,
-                        isAnswerVisible = false
+                        isFinished = words.isEmpty()
                     ) 
                 }
+            } catch (e: Exception) {
+                updateState { it.copy(isLoading = false) }
             }
         }
     }
 
-    fun showAnswer() {
-        updateState { it.copy(isAnswerVisible = true) }
-    }
-
-    fun submitResult(quality: ReviewQuality) {
+    private fun handleSubmitResult(quality: ReviewQuality) {
         val word = currentState.currentWord ?: return
         val updatedWord = srsAlgorithm.calculateNextReview(word, quality)
         
         scope.launch {
             vocabularyRepository.saveWord(updatedWord)
+        }
+
+        updateState { state ->
+            val newQueue = state.queue.toMutableList()
+            
+            // Remove current word from the front
+            if (newQueue.isNotEmpty()) {
+                newQueue.removeAt(0)
+            }
+
+            // If quality is poor (AGAIN), add to the end of the queue for re-learning
+            if (quality.sm2Value < 3) { // 3 is SUCCESS_THRESHOLD in Sm2Algorithm
+                newQueue.add(updatedWord)
+            }
+
+            val nextWord = newQueue.firstOrNull()
+            state.copy(
+                queue = newQueue,
+                currentWord = nextWord,
+                remainingCount = newQueue.size,
+                isAnswerVisible = false,
+                isFinished = nextWord == null
+            )
         }
     }
 }

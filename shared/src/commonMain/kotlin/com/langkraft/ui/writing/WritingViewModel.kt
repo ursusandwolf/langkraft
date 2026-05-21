@@ -23,7 +23,11 @@ class WritingViewModel(
 ) : StateViewModel<WritingState>(WritingState()) {
 
     fun onTextChanged(text: String) {
-        updateState { it.copy(inputText = text) }
+        updateState { it.copy(
+            inputText = text,
+            correction = null,
+            error = null
+        ) }
     }
 
     fun submitForCorrection() {

@@ -3,14 +3,13 @@ package com.langkraft.ui.player
 import com.langkraft.domain.ai.LinguisticAssistant
 import com.langkraft.domain.model.SubtitleLine
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class PlayerLinguisticDelegate(
     private val linguisticAssistant: LinguisticAssistant,
     private val scope: CoroutineScope,
-    private val updateState: ((PlayerState) -> PlayerState) -> Unit
+    private val updateState: ((PlayerState) -> PlayerState) -> Unit,
+    private val getState: () -> PlayerState
 ) {
     fun handleWordClicked(word: String, line: SubtitleLine) {
         updateState { it.copy(selectedWord = word, selectedWordContext = line, isTranslatingWord = true) }
@@ -37,52 +36,50 @@ class PlayerLinguisticDelegate(
     }
 
     fun handleToggleLemmatization(line: SubtitleLine) {
-        // Since we don't have direct access to state here, we'll check it within updateState or pass a getter
-        // But for simplicity, we can just use updateState to check and update
-        updateState { state ->
-            val current = state.lemmatizedSentences[line.id]
-            if (current != null) {
-                state.copy(lemmatizedSentences = state.lemmatizedSentences - line.id)
-            } else {
-                scope.launch {
-                    try {
-                        val result = linguisticAssistant.analyzeSentence(line.originalText)
-                        val lemmas = result.words.associate { it.original to it.lemma }
-                        updateState { 
-                            it.copy(
-                                lemmatizedSentences = it.lemmatizedSentences + (line.id to lemmas),
-                                lemmatizingSentenceId = null
-                            ) 
-                        }
-                    } catch (e: Exception) {
-                        updateState { it.copy(lemmatizingSentenceId = null, error = e.message) }
+        val state = getState()
+        val isAlreadyLemmatized = state.lemmatizedSentences.containsKey(line.id)
+        
+        if (isAlreadyLemmatized) {
+            updateState { it.copy(lemmatizedSentences = it.lemmatizedSentences - line.id) }
+        } else {
+            updateState { it.copy(lemmatizingSentenceId = line.id) }
+            scope.launch {
+                try {
+                    val result = linguisticAssistant.analyzeSentence(line.originalText)
+                    val lemmas = result.words.associate { it.original to it.lemma }
+                    updateState { 
+                        it.copy(
+                            lemmatizedSentences = it.lemmatizedSentences + (line.id to lemmas),
+                            lemmatizingSentenceId = null
+                        ) 
                     }
+                } catch (e: Exception) {
+                    updateState { it.copy(lemmatizingSentenceId = null, error = e.message) }
                 }
-                state.copy(lemmatizingSentenceId = line.id)
             }
         }
     }
 
     fun handleToggleTranslation(line: SubtitleLine) {
-        updateState { state ->
-            val current = state.sentenceTranslations[line.id]
-            if (current != null) {
-                state.copy(sentenceTranslations = state.sentenceTranslations - line.id)
-            } else {
-                scope.launch {
-                    try {
-                        val translation = linguisticAssistant.translateSentence(line.originalText)
-                        updateState { 
-                            it.copy(
-                                sentenceTranslations = it.sentenceTranslations + (line.id to translation),
-                                analyzingSentenceId = null
-                            ) 
-                        }
-                    } catch (e: Exception) {
-                        updateState { it.copy(analyzingSentenceId = null, error = e.message) }
+        val state = getState()
+        val isAlreadyTranslated = state.sentenceTranslations.containsKey(line.id)
+
+        if (isAlreadyTranslated) {
+            updateState { it.copy(sentenceTranslations = it.sentenceTranslations - line.id) }
+        } else {
+            updateState { it.copy(analyzingSentenceId = line.id) }
+            scope.launch {
+                try {
+                    val translation = linguisticAssistant.translateSentence(line.originalText)
+                    updateState { 
+                        it.copy(
+                            sentenceTranslations = it.sentenceTranslations + (line.id to translation),
+                            analyzingSentenceId = null
+                        ) 
                     }
+                } catch (e: Exception) {
+                    updateState { it.copy(analyzingSentenceId = null, error = e.message) }
                 }
-                state.copy(analyzingSentenceId = line.id)
             }
         }
     }
