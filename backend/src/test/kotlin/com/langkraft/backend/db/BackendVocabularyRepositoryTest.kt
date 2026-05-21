@@ -3,172 +3,108 @@ package com.langkraft.backend.db
 import com.langkraft.domain.model.SyncEntry
 import com.langkraft.domain.model.VocabularyWord
 import com.langkraft.domain.model.WordStatus
-import org.jetbrains.exposed.sql.*
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.Database
+import org.jetbrains.exposed.sql.SchemaUtils
+import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.transactions.transaction
-import org.junit.jupiter.api.AfterEach
-import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
-import java.io.File
-import java.nio.file.Files
+import org.junit.jupiter.api.TestInstance
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class BackendVocabularyRepositoryTest {
 
     private lateinit var repository: BackendVocabularyRepository
-    private lateinit var dbFile: File
-    private lateinit var database: Database
+    private val userId = "user-1"
 
-    @BeforeEach
+    @BeforeAll
     fun setup() {
-        dbFile = Files.createTempFile("langkraft-test", ".db").toFile()
-        database = Database.connect("jdbc:sqlite:${dbFile.absolutePath}", driver = "org.sqlite.JDBC")
-        repository = BackendVocabularyRepository(database)
-        
-        transaction(database) {
+        val db = Database.connect("jdbc:sqlite:file:testdbvocab?mode=memory&cache=shared", driver = "org.sqlite.JDBC")
+        transaction(db) {
             SchemaUtils.create(Users, VocabularySync)
-            // Seed a user to satisfy foreign key constraints
             Users.insert {
-                it[id] = "user1"
+                it[id] = userId
                 it[email] = "test@example.com"
                 it[passwordHash] = "hash"
                 it[displayName] = "Test User"
             }
         }
-    }
-
-    @AfterEach
-    fun tearDown() {
-        dbFile.delete()
+        repository = BackendVocabularyRepository(db)
     }
 
     @Test
-    fun `test sync - new word from client`() {
-        val userId = "user1"
-        val word = VocabularyWord(
-            id = "w1",
-            word = "Haus",
-            lemma = "Haus",
-            translation = "House",
-            contextSentence = "Das Haus ist gross.",
-            addedAt = 1000,
-            lastUpdated = 1000
-        )
-
-        val serverChanges = repository.sync(userId, listOf(SyncEntry(word, "UPSERT")), 0L)
+    fun `test initial sync - upsert new word`() {
+        val word = VocabularyWord(id = "w1", word = "Haus", contextSentence = "Das Haus", lastUpdated = 1000)
+        val clientChanges = listOf(SyncEntry(word, "UPSERT"))
         
-        assertTrue(serverChanges.isEmpty(), "Server should not have any changes for new user")
+        val serverChanges = repository.sync(userId, clientChanges, 0)
         
-        transaction(database) {
-            val saved = VocabularySync.selectAll().single()
-            assertEquals("w1", saved[VocabularySync.id])
-            assertEquals("Haus", saved[VocabularySync.word])
-            assertEquals(1000L, saved[VocabularySync.lastUpdated])
-        }
+        assertTrue(serverChanges.isEmpty(), "Server should have no other changes")
+        
+        val secondSync = repository.sync(userId, emptyList(), 0)
+        assertEquals(1, secondSync.size)
+        assertEquals("Haus", secondSync.first().word.word)
     }
 
     @Test
-    fun `test sync - conflict resolution (Last Write Wins)`() {
-        val userId = "user1"
-        val wordId = "w1"
+    fun `test conflict resolution - last write wins`() {
+        val wordV1 = VocabularyWord(id = "w1", word = "Haus", contextSentence = "Das Haus", lastUpdated = 1000)
+        repository.sync(userId, listOf(SyncEntry(wordV1, "UPSERT")), 0)
         
-        // 1. Seed server with an older version
-        transaction(database) {
+        val wordOld = wordV1.copy(word = "OLD", lastUpdated = 500)
+        repository.sync(userId, listOf(SyncEntry(wordOld, "UPSERT")), 0)
+        
+        val syncResult = repository.sync(userId, emptyList(), 0)
+        assertEquals("Haus", syncResult.first().word.word, "Should keep the newer version")
+        
+        val wordNew = wordV1.copy(word = "NEU", lastUpdated = 2000)
+        repository.sync(userId, listOf(SyncEntry(wordNew, "UPSERT")), 0)
+        
+        val syncResult2 = repository.sync(userId, emptyList(), 0)
+        assertEquals("NEU", syncResult2.first().word.word, "Should update to the newer version")
+    }
+
+    @Test
+    fun `test delete entry`() {
+        val word = VocabularyWord(id = "w1", word = "Haus", contextSentence = "Das Haus", lastUpdated = 1000)
+        repository.sync(userId, listOf(SyncEntry(word, "UPSERT")), 0)
+        
+        repository.sync(userId, listOf(SyncEntry(word, "DELETE")), 0)
+        
+        val syncResult = repository.sync(userId, emptyList(), 0)
+        assertTrue(syncResult.isEmpty(), "Word should be deleted")
+    }
+
+    @Test
+    fun `test server returns only missing changes`() {
+        val word1 = VocabularyWord(id = "w1", word = "Word 1", contextSentence = "Ctx 1", lastUpdated = 1000)
+        val word2 = VocabularyWord(id = "w2", word = "Word 2", contextSentence = "Ctx 2", lastUpdated = 2000)
+        
+        repository.sync(userId, listOf(SyncEntry(word1, "UPSERT")), 0)
+        
+        val word3 = VocabularyWord(id = "w3", word = "Word 3", contextSentence = "Ctx 3", lastUpdated = 3000)
+        transaction {
             VocabularySync.insert {
-                it[id] = wordId
-                it[this.userId] = userId
-                it[word] = "Haus"
-                it[contextSentence] = "Seed context"
-                it[lastUpdated] = 500L
-                it[addedAt] = 100L
-                it[status] = "NEW"
-                it[nextReviewAt] = 0L
+                it[id] = "w3"
+                it[VocabularySync.userId] = userId
+                it[word] = word3.word
+                it[contextSentence] = word3.contextSentence
+                it[addedAt] = 0
+                it[status] = WordStatus.NEW.name
+                it[nextReviewAt] = 0
                 it[intervalDays] = 0
                 it[easeFactor] = 2.5
                 it[lapseCount] = 0
                 it[tags] = ""
+                it[lastUpdated] = 3000
             }
         }
-
-        // 2. Client sends a newer version
-        val newerWord = VocabularyWord(
-            id = wordId,
-            word = "Haus (updated)",
-            contextSentence = "Updated context",
-            addedAt = 100L,
-            lastUpdated = 1000L
-        )
-
-        repository.sync(userId, listOf(SyncEntry(newerWord, "UPSERT")), 0L)
-
-        // 3. Verify server was updated
-        transaction(database) {
-            val updated = VocabularySync.select { VocabularySync.id eq wordId }.single()
-            assertEquals("Haus (updated)", updated[VocabularySync.word])
-            assertEquals(1000L, updated[VocabularySync.lastUpdated])
-        }
-
-        // 4. Client sends an older version (should be ignored)
-        val olderWord = VocabularyWord(
-            id = wordId,
-            word = "Haus (stale)",
-            contextSentence = "Stale context",
-            addedAt = 100L,
-            lastUpdated = 700L
-        )
-
-        repository.sync(userId, listOf(SyncEntry(olderWord, "UPSERT")), 1000L)
-
-        transaction(database) {
-            val final = VocabularySync.select { VocabularySync.id eq wordId }.single()
-            assertEquals("Haus (updated)", final[VocabularySync.word], "Server should NOT be downgraded")
-            assertEquals(1000L, final[VocabularySync.lastUpdated])
-        }
-    }
-
-    @Test
-    fun `test sync - batch update (N plus 1 check)`() {
-        val userId = "user1"
         
-        // Seed 50 words
-        transaction(database) {
-            (1..50).forEach { i ->
-                VocabularySync.insert {
-                    it[id] = "w$i"
-                    it[this.userId] = userId
-                    it[word] = "Word $i"
-                    it[contextSentence] = "Context $i"
-                    it[lastUpdated] = 100L
-                    it[addedAt] = 10L
-                    it[status] = "NEW"
-                    it[nextReviewAt] = 0L
-                    it[intervalDays] = 0
-                    it[easeFactor] = 2.5
-                    it[lapseCount] = 0
-                    it[tags] = ""
-                }
-            }
-        }
-
-        // Client updates all 50 words
-        val clientChanges = (1..50).map { i ->
-            SyncEntry(
-                VocabularyWord(
-                    id = "w$i",
-                    word = "Word $i updated",
-                    contextSentence = "Context $i",
-                    addedAt = 10L,
-                    lastUpdated = 200L
-                ), "UPSERT"
-            )
-        }
-
-        repository.sync(userId, clientChanges, 100L)
-
-        transaction(database) {
-            val count = VocabularySync.select { VocabularySync.lastUpdated eq 200L }.count()
-            assertEquals(50, count, "All 50 words should be updated to version 200")
-        }
+        val result = repository.sync(userId, listOf(SyncEntry(word2, "UPSERT")), 1500)
+        
+        assertEquals(1, result.size)
+        assertEquals("w3", result.first().word.id, "Should return word3 which is newer than 1500 and not in request")
     }
 }

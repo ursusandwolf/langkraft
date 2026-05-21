@@ -15,13 +15,15 @@ object Users : Table("users") {
 }
 
 object IngestionJobs : Table("ingestion_jobs") {
-    val jobId = varchar("job_id", 36).primaryKey()
+    val jobId = varchar("job_id", 36)
     val status = varchar("status", 50)
     val url = text("url")
     val contentJson = text("content_json").nullable()
     val error = text("error").nullable()
     val createdAt = long("created_at")
     val lastUpdatedAt = long("last_updated_at")
+
+    override val primaryKey = PrimaryKey(jobId)
 }
 
 object VocabularySync : Table("vocabulary_sync") {

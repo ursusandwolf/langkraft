@@ -1,6 +1,8 @@
 package com.langkraft.io
 
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 
 actual class FileSystemImpl : FileSystem {
     actual override fun getAppDataDir(): String {
@@ -27,6 +29,18 @@ actual class FileSystemImpl : FileSystem {
     }
 
     actual override fun rename(from: String, to: String) {
-        File(from).renameTo(File(to))
+        try {
+            val source = File(from).toPath()
+            val target = File(to).toPath()
+            Files.move(source, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+        } catch (e: Exception) {
+            // Fallback for filesystems that don't support atomic move
+            try {
+                Files.move(File(from).toPath(), File(to).toPath(), StandardCopyOption.REPLACE_EXISTING)
+            } catch (e2: Exception) {
+                // Last resort
+                File(from).renameTo(File(to))
+            }
+        }
     }
 }

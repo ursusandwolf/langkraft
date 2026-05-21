@@ -63,9 +63,29 @@ class PlayerViewModel(
                 audioPlayer.setPlaybackSpeed(event.speed.toDouble())
             }
             is PlayerEvent.StepBack -> {
-                val newTime = (currentState.currentTimeMs - 5000).coerceAtLeast(0)
-                audioPlayer.seekTo(newTime)
-                updateState { it.copy(currentTimeMs = newTime, isUserScrolling = false) }
+                val subtitles = currentState.content?.subtitles ?: return
+                val currentIndex = currentState.currentSubtitleIndex
+                val currentTime = currentState.currentTimeMs
+                
+                val targetTime = if (currentIndex != -1) {
+                    val currentLine = subtitles[currentIndex]
+                    // If we are more than 1 second into the current line, jump to its start
+                    if (currentTime - currentLine.startMs > 1000) {
+                        currentLine.startMs
+                    } else if (currentIndex > 0) {
+                        // Otherwise jump to the previous line
+                        subtitles[currentIndex - 1].startMs
+                    } else {
+                        0L
+                    }
+                } else {
+                    // Not in a subtitle, find the closest one before current time
+                    val prevLine = subtitles.findLast { it.endMs < currentTime }
+                    prevLine?.startMs ?: 0L
+                }
+                
+                audioPlayer.seekTo(targetTime)
+                updateState { it.copy(currentTimeMs = targetTime, isUserScrolling = false) }
             }
             is PlayerEvent.SeekTo -> {
                 audioPlayer.seekTo(event.timeMs)
@@ -120,6 +140,11 @@ class PlayerViewModel(
             
             audioPlayer.load(content.getPlaybackUrl(appConfig.backendUrl))
         }
+    }
+
+    override fun onCleared() {
+        audioPlayer.release()
+        super.onCleared()
     }
     
     private fun handleTimeUpdate(timeMs: Long) {

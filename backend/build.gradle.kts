@@ -39,6 +39,7 @@ dependencies {
     implementation("org.jetbrains.exposed:exposed-jdbc:$exposedVersion")
     implementation("org.jetbrains.exposed:exposed-kotlin-datetime:$exposedVersion")
     implementation("org.xerial:sqlite-jdbc:3.42.0.0")
+    testImplementation("org.xerial:sqlite-jdbc:3.42.0.0")
 
     // YtdlpJava replacement
     implementation("com.github.sapher:youtubedl-java:1.1") 

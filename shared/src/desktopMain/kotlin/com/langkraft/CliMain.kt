@@ -20,6 +20,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
+import org.koin.core.component.get
 import kotlin.system.exitProcess
 
 class TuiApp : KoinComponent {
@@ -27,13 +28,6 @@ class TuiApp : KoinComponent {
     private val screen: Screen = terminalFactory.createScreen()
     private val gui = MultiWindowTextGUI(screen, DefaultWindowManager(), EmptySpace())
     
-    // ViewModels
-    private val dashboardViewModel: DashboardViewModel by inject()
-    private val contentSelectionViewModel: ContentSelectionViewModel by inject()
-    private val playerViewModel: PlayerViewModel by inject()
-    private val srsTrainingViewModel: SrsTrainingViewModel by inject()
-    private val writingViewModel: WritingViewModel by inject()
-
     private val scope = CoroutineScope(Dispatchers.Default + Job())
 
     fun start() {
@@ -70,6 +64,7 @@ class TuiApp : KoinComponent {
     }
 
     private fun showWriting(parent: Window) {
+        val writingViewModel: WritingViewModel = get()
         val window = BasicWindow("Writing Diary")
         val panel = Panel(LinearLayout(Direction.VERTICAL))
         
@@ -101,6 +96,7 @@ class TuiApp : KoinComponent {
     }
 
     private fun showSrsTraining(parent: Window) {
+        val srsTrainingViewModel: SrsTrainingViewModel = get()
         val window = BasicWindow("SRS Training")
         val panel = Panel(LinearLayout(Direction.VERTICAL))
         
@@ -136,9 +132,11 @@ class TuiApp : KoinComponent {
 
         gui.addWindowAndWait(window)
         job.cancel()
+        srsTrainingViewModel.onCleared()
     }
 
     private fun showContentList(parent: Window) {
+        val contentSelectionViewModel: ContentSelectionViewModel = get()
         val window = BasicWindow("Content Library")
         val panel = Panel(LinearLayout(Direction.VERTICAL))
         
@@ -165,9 +163,11 @@ class TuiApp : KoinComponent {
 
         gui.addWindowAndWait(window)
         job.cancel()
+        contentSelectionViewModel.onCleared()
     }
 
     private fun showPlayer(contentId: String) {
+        val playerViewModel: PlayerViewModel = get()
         playerViewModel.onEvent(com.langkraft.ui.player.PlayerEvent.LoadContent(contentId))
         
         val window = BasicWindow("Immersion Player")
@@ -184,6 +184,7 @@ class TuiApp : KoinComponent {
         
         val controls = Panel(LinearLayout(Direction.HORIZONTAL))
         controls.addComponent(Button("Play/Pause", Runnable { playerViewModel.onEvent(PlayerEvent.PlayPause) }))
+        controls.addComponent(Button("Step Back", Runnable { playerViewModel.onEvent(PlayerEvent.StepBack) }))
         controls.addComponent(Button("Loop", Runnable { playerViewModel.onEvent(PlayerEvent.ToggleLoop) }))
         controls.addComponent(Button("Close", Runnable { window.close() }))
         panel.addComponent(controls)
@@ -200,6 +201,7 @@ class TuiApp : KoinComponent {
 
         gui.addWindowAndWait(window)
         job.cancel()
+        playerViewModel.onCleared()
     }
 
     private fun renderPlayerState(
@@ -235,6 +237,7 @@ class TuiApp : KoinComponent {
     }
 
     private fun showDashboard(parent: Window) {
+        val dashboardViewModel: DashboardViewModel = get()
         val window = BasicWindow("Dashboard")
         val panel = Panel(LinearLayout(Direction.VERTICAL))
         
@@ -264,6 +267,7 @@ class TuiApp : KoinComponent {
 
         gui.addWindowAndWait(window)
         job.cancel()
+        dashboardViewModel.onCleared()
     }
 }
 

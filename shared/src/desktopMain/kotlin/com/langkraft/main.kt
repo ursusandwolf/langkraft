@@ -24,6 +24,9 @@ import com.langkraft.di.initKoin
 import com.langkraft.di.createDesktopModule
 import org.koin.compose.koinInject
 import com.langkraft.ui.theme.LangkraftTheme
+import com.langkraft.ui.BaseViewModel
+import org.koin.compose.getKoin
+import org.koin.core.parameter.ParametersDefinition
 
 fun main() {
     initKoin {
@@ -40,11 +43,25 @@ fun main() {
 }
 
 @Composable
+inline fun <reified T : BaseViewModel> rememberViewModel(
+    key: Any? = null,
+    noinline parameters: ParametersDefinition? = null
+): T {
+    val koin = getKoin()
+    val viewModel = remember(key) { koin.get<T>(parameters = parameters) }
+    DisposableEffect(viewModel) {
+        onDispose {
+            viewModel.onCleared()
+        }
+    }
+    return viewModel
+}
+
+@Composable
 fun MainApp() {
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Dashboard) }
     
     val scaffoldState = rememberScaffoldState()
-    val scope = rememberCoroutineScope()
 
     Scaffold(
         scaffoldState = scaffoldState,
@@ -80,26 +97,25 @@ fun MainApp() {
         Box(modifier = Modifier.padding(padding).fillMaxSize()) {
             when (val screen = currentScreen) {
                 is Screen.Dashboard -> {
-                    DashboardView(koinInject())
+                    DashboardView(rememberViewModel())
                 }
                 is Screen.ContentSelection -> {
-                    ContentSelectionView(koinInject(), onContentSelected = { 
+                    ContentSelectionView(rememberViewModel(), onContentSelected = { 
                         currentScreen = Screen.Player(it.id)
                     })
                 }
                 is Screen.SrsTraining -> {
-                    SrsTrainingView(koinInject(), onFinish = {
+                    SrsTrainingView(rememberViewModel(), onFinish = {
                         currentScreen = Screen.Dashboard
                     })
                 }
                 is Screen.Writing -> {
-                    WritingView(koinInject(), onBack = {
+                    WritingView(rememberViewModel(), onBack = {
                         currentScreen = Screen.Dashboard
                     })
                 }
                 is Screen.Player -> {
-                    val viewModel = koinInject<PlayerViewModel>()
-                    // Need to load content in ViewModel
+                    val viewModel = rememberViewModel<PlayerViewModel>(key = screen.contentId)
                     LaunchedEffect(screen.contentId) {
                         viewModel.onEvent(com.langkraft.ui.player.PlayerEvent.LoadContent(screen.contentId))
                     }

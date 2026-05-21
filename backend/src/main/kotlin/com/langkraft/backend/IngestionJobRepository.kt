@@ -3,9 +3,12 @@ package com.langkraft.backend
 import com.langkraft.backend.db.IngestionJobs
 import com.langkraft.domain.model.ImmersionContent
 import com.langkraft.domain.model.IngestionJob
+import com.langkraft.domain.model.ContentProcessingStatus
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.lessEq
 import org.jetbrains.exposed.sql.transactions.transaction
 
 /**
@@ -23,7 +26,7 @@ class IngestionJobRepository(private val db: Database) {
 
         return IngestionJob(
             jobId = row[IngestionJobs.jobId],
-            status = row[IngestionJobs.status],
+            status = ContentProcessingStatus.valueOf(row[IngestionJobs.status]),
             url = row[IngestionJobs.url],
             content = content,
             error = row.getOrNull(IngestionJobs.error),
@@ -36,7 +39,7 @@ class IngestionJobRepository(private val db: Database) {
         transaction(db) {
             IngestionJobs.insert {
                 it[jobId] = job.jobId
-                it[status] = job.status
+                it[status] = job.status.name
                 it[url] = job.url
                 it[createdAt] = job.createdAt
                 it[lastUpdatedAt] = job.lastUpdatedAt
@@ -61,7 +64,7 @@ class IngestionJobRepository(private val db: Database) {
             val updatedJob = modifier(currentJob)
 
             IngestionJobs.update({ IngestionJobs.jobId eq id }) {
-                it[status] = updatedJob.status
+                it[status] = updatedJob.status.name
                 it[error] = updatedJob.error
                 updatedJob.content?.let { content ->
                     it[contentJson] = json.encodeToString(content)

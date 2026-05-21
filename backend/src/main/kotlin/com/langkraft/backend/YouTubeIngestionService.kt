@@ -130,9 +130,75 @@ class YouTubeIngestionService(
         SrtParser.parse(videoId, srtFile.readText())
     }
 
-    private suspend fun generateWaveform(jobId: String, audioPath: String): List<Float> {
+    private suspend fun generateWaveform(jobId: String, audioPath: String): List<Float> = withContext(Dispatchers.IO) {
         jobRepository.update(jobId) { it.copy(status = ContentProcessingStatus.GENERATING_WAVEFORM) }
-        delay(500)
-        return List(100) { Random.nextFloat() }
+        
+        val points = 200
+        val sampleRate = 4000
+        val waveform = mutableListOf<Float>()
+        
+        try {
+            val process = ProcessBuilder(
+                "ffmpeg", "-i", audioPath,
+                "-ac", "1",
+                "-ar", sampleRate.toString(),
+                "-f", "s16le",
+                "-"
+            ).start()
+
+            val inputStream = process.inputStream
+            val buffer = ByteArray(4096)
+            val allSamples = mutableListOf<Short>()
+
+            // Read all samples into memory (for short audio files this is fine)
+            // For very long files, we should aggregate on the fly.
+            var bytesRead: Int
+            while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                for (i in 0 until bytesRead step 2) {
+                    if (i + 1 < bytesRead) {
+                        val sample = ((buffer[i+1].toInt() shl 8) or (buffer[i].toInt() and 0xFF)).toShort()
+                        allSamples.add(sample)
+                    }
+                }
+            }
+            process.waitFor()
+
+            if (allSamples.isEmpty()) return@withContext List(points) { 0f }
+
+            val chunkSize = (allSamples.size / points).coerceAtLeast(1)
+            var maxVal = 0f
+
+            for (i in 0 until points) {
+                val start = i * chunkSize
+                val end = ((i + 1) * chunkSize).coerceAtMost(allSamples.size)
+                if (start >= allSamples.size) break
+
+                var chunkMax = 0
+                for (j in start until end) {
+                    val absSample = Math.abs(allSamples[j].toInt())
+                    if (absSample > chunkMax) chunkMax = absSample
+                }
+                
+                val value = chunkMax.toFloat()
+                waveform.add(value)
+                if (value > maxVal) maxVal = value
+            }
+
+            // Normalize
+            val result = if (maxVal > 0) {
+                waveform.map { it / maxVal }
+            } else {
+                waveform
+            }
+            
+            // Pad if needed
+            val padded = result.toMutableList()
+            while (padded.size < points) padded.add(0f)
+            
+            padded
+        } catch (e: Exception) {
+            logger.error("Failed to generate waveform for $audioPath", e)
+            List(points) { 0.1f } // Fallback
+        }
     }
 }
