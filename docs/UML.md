@@ -10,9 +10,17 @@ classDiagram
     class Routing {
         +apiRoutes(Route)
     }
+    class SyncService {
+        +performSync(userEmail, request) SyncResponse
+    }
     class YouTubeIngestionService {
-        +ingest(url: String) ImmersionContent
-        -cleanupOldJobs()
+        +startIngestion(url: String) String
+        -processIngestion(jobId, url)
+    }
+    class IngestionJobRepository {
+        +save(job)
+        +update(id, modifier)
+        +cleanup(expiry)
     }
     class YtdlpClient {
         +getVideoInfo(url: String) YtdlpInfo
@@ -23,7 +31,10 @@ classDiagram
     }
 
     Application --> Routing
+    Routing --> SyncService
     Routing --> YouTubeIngestionService
+    SyncService --> VocabularySyncRepository
+    YouTubeIngestionService --> IngestionJobRepository
     YouTubeIngestionService --> YtdlpClient
     YouTubeIngestionService --> SrtParser
 ```

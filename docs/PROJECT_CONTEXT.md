@@ -13,13 +13,13 @@ The app follows a specific language acquisition methodology:
 6. **Memorization:** Features to help internalize corrected prose.
 
 ## Current State
-- **Security:** User passwords are secured with **BCrypt**. Client-side sends raw passwords in a field named `password`.
-- **Architecture:** Strictly follows **Clean Architecture**. Introduced `StateViewModel` for standardized, boilerplate-free state management. Data layer uses `BaseSqlDelightRepository`. All backend URLs are now strictly typed using `io.ktor.http.Url`.
-- **Sync Protocol:** Refactored to use `SyncEntry` with explicit `UPSERT` and `DELETE`. Improved data integrity by clearing pending changes only after successful server confirmation. `SyncManager` now allows immediate retries on network failures.
-- **Backend Services:** `YouTubeIngestionService` refactored for better lifecycle management with support for external `CoroutineScope`.
-- **Data Layer:** SQLDelight schema supports incremental sync and JSON-serialized tags. File system operations optimized with atomic `rename` for downloads.
-- **Sync Manager:** Uses `Dispatchers.IO` (or `Dispatchers.Default` on common) to ensure UI responsiveness during sync.
-- **Logging:** Unified multiplatform `Logger` replaces raw `println` calls in the data layer.
+- **Security:** User passwords are secured with **BCrypt**. Client-side sends raw passwords in a field named `password`. JWT validity is now configurable via `application.conf`.
+- **Architecture:** Strictly follows **Clean Architecture**. Introduced `StateViewModel` for standardized state management. Backend route handlers are thin, delegating to services like `SyncService`.
+- **Ingestion System:** `YouTubeIngestionService` uses a **worker queue** (Channel-based) to limit concurrent tasks. `IngestionJobRepository` is now **persistent** (Exposed/SQLite).
+- **Sync Protocol:** Refactored to use `SyncEntry` with explicit `UPSERT` and `DELETE`. Improved data integrity by clearing pending changes only after server confirmation.
+- **Data Layer:** SQLDelight schema supports incremental sync. Backend uses Exposed with SQLite.
+- **Configuration:** All major constants (JWT, cleanup intervals, worker counts) are externalized in `application.conf`.
+- **Logging:** Unified multiplatform `Logger` replaces raw `println` calls.
 - **Testing:** Unit tests cover `Sm2Algorithm` and `SrsTrainingViewModel`.
 
 ## Tech Stack

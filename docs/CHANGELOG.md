@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 ### Added
+- **Persistent Ingestion Jobs:** Migrated `IngestionJobRepository` from in-memory storage to a persistent SQLite table (`IngestionJobs`) using Exposed.
+- **Ingestion Work Queue:** Implemented a `Channel`-based work queue in `YouTubeIngestionService` with a configurable number of concurrent workers (default 4) to prevent resource exhaustion.
+- **SyncService:** Extracted synchronization logic from route handlers into a dedicated `SyncService`, improving separation of concerns.
+- **UnauthorizedException:** Added a custom exception for authentication failures with a global handler in `StatusPages`.
+- **External Configuration:** Moved JWT validity, ingestion cleanup intervals, and worker counts to `application.conf`.
+- **IngestionJob Metadata:** Added `createdAt` and `lastUpdatedAt` fields to the `IngestionJob` domain model and database schema.
+
+### Changed
 - **StateViewModel:** Introduced a generic `StateViewModel<S>` abstract class to standardize state management across all ViewModels, significantly reducing boilerplate.
 - **BaseSqlDelightRepository:** Added an abstract base class for SQLDelight repositories with helper functions for mapping queries to domain models.
 - **Desktop Koin Module:** Created `DesktopModule` to provide platform-specific `AppDatabase` via `JdbcSqliteDriver`.

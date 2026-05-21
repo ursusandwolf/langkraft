@@ -7,10 +7,12 @@ The backend is built with **Ktor** and is responsible for content ingestion, use
 ### Components
 
 - **`Application.kt`**: The server entry point. Uses **Koin** for dependency injection and **StatusPages** for global exception handling.
-- **`Routing.kt`**: Modular routing configuration. All API endpoints are prefixed with `/api`.
+- **`Routing.kt`**: Modular routing configuration. All API endpoints are prefixed with `/api`. Route handlers are kept thin by delegating business logic to services.
+- **`SyncService`**: Encapsulates the logic for incremental synchronization between client and server.
 - **`JwtService`**: Encapsulates JWT generation and validation logic.
 - **`YtdlpClient`**: A `suspend`-friendly wrapper around `yt-dlp`. Executes long-running processes on `Dispatchers.IO`.
-- **`YouTubeIngestionService`**: Orchestrates content fetching and metadata extraction. Includes a background cleanup job for expired ingestion tasks.
+- **`YouTubeIngestionService`**: Orchestrates content fetching and metadata extraction using a **worker queue** (via `kotlinx.coroutines.channels.Channel`) to limit concurrent ingestion tasks.
+- **`IngestionJobRepository`**: Persistent storage for ingestion job states using **Exposed** and SQLite. Includes a background cleanup job for expired tasks.
 - **`SrtParser`**: Robust SRT/VTT parser with strict timestamp validation and deterministic ID generation.
 
 ## Security
