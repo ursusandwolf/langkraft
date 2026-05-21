@@ -90,7 +90,9 @@ data class IngestionJob(
     val status: ContentProcessingStatus,
     val url: String,
     val content: ImmersionContent? = null,
-    val error: String? = null
+    val error: String? = null,
+    val createdAt: Long = 0,
+    val lastUpdatedAt: Long = 0
 )
 
 @Serializable

@@ -9,15 +9,12 @@ class JwtService(config: ApplicationConfig) {
     private val secret = config.property("jwt.secret").getString()
     private val issuer = config.property("jwt.issuer").getString()
     private val audience = config.property("jwt.audience").getString()
-
-    companion object {
-        private const val TOKEN_VALIDITY_MS = 3600000 * 24L // 24 hours
-    }
+    private val validityMs = config.property("jwt.validity_ms").getString().toLong()
 
     fun generateToken(email: String): String = JWT.create()
         .withAudience(audience)
         .withIssuer(issuer)
         .withClaim("email", email)
-        .withExpiresAt(Date(System.currentTimeMillis() + TOKEN_VALIDITY_MS))
+        .withExpiresAt(Date(System.currentTimeMillis() + validityMs))
         .sign(Algorithm.HMAC256(secret))
 }

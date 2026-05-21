@@ -14,6 +14,16 @@ object Users : Table("users") {
     override val primaryKey = PrimaryKey(id)
 }
 
+object IngestionJobs : Table("ingestion_jobs") {
+    val jobId = varchar("job_id", 36).primaryKey()
+    val status = varchar("status", 50)
+    val url = text("url")
+    val contentJson = text("content_json").nullable()
+    val error = text("error").nullable()
+    val createdAt = long("created_at")
+    val lastUpdatedAt = long("last_updated_at")
+}
+
 object VocabularySync : Table("vocabulary_sync") {
     val id = varchar("id", 36)
     val userId = varchar("user_id", 36).references(Users.id)

@@ -3,44 +3,62 @@ package com.langkraft.backend
 import com.langkraft.domain.model.ImmersionContent
 import com.langkraft.domain.model.ContentProcessingStatus
 import com.langkraft.domain.model.IngestionJob
+import io.ktor.server.config.ApplicationConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
 import org.slf4j.LoggerFactory
 import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
 import kotlin.random.Random
 
 /**
  * Service that uses YtdlpClient to fetch content from YouTube.
- * Performs operations asynchronously and tracks job state.
+ * Performs operations asynchronously via a work queue and tracks job state.
  */
 class YouTubeIngestionService(
     private val ytdlpClient: YtdlpClient,
     private val jobRepository: IngestionJobRepository,
+    config: ApplicationConfig,
     private val externalScope: CoroutineScope? = null
 ) {
     private val logger = LoggerFactory.getLogger(YouTubeIngestionService::class.java)
     private val scope = externalScope ?: CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val ingestionChannel = Channel<Pair<String, String>>(Channel.UNLIMITED)
 
-    companion object {
-        private const val CLEANUP_INTERVAL_MS = 3600_000L // 1 hour
-        private const val JOB_EXPIRY_MS = 24 * 3600_000L // 24 hours
-    }
+    private val cleanupIntervalMs = config.property("ingestion.cleanup_interval_ms").getString().toLong()
+    private val jobExpiryMs = config.property("ingestion.job_expiry_ms").getString().toLong()
+    private val workerCount = config.property("ingestion.worker_count").getString().toInt()
 
     init {
         startCleanupLoop()
+        startWorkerRoutines()
+    }
+    
+    private fun startWorkerRoutines() {
+        repeat(workerCount) {
+            scope.launch {
+                for ((jobId, url) in ingestionChannel) {
+                    try {
+                        processIngestion(jobId, url)
+                    } catch (e: Exception) {
+                        logger.error("Ingestion failed for $jobId", e)
+                        jobRepository.update(jobId) { it.copy(status = ContentProcessingStatus.ERROR, error = e.message) }
+                    }
+                }
+            }
+        }
     }
 
     private fun startCleanupLoop() {
         scope.launch {
             while (true) {
-                delay(CLEANUP_INTERVAL_MS)
+                delay(cleanupIntervalMs)
                 try {
-                    jobRepository.cleanup(JOB_EXPIRY_MS)
+                    jobRepository.cleanup(jobExpiryMs)
                     logger.info("Executed job cleanup")
                 } catch (e: Exception) {
                     logger.error("Job cleanup failed", e)
@@ -51,16 +69,20 @@ class YouTubeIngestionService(
 
     fun startIngestion(url: String): String {
         val jobId = UUID.randomUUID().toString()
-        jobRepository.save(IngestionJob(jobId, ContentProcessingStatus.IDLE, url))
+        val now = System.currentTimeMillis()
+        val job = IngestionJob(
+            jobId = jobId,
+            status = ContentProcessingStatus.IDLE,
+            url = url,
+            createdAt = now,
+            lastUpdatedAt = now
+        )
+        jobRepository.save(job)
         
         scope.launch {
-            try {
-                processIngestion(jobId, url)
-            } catch (e: Exception) {
-                logger.error("Ingestion failed for $jobId", e)
-                jobRepository.update(jobId) { it.copy(status = ContentProcessingStatus.ERROR, error = e.message) }
-            }
+            ingestionChannel.send(jobId to url)
         }
+        
         return jobId
     }
 

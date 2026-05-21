@@ -55,8 +55,7 @@ fun Route.authRoutes() {
 fun Route.apiRoutes() {
     val ingestionService by inject<YouTubeIngestionService>()
     val aiAssistant by inject<LinguisticAssistant>()
-    val userRepository by inject<BackendUserRepository>()
-    val vocabularyRepository by inject<VocabularySyncRepository>()
+    val syncService by inject<SyncService>()
 
     // PUBLIC API ROUTES
     route("/api") {
@@ -105,29 +104,19 @@ fun Route.apiRoutes() {
             
             post("/sync") {
                 val principal = call.principal<JWTPrincipal>()
-                val email = principal?.getClaim("email", String::class)
-                
-                if (email == null) {
-                    call.respond(HttpStatusCode.Unauthorized)
-                    return@post
-                }
-                
-                val user = userRepository.findByEmail(email)
-                if (user == null) {
-                    call.respond(HttpStatusCode.Unauthorized)
-                    return@post
-                }
-                
+                val email = principal?.getClaim("email", String::class) ?: throw UnauthorizedException()
                 val request = call.receive<SyncRequest>()
-                val serverChanges = vocabularyRepository.sync(user.id, request.clientChanges, request.lastSyncTimestamp)
-                
-                call.respond(SyncResponse(System.currentTimeMillis(), serverChanges))
+                val response = syncService.performSync(email, request)
+                call.respond(response)
             }
         }
     }
 }
 
 fun StatusPagesConfig.configureBackendExceptions() {
+    exception<UnauthorizedException> { call, cause ->
+        call.respond(HttpStatusCode.Unauthorized, cause.message ?: "Unauthorized")
+    }
     exception<IngestionException> { call, cause ->
         call.respondText("Ingestion Error: ${cause.message}", status = HttpStatusCode.BadRequest)
     }

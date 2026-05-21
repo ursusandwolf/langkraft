@@ -22,7 +22,7 @@ val backendModule = module {
         val dbFile = File("data").apply { mkdirs() }
         Database.connect("jdbc:sqlite:data/langkraft.db", "org.xerial.sqlite.JDBC").also {
             transaction(it) {
-                SchemaUtils.create(Users, VocabularySync)
+                SchemaUtils.create(Users, VocabularySync, IngestionJobs)
             }
         }
     }
@@ -31,10 +31,11 @@ val backendModule = module {
     single<VocabularySyncRepository> { BackendVocabularyRepository(get()) }
     single { com.langkraft.backend.JwtService(get()) }
     single { com.langkraft.backend.AuthService(get(), get()) }
+    single { com.langkraft.backend.SyncService(get(), get()) }
 
     single { YtdlpClient("downloads") }
-    single { com.langkraft.backend.IngestionJobRepository() }
-    single { YouTubeIngestionService(get(), get()) }
+    single { com.langkraft.backend.IngestionJobRepository(get()) }
+    single { YouTubeIngestionService(get(), get(), get()) }
     
     single {
         HttpClient(CIO) {
