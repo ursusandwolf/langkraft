@@ -3,53 +3,35 @@ package com.langkraft.backend
 import com.langkraft.domain.model.SubtitleLine
 import java.util.UUID
 
-/**
- * A simple SRT parser to convert raw subtitle files into Domain models.
- */
 object SrtParser {
+    private val timestamp = Regex("""(\d{2,}):(\d{2}):(\d{2})[,.](\d{3})""")
+    private val range = Regex("""\s*(\d{2,}:\d{2}:\d{2}[,.]\d{3})\s*-->\s*(\d{2,}:\d{2}:\d{2}[,.]\d{3})\s*""")
+
     fun parse(contentId: String, srtContent: String): List<SubtitleLine> {
-        val lines = srtContent.lines()
-        val cues = mutableListOf<SubtitleLine>()
-        var i = 0
-        
-        while (i < lines.size) {
-            val line = lines[i].trim()
-            if (line.isEmpty()) { i++; continue }
-            
-            // Skip index line
-            i++ 
-            
-            // Parse timestamps (00:00:20,000 --> 00:00:24,400)
-            val timeRange = lines[i].split(" --> ")
-            val startMs = parseTimestamp(timeRange[0])
-            val endMs = parseTimestamp(timeRange[1])
-            i++
-            
-            // Parse text (can be multiple lines until empty line)
-            val textBuilder = StringBuilder()
-            while (i < lines.size && lines[i].trim().isNotEmpty()) {
-                if (textBuilder.isNotEmpty()) textBuilder.append(" ")
-                textBuilder.append(lines[i].trim())
-                i++
+        val normalized = srtContent.removePrefix("\uFEFF").replace("\r\n", "\n").replace("\r", "\n").trim()
+        if (normalized.isEmpty()) return emptyList()
+        return normalized.split(Regex("\n\s*\n")).mapIndexed { index, block ->
+            val lines = block.lines()
+            require(lines.size >= 3 && lines[0].trim().toIntOrNull() != null) {
+                "Invalid SRT cue ${index + 1}: expected index, time range and text"
             }
-            
-            cues.add(SubtitleLine(
-                id = UUID.randomUUID().toString(),
-                contentId = contentId,
-                startMs = startMs,
-                endMs = endMs,
-                textDe = textBuilder.toString(),
-                textEn = null
-            ))
-        }
-        return cues
+            val match = range.matchEntire(lines[1])
+                ?: throw IllegalArgumentException("Invalid SRT time range in cue ${index + 1}")
+            val start = parseTimestamp(match.groupValues[1])
+            val end = parseTimestamp(match.groupValues[2])
+            require(end > start) { "SRT cue ${index + 1} must end after it starts" }
+            val text = lines.drop(2).joinToString(" ") { it.trim() }
+            require(text.isNotBlank()) { "Empty SRT cue ${index + 1}" }
+            SubtitleLine(UUID.randomUUID().toString(), contentId, start, end, text, null)
+        }.sortedBy { it.startMs }
     }
 
-    private fun parseTimestamp(timestamp: String): Long {
-        val parts = timestamp.replace(",", ".").split(":")
-        val hours = parts[0].toLong()
-        val minutes = parts[1].toLong()
-        val secondsWithMs = parts[2].toDouble()
-        return (hours * 3600000 + minutes * 60000 + (secondsWithMs * 1000).toLong())
+    private fun parseTimestamp(value: String): Long {
+        val match = requireNotNull(timestamp.matchEntire(value)) { "Invalid SRT timestamp" }
+        val (h, m, s, ms) = match.destructured
+        val hours = h.toLongOrNull() ?: throw IllegalArgumentException("Invalid SRT hours")
+        require(hours <= (Long.MAX_VALUE - 3_600_000) / 3_600_000) { "SRT timestamp too large" }
+        require(m.toInt() in 0..59 && s.toInt() in 0..59) { "Invalid SRT minutes or seconds" }
+        return hours * 3_600_000 + m.toLong() * 60_000 + s.toLong() * 1_000 + ms.toLong()
     }
 }

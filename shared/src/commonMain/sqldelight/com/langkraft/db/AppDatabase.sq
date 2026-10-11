@@ -1,64 +1,80 @@
--- Table for storing media content (YouTube videos, audio files)
-CREATE TABLE Content (
+CREATE TABLE IF NOT EXISTS Content (
     id TEXT NOT NULL PRIMARY KEY,
     title TEXT NOT NULL,
-    audioUrl TEXT NOT NULL,         -- Remote URL
-    localAudioPath TEXT,            -- Local path for offline mode
-    sourceUrl TEXT NOT NULL,        -- Original YouTube URL
+    audioUrl TEXT NOT NULL,
+    localAudioPath TEXT,
+    sourceUrl TEXT NOT NULL,
     durationSeconds INTEGER NOT NULL DEFAULT 0,
-    createdAt INTEGER NOT NULL      -- Timestamp
+    createdAt INTEGER NOT NULL
 );
-
--- Table for subtitle lines/cues
-CREATE TABLE SubtitleLine (
+CREATE TABLE IF NOT EXISTS SubtitleLine (
     id TEXT NOT NULL PRIMARY KEY,
     contentId TEXT NOT NULL,
     startMs INTEGER NOT NULL,
     endMs INTEGER NOT NULL,
-    textDe TEXT NOT NULL,           -- Original German text
-    textEn TEXT,                    -- Optional English translation
+    textDe TEXT NOT NULL,
+    textEn TEXT,
     FOREIGN KEY (contentId) REFERENCES Content(id) ON DELETE CASCADE
 );
-
--- Table for vocabulary (saved words/phrases)
-CREATE TABLE Vocabulary (
+CREATE INDEX IF NOT EXISTS subtitle_content_time ON SubtitleLine(contentId, startMs);
+CREATE TABLE IF NOT EXISTS Vocabulary (
     id TEXT NOT NULL PRIMARY KEY,
-    word TEXT NOT NULL,             -- The word itself (e.g., "Häuser")
-    lemma TEXT,                     -- Dictionary form (e.g., "Haus")
-    translation TEXT,               -- User or AI provided translation
-    contextSentence TEXT,           -- The specific sentence where it was found
-    contentId TEXT,                 -- Reference to source content
-    subtitleLineId TEXT,            -- Reference to specific timestamp
+    word TEXT NOT NULL,
+    lemma TEXT,
+    translation TEXT,
+    contextSentence TEXT NOT NULL,
+    contentId TEXT,
+    subtitleLineId TEXT,
     addedAt INTEGER NOT NULL,
-    
-    -- Spaced Repetition (SRS) data
-    nextReviewAt INTEGER,           -- Timestamp for next review
+    nextReviewAt INTEGER,
     intervalDays INTEGER NOT NULL DEFAULT 0,
     easeFactor REAL NOT NULL DEFAULT 2.5,
-    status TEXT NOT NULL DEFAULT 'NEW', -- NEW, LEARNING, MASTERED
-    
+    status TEXT NOT NULL DEFAULT 'NEW',
     FOREIGN KEY (contentId) REFERENCES Content(id) ON DELETE SET NULL,
     FOREIGN KEY (subtitleLineId) REFERENCES SubtitleLine(id) ON DELETE SET NULL
 );
+CREATE INDEX IF NOT EXISTS vocabulary_review ON Vocabulary(status, nextReviewAt);
 
--- Queries
 selectAllContent:
 SELECT * FROM Content ORDER BY createdAt DESC;
 
+selectContent:
+SELECT * FROM Content WHERE id = ?;
+
 insertContent:
-INSERT OR REPLACE INTO Content(id, title, audioUrl, localAudioPath, sourceUrl, durationSeconds, createdAt)
+INSERT OR IGNORE INTO Content(id, title, audioUrl, localAudioPath, sourceUrl, durationSeconds, createdAt)
 VALUES (?, ?, ?, ?, ?, ?, ?);
+
+updateContent:
+UPDATE Content SET title = ?, audioUrl = ?, localAudioPath = ?, sourceUrl = ?, durationSeconds = ? WHERE id = ?;
 
 selectSubtitlesForContent:
 SELECT * FROM SubtitleLine WHERE contentId = ? ORDER BY startMs ASC;
 
 insertSubtitleLine:
-INSERT OR REPLACE INTO SubtitleLine(id, contentId, startMs, endMs, textDe, textEn)
-VALUES (?, ?, ?, ?, ?, ?);
+INSERT OR IGNORE INTO SubtitleLine(id, contentId, startMs, endMs, textDe, textEn) VALUES (?, ?, ?, ?, ?, ?);
 
-upsertWord:
-INSERT OR REPLACE INTO Vocabulary(id, word, lemma, translation, contextSentence, contentId, subtitleLineId, addedAt, status)
+updateSubtitleLine:
+UPDATE SubtitleLine SET startMs = ?, endMs = ?, textDe = ?, textEn = ? WHERE id = ? AND contentId = ?;
+
+deleteSubtitleLine:
+DELETE FROM SubtitleLine WHERE id = ?;
+
+insertWord:
+INSERT OR IGNORE INTO Vocabulary(id, word, lemma, translation, contextSentence, contentId, subtitleLineId, addedAt, status)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
 
+updateWord:
+UPDATE Vocabulary SET word = ?, lemma = ?, translation = ?, contextSentence = ?, contentId = ?, subtitleLineId = ?, status = ? WHERE id = ?;
+
 selectVocabularyToReview:
-SELECT * FROM Vocabulary WHERE nextReviewAt <= ? OR nextReviewAt IS NULL ORDER BY nextReviewAt ASC;
+SELECT * FROM Vocabulary WHERE status != 'MASTERED' AND (nextReviewAt <= ? OR nextReviewAt IS NULL) ORDER BY nextReviewAt ASC;
+
+selectWord:
+SELECT * FROM Vocabulary WHERE id = ?;
+
+deleteWord:
+DELETE FROM Vocabulary WHERE id = ?;
+
+updateReviewSchedule:
+UPDATE Vocabulary SET nextReviewAt = ?, intervalDays = ?, easeFactor = ? WHERE id = ?;

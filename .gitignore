@@ -1,3 +1,33 @@
+# Gradle and Kotlin caches
+.gradle/
+.kotlin/
+
+# Build output (all modules)
+build/
+out/
+
+# Local IDE and Android SDK settings
+.idea/
+*.iml
+local.properties
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+!.env.sample
+*.jks
+*.keystore
+
+# Downloaded media
+/downloads/
+/backend/downloads/
+
+# OS metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
+
 # Compiled class file
 *.class
 
@@ -12,6 +42,7 @@
 
 # Package Files #
 *.jar
+!gradle/wrapper/gradle-wrapper.jar
 *.war
 *.nar
 *.ear
@@ -22,6 +53,3 @@
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
 replay_pid*
-
-# Kotlin Gradle plugin data, see https://kotlinlang.org/docs/whatsnew20.html#new-directory-for-kotlin-data-in-gradle-projects
-.kotlin/

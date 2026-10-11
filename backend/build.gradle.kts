@@ -1,15 +1,20 @@
 plugins {
     kotlin("jvm")
-    id("io.ktor.plugin") version "2.3.5"
+    application
 }
-
+kotlin { jvmToolchain(21) }
+application { mainClass.set("com.langkraft.backend.ApplicationKt") }
 dependencies {
-    implementation(project(":shared")) // Access shared models
-    implementation("io.ktor:ktor-server-core:2.3.5")
-    implementation("io.ktor:ktor-server-netty:2.3.5")
-    implementation("io.ktor:ktor-server-content-negotiation:2.3.5")
-    implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.5")
-    
-    // YtdlpJava from user repository (should be added via jitpack or local)
-    // implementation("com.github.ursusandwolf:YtdlpJava:dev") 
+    implementation(project(":core"))
+    implementation("io.ktor:ktor-server-netty:3.3.0")
+    implementation("io.ktor:ktor-server-content-negotiation:3.3.0")
+    implementation("io.ktor:ktor-server-status-pages:3.3.0")
+    implementation("io.ktor:ktor-server-partial-content:3.3.0")
+    implementation("io.ktor:ktor-server-cors:3.3.0")
+    implementation("io.ktor:ktor-serialization-kotlinx-json:3.3.0")
+    implementation("ch.qos.logback:logback-classic:1.5.18")
+    testImplementation(kotlin("test-junit5"))
+    testImplementation("io.ktor:ktor-server-test-host:3.3.0")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
+tasks.test { useJUnitPlatform() }

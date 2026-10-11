@@ -12,6 +12,7 @@ data class PlayerState(
     val selectedWordContext: SubtitleLine? = null,
     val translation: String? = null,
     val isTranslating: Boolean = false,
+    val isSaving: Boolean = false,
     val error: String? = null
 )
 
