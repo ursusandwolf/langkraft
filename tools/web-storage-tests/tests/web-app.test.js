@@ -43,8 +43,12 @@ const errors=[];
 let page;
 try {
   page=await browser.newPage({viewport:{width:1200,height:800}});
-  page.on('pageerror',e=>errors.push(e.message||e.name));
+  page.on('pageerror',e=>errors.push(e.stack||e.message||e.name));
   await page.addInitScript(()=>{
+    // Reproduce POSIX locale values from a headless Linux environment. The app
+    // must normalize these before Compose constructs Intl.Locale instances.
+    Object.defineProperty(navigator,'languages',{configurable:true,value:['C','de_DE.UTF-8','en-US']});
+    Object.defineProperty(navigator,'language',{configurable:true,value:'C'});
     const original=HTMLMediaElement.prototype.load;
     HTMLMediaElement.prototype.load=function(){window.activeAudio=this;return original.call(this);};
   });
@@ -53,6 +57,8 @@ try {
   const query=(sql,params=[])=>page.evaluate(async({sql,params})=>{const client=window.storage.createDatabaseClient();try{return await client.request('exec',sql,params);}finally{client.close();}},{sql,params});
   const waitQuery=async(sql,predicate)=>{const deadline=Date.now()+12000;while(Date.now()<deadline){const rows=await query(sql);if(predicate(rows))return rows;await page.waitForTimeout(100);}throw new Error('Timed out: '+sql);};
   await open();
+  assert.deepEqual(await page.evaluate(()=>Array.from(navigator.languages)),['de-DE','en-US']);
+  assert.equal(await page.evaluate(()=>navigator.language),'de-DE');
   await page.screenshot({path:path.join(artifacts,'stats.png')});
   // Software rendering on fresh Linux runners may paint after the Kotlin startup callback.
   const input=page.getByRole('textbox',{name:'YouTube URL'});
