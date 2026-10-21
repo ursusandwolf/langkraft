@@ -45,20 +45,52 @@ CREATE TABLE Vocabulary (
 selectAllContent:
 SELECT * FROM Content ORDER BY createdAt DESC;
 
-insertContent:
-INSERT OR REPLACE INTO Content(id, title, audioUrl, localAudioPath, sourceUrl, durationSeconds, createdAt)
-VALUES (?, ?, ?, ?, ?, ?, ?);
+selectContentById:
+SELECT * FROM Content WHERE id = ?;
+
+selectLibrary:
+SELECT Content.*, SubtitleLine.id AS subtitleId, SubtitleLine.startMs,
+       SubtitleLine.endMs, SubtitleLine.textDe, SubtitleLine.textEn
+FROM Content LEFT JOIN SubtitleLine ON Content.id = SubtitleLine.contentId
+ORDER BY Content.createdAt DESC, Content.id, SubtitleLine.startMs, SubtitleLine.id;
+
+insertContent {
+    UPDATE Content SET title = :title, audioUrl = :audioUrl,
+        localAudioPath = :localAudioPath, sourceUrl = :sourceUrl,
+        durationSeconds = :durationSeconds WHERE id = :id;
+    INSERT OR IGNORE INTO Content(id, title, audioUrl, localAudioPath, sourceUrl, durationSeconds, createdAt)
+    VALUES (:id, :title, :audioUrl, :localAudioPath, :sourceUrl, :durationSeconds, :createdAt);
+}
 
 selectSubtitlesForContent:
 SELECT * FROM SubtitleLine WHERE contentId = ? ORDER BY startMs ASC;
 
-insertSubtitleLine:
-INSERT OR REPLACE INTO SubtitleLine(id, contentId, startMs, endMs, textDe, textEn)
-VALUES (?, ?, ?, ?, ?, ?);
+selectConflictingSubtitles:
+SELECT id FROM SubtitleLine WHERE id IN :ids AND contentId != :contentId;
 
-upsertWord:
-INSERT OR REPLACE INTO Vocabulary(id, word, lemma, translation, contextSentence, contentId, subtitleLineId, addedAt, status)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+deleteObsoleteSubtitles:
+DELETE FROM SubtitleLine WHERE contentId = :contentId AND id NOT IN :ids;
+
+deleteSubtitlesForContent:
+DELETE FROM SubtitleLine WHERE contentId = ?;
+
+insertSubtitleLine {
+    UPDATE SubtitleLine SET contentId = :contentId, startMs = :startMs,
+        endMs = :endMs, textDe = :textDe, textEn = :textEn WHERE id = :id;
+    INSERT OR IGNORE INTO SubtitleLine(id, contentId, startMs, endMs, textDe, textEn)
+    VALUES (:id, :contentId, :startMs, :endMs, :textDe, :textEn);
+}
+
+upsertWord {
+    UPDATE Vocabulary SET word = :word, lemma = :lemma, translation = :translation,
+        contextSentence = :contextSentence, contentId = :contentId,
+        subtitleLineId = :subtitleLineId, status = :status WHERE id = :id;
+    INSERT OR IGNORE INTO Vocabulary(id, word, lemma, translation, contextSentence, contentId, subtitleLineId, addedAt, status)
+    VALUES (:id, :word, :lemma, :translation, :contextSentence, :contentId, :subtitleLineId, :addedAt, :status);
+}
 
 selectVocabularyToReview:
 SELECT * FROM Vocabulary WHERE nextReviewAt <= ? OR nextReviewAt IS NULL ORDER BY nextReviewAt ASC;
+
+deleteWord:
+DELETE FROM Vocabulary WHERE id = ?;

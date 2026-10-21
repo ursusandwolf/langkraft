@@ -3,12 +3,13 @@ package com.langkraft.ui.player
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.langkraft.domain.model.VocabularyWord
 import com.langkraft.domain.model.SubtitleLine
-import java.util.UUID
+import kotlin.random.Random
 
 @Composable
 fun WordDetailsSheet(
@@ -17,8 +18,14 @@ fun WordDetailsSheet(
     translation: String?,
     isSaving: Boolean,
     onSave: (VocabularyWord) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    isTranslating: Boolean = translation == null,
+    error: String? = null,
+    onRetry: () -> Unit = {}
 ) {
+    val wordId = remember(word, contextLine?.id) {
+        Random.Default.nextBytes(16).joinToString("") { (it.toInt() and 0xff).toString(16).padStart(2, '0') }
+    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -52,10 +59,16 @@ fun WordDetailsSheet(
             text = "Translation:",
             style = MaterialTheme.typography.overline
         )
-        if (translation == null) {
+        if (isTranslating) {
             CircularProgressIndicator(modifier = Modifier.size(24.dp))
-        } else {
+        } else if (translation != null) {
             Text(text = translation, style = MaterialTheme.typography.h6)
+        }
+        if (error != null) {
+            Text(text = error, color = MaterialTheme.colors.error)
+            if (translation == null) {
+                TextButton(onClick = onRetry) { Text("RETRY TRANSLATION") }
+            }
         }
         
         Spacer(modifier = Modifier.height(24.dp))
@@ -64,7 +77,7 @@ fun WordDetailsSheet(
             onClick = {
                 if (translation != null && contextLine != null) {
                     onSave(VocabularyWord(
-                        id = UUID.randomUUID().toString(),
+                        id = wordId,
                         word = word,
                         lemma = null, // Future: AI provides lemma
                         translation = translation,
@@ -74,7 +87,7 @@ fun WordDetailsSheet(
                     ))
                 }
             },
-            enabled = translation != null && !isSaving,
+            enabled = translation != null && contextLine != null && !isSaving && !isTranslating,
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("ADD TO DICTIONARY")

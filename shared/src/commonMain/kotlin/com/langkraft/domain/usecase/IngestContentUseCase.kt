@@ -2,6 +2,7 @@ package com.langkraft.domain.usecase
 
 import com.langkraft.domain.model.ImmersionContent
 import com.langkraft.domain.repository.ContentRepository
+import kotlinx.coroutines.CancellationException
 
 /**
  * Orchestrates the process of taking a YouTube URL, 
@@ -10,7 +11,7 @@ import com.langkraft.domain.repository.ContentRepository
 class IngestContentUseCase(
     private val contentRepository: ContentRepository
 ) {
-    suspend operator fun invoke(youtubeUrl: String): Result<ImmersionContent> = runCatching {
+    suspend operator fun invoke(youtubeUrl: String): Result<ImmersionContent> = try {
         // 1. Fetch metadata and links from Backend
         val remoteContent = contentRepository.fetchFromYouTube(youtubeUrl)
         
@@ -24,6 +25,10 @@ class IngestContentUseCase(
         val updatedContent = remoteContent.copy(localAudioPath = localPath)
         contentRepository.saveContent(updatedContent)
         
-        updatedContent
+        Result.success(updatedContent)
+    } catch (exception: CancellationException) {
+        throw exception
+    } catch (exception: Exception) {
+        Result.failure(exception)
     }
 }

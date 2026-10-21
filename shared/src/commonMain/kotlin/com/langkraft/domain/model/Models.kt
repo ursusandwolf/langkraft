@@ -1,5 +1,8 @@
 package com.langkraft.domain.model
 
+import kotlinx.serialization.Serializable
+
+@Serializable
 data class ImmersionContent(
     val id: String,
     val title: String,
@@ -10,6 +13,7 @@ data class ImmersionContent(
     val subtitles: List<SubtitleLine> = emptyList()
 )
 
+@Serializable
 data class SubtitleLine(
     val id: String,
     val contentId: String,
@@ -19,6 +23,7 @@ data class SubtitleLine(
     val textEn: String?
 )
 
+@Serializable
 data class VocabularyWord(
     val id: String,
     val word: String,
@@ -30,6 +35,7 @@ data class VocabularyWord(
     val status: WordStatus = WordStatus.NEW
 )
 
+@Serializable
 enum class WordStatus {
     NEW, LEARNING, MASTERED
 }

@@ -1,0 +1,115 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  jvm:
+    name: JVM tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+      # Invoke via bash because the wrapper may be checked out without +x on Windows.
+      - name: Run shared and backend regression tests
+        run: bash ./gradlew --no-daemon --stacktrace :shared:desktopTest :backend:test
+      - name: Save JVM reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: jvm-test-reports
+          retention-days: 14
+          path: |
+            shared/build/reports/tests/desktopTest/
+            shared/build/test-results/desktopTest/
+            backend/build/reports/tests/test/
+            backend/build/test-results/test/
+            build/reports/problems/
+
+  web:
+    name: Web build and browser tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: tools/web-storage-tests/package-lock.json
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+      - name: Install browser test dependencies
+        working-directory: tools/web-storage-tests
+        run: npm ci
+      - name: Install Chromium and system dependencies
+        working-directory: tools/web-storage-tests
+        run: npx playwright install --with-deps chromium
+      - name: Select Chromium for Kotlin browser tests
+        working-directory: tools/web-storage-tests
+        run: echo "CHROME_BIN=$(node --input-type=module -e 'import { chromium } from "playwright"; console.log(chromium.executablePath())')" >> "$GITHUB_ENV"
+      - name: Compile JavaScript and run Kotlin browser tests
+        run: bash ./gradlew --no-daemon --stacktrace :shared:compileKotlinJs :shared:compileTestKotlinJs :shared:jsBrowserTest
+      # Kotlin 1.9 uses the same compileSync directory for both executable modes.
+      # Keep their Gradle invocations separate to avoid overlapping task outputs.
+      - name: Build development application
+        run: bash ./gradlew --no-daemon --stacktrace :webApp:jsBrowserDevelopmentWebpack
+      - name: Verify storage persistence and cleanup
+        working-directory: tools/web-storage-tests
+        run: npm test
+      - name: Verify development application
+        working-directory: tools/web-storage-tests
+        env:
+          WEB_APP_ARTIFACTS: build/app-development
+        run: npm run test:app
+      - name: Build production application
+        run: bash ./gradlew --no-daemon --stacktrace :webApp:jsBrowserDistribution
+      - name: Verify production application
+        working-directory: tools/web-storage-tests
+        env:
+          WEB_APP_BUNDLE: ../../webApp/build/dist/js/productionExecutable
+          WEB_APP_ARTIFACTS: build/app-production
+        run: npm run test:app
+      - name: Save browser reports and screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: web-test-reports
+          retention-days: 14
+          path: |
+            shared/build/reports/tests/jsBrowserTest/
+            shared/build/test-results/jsBrowserTest/
+            tools/web-storage-tests/build/app-development/
+            tools/web-storage-tests/build/app-production/
+            build/reports/problems/
+      - name: Save production application
+        uses: actions/upload-artifact@v7
+        with:
+          name: web-production
+          retention-days: 14
+          if-no-files-found: error
+          path: webApp/build/dist/js/productionExecutable/
