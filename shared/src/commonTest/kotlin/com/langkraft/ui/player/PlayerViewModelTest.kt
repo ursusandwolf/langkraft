@@ -1,6 +1,8 @@
 package com.langkraft.ui.player
 
 import com.langkraft.audio.AudioPlayer
+import com.langkraft.audio.AudioPlayerError
+import com.langkraft.audio.AudioErrorReason
 import com.langkraft.domain.ai.LinguisticAssistant
 import com.langkraft.domain.model.ImmersionContent
 import com.langkraft.domain.model.SubtitleLine
@@ -29,6 +31,123 @@ class PlayerViewModelTest {
     private val content = ImmersionContent("content", "Title", "https://host/audio.opus",
         "/offline/audio.opus", "https://youtu.be/video", 1, listOf(line))
     private val word = VocabularyWord("word", "Tag", null, "day", line.textDe, "content", line.id)
+
+    @Test
+    fun missingLocalAudioWaitsForExplicitOnlineActionWithoutChangingSavedContent() = runTest {
+        val f = fixture()
+        f.vm.onEvent(PlayerEvent.LoadContent("content"))
+        runCurrent()
+        f.audio.fail(AudioErrorReason.LOCAL_ASSET_UNAVAILABLE)
+        runCurrent()
+        assertTrue(f.vm.state.value.canPlayOnline)
+        assertEquals(content.localAudioPath, f.audio.loadedUrl)
+        assertEquals(1, f.audio.loads.size)
+        f.vm.onEvent(PlayerEvent.PlayPause)
+        assertFalse(f.audio.isPlaying.value)
+        f.vm.onEvent(PlayerEvent.PlayOnline)
+        runCurrent()
+        assertEquals(content.audioUrl, f.audio.loadedUrl)
+        assertTrue(f.audio.isPlaying.value)
+        assertTrue(f.vm.state.value.isUsingRemoteAudio)
+        assertFalse(f.vm.state.value.canPlayOnline)
+        assertNull(f.vm.state.value.error)
+        assertEquals(content.localAudioPath, f.vm.state.value.content!!.localAudioPath)
+        assertTrue(f.savedContents.isEmpty())
+        f.vm.onEvent(PlayerEvent.PlayOnline)
+        assertEquals(2, f.audio.loads.size)
+    }
+
+    @Test
+    fun remoteFailureDoesNotLoopAndExplicitRetryKeepsRemoteSource() = runTest {
+        val f = fixture()
+        f.vm.onEvent(PlayerEvent.LoadContent("content"))
+        runCurrent()
+        f.audio.fail(AudioErrorReason.LOCAL_ASSET_UNAVAILABLE)
+        runCurrent()
+        f.vm.onEvent(PlayerEvent.PlayOnline)
+        f.audio.fail(AudioErrorReason.SOURCE_ERROR)
+        runCurrent()
+        assertEquals("Audio failure", f.vm.state.value.error)
+        assertFalse(f.vm.state.value.canPlayOnline)
+        assertEquals(2, f.audio.loads.size)
+        f.vm.onEvent(PlayerEvent.PlayOnline)
+        runCurrent()
+        assertEquals(2, f.audio.loads.size)
+        f.vm.retryLoad()
+        runCurrent()
+        assertEquals(content.audioUrl, f.audio.loadedUrl)
+        assertEquals(3, f.audio.loads.size)
+        assertTrue(f.savedContents.isEmpty())
+    }
+
+    @Test
+    fun staleAudioFailureCannotAffectLoadingOrNewContent() = runTest {
+        val next = CompletableDeferred<ImmersionContent>()
+        val f = fixture(load = { if (it == "next") next.await() else content })
+        f.vm.onEvent(PlayerEvent.LoadContent("content"))
+        runCurrent()
+        val oldRequest = f.audio.requestId
+        f.vm.onEvent(PlayerEvent.LoadContent("next"))
+        f.audio.fail(AudioErrorReason.LOCAL_ASSET_UNAVAILABLE, oldRequest)
+        runCurrent()
+        assertTrue(f.vm.state.value.isLoading)
+        assertNull(f.vm.state.value.error)
+        assertFalse(f.vm.state.value.canPlayOnline)
+        next.complete(content.copy(id = "next"))
+        runCurrent()
+        f.audio.fail(AudioErrorReason.SOURCE_ERROR, oldRequest)
+        runCurrent()
+        assertEquals("next", f.vm.state.value.content!!.id)
+        assertNull(f.vm.state.value.error)
+        assertFalse(f.vm.state.value.canPlayOnline)
+    }
+
+    @Test
+    fun lateLocalFailureDoesNotReplaceSuccessfulRemoteLoad() = runTest {
+        val f = fixture()
+        f.vm.onEvent(PlayerEvent.LoadContent("content"))
+        runCurrent()
+        val oldRequest = f.audio.requestId
+        f.audio.fail(AudioErrorReason.LOCAL_ASSET_UNAVAILABLE)
+        runCurrent()
+        f.vm.onEvent(PlayerEvent.PlayOnline)
+        f.audio.fail(AudioErrorReason.LOCAL_ASSET_UNAVAILABLE, oldRequest)
+        runCurrent()
+        assertNull(f.vm.state.value.error)
+        assertFalse(f.vm.state.value.canPlayOnline)
+        assertTrue(f.vm.state.value.isUsingRemoteAudio)
+    }
+
+    @Test
+    fun autoplayAndTemporaryStorageErrorsDoNotOfferOnlineFallback() = runTest {
+        for (reason in listOf(AudioErrorReason.AUTOPLAY_BLOCKED, AudioErrorReason.STORAGE_ERROR)) {
+            val f = fixture()
+            f.vm.onEvent(PlayerEvent.LoadContent("content"))
+            runCurrent()
+            f.audio.fail(reason)
+            runCurrent()
+            assertNotNull(f.vm.state.value.error)
+            assertFalse(f.vm.state.value.canPlayOnline)
+            f.vm.onEvent(PlayerEvent.PlayOnline)
+            assertEquals(1, f.audio.loads.size)
+            assertEquals(content.localAudioPath, f.audio.loadedUrl)
+            assertTrue(f.savedContents.isEmpty())
+            f.vm.release()
+        }
+    }
+
+    @Test
+    fun remoteOnlyContentCannotOfferFallbackToTheSameSource() = runTest {
+        val f = fixture(load = { content.copy(localAudioPath = null) })
+        f.vm.onEvent(PlayerEvent.LoadContent("content"))
+        runCurrent()
+        f.audio.fail(AudioErrorReason.LOCAL_ASSET_UNAVAILABLE)
+        runCurrent()
+        assertTrue(f.vm.state.value.isUsingRemoteAudio)
+        assertFalse(f.vm.state.value.canPlayOnline)
+        f.vm.onEvent(PlayerEvent.PlayOnline)
+        assertEquals(1, f.audio.loads.size)
+    }
 
     @Test
     fun loadsOfflineAudioAndUsesEngineStateForPlaybackAndSeek() = runTest {
@@ -167,8 +286,10 @@ class PlayerViewModelTest {
     @Test
     fun audioEngineFailureIsVisibleToTheUser() = runTest {
         val fixture = fixture()
+        fixture.vm.onEvent(PlayerEvent.LoadContent("content"))
         runCurrent()
-        fixture.audio.error.value = "Audio download failed"
+        fixture.audio.error.value = AudioPlayerError(fixture.audio.requestId,
+            AudioErrorReason.SOURCE_ERROR, "Audio download failed")
         runCurrent()
         assertEquals("Audio download failed", fixture.vm.state.value.error)
     }
@@ -179,10 +300,11 @@ class PlayerViewModelTest {
         save: suspend (VocabularyWord) -> Unit = {}
     ): Fixture {
         val audio = FakeAudioPlayer()
+        val savedContents = mutableListOf<ImmersionContent>()
         val repository = object : ContentRepository {
             override fun getAllContent() = flowOf(listOf(content))
             override suspend fun getContentById(id: String) = load(id)
-            override suspend fun saveContent(content: ImmersionContent) = Unit
+            override suspend fun saveContent(content: ImmersionContent) { savedContents += content }
             override suspend fun downloadAudio(content: ImmersionContent) = "/local"
             override suspend fun fetchFromYouTube(url: String) = content
         }
@@ -194,18 +316,29 @@ class PlayerViewModelTest {
         val assistant = object : LinguisticAssistant {
             override suspend fun translateWithContext(word: String, context: String) = translate(word, context)
         }
-        return Fixture(PlayerViewModel(repository, vocabulary, assistant, backgroundScope, audio), audio)
+        return Fixture(PlayerViewModel(repository, vocabulary, assistant, backgroundScope, audio), audio, savedContents)
     }
 
-    private data class Fixture(val vm: PlayerViewModel, val audio: FakeAudioPlayer)
+    private data class Fixture(val vm: PlayerViewModel, val audio: FakeAudioPlayer,
+        val savedContents: List<ImmersionContent>)
 
     private class FakeAudioPlayer : AudioPlayer {
         override val currentTimeMs = MutableStateFlow(0L)
         override val isPlaying = MutableStateFlow(false)
-        override val error = MutableStateFlow<String?>(null)
+        override val error = MutableStateFlow<AudioPlayerError?>(null)
+        val loads = mutableListOf<Pair<String, Long>>()
+        val requestId get() = loads.last().second
         var loadedUrl: String? = null
         var released = false
-        override fun load(url: String) { loadedUrl = url; currentTimeMs.value = 0 }
+        override fun load(url: String, requestId: Long) {
+            loads += url to requestId
+            loadedUrl = url
+            currentTimeMs.value = 0
+            error.value = null
+        }
+        fun fail(reason: AudioErrorReason, requestId: Long = this.requestId) {
+            error.value = AudioPlayerError(requestId, reason, "Audio failure")
+        }
         override fun play() { isPlaying.value = true }
         override fun pause() { isPlaying.value = false }
         override fun seekTo(timeMs: Long) { currentTimeMs.value = timeMs }

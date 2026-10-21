@@ -22,6 +22,8 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 class ContentApiException(val statusCode: Int) : Exception("Content service returned HTTP $statusCode")
+class UnexpectedAudioContentTypeException(val mediaType: String) :
+    Exception("Expected audio but received $mediaType")
 
 class ContentApi(
     private val client: HttpClient,
@@ -49,8 +51,20 @@ class ContentApi(
     suspend fun download(content: ImmersionContent, storage: AudioStorage): String =
         client.prepareGet(resolve(content.audioUrl)).execute { response ->
             checkResponse(response)
+            checkAudioContentType(response)
             storage.store(content.id, response.bodyAsChannel(), response.contentLength())
         }
+
+    private fun checkAudioContentType(response: HttpResponse) {
+        // Missing/generic binary MIME remains compatible with media servers. This
+        // guard rejects explicit non-audio responses; it does not validate codecs.
+        val type = response.contentType() ?: return
+        if (!type.contentType.equals("audio", ignoreCase = true) &&
+            !type.match(ContentType.Application.OctetStream) &&
+            !type.match(ContentType("application", "ogg"))) {
+            throw UnexpectedAudioContentTypeException(type.toString())
+        }
+    }
 
     private fun resolve(url: String): String = URLBuilder(baseUrl).takeFrom(url).buildString()
 

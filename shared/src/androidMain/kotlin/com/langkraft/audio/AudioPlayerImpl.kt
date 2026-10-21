@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.cancel
+import java.io.FileNotFoundException
 
 class AudioPlayerImpl(context: Context) : AudioPlayer {
     private val exoPlayer = ExoPlayer.Builder(context).build()
@@ -23,18 +24,16 @@ class AudioPlayerImpl(context: Context) : AudioPlayer {
     
     private val _isPlaying = MutableStateFlow(false)
     override val isPlaying: StateFlow<Boolean> = _isPlaying
-    private val _error = MutableStateFlow<String?>(null)
-    override val error: StateFlow<String?> = _error
+    private val _error = MutableStateFlow<AudioPlayerError?>(null)
+    override val error: StateFlow<AudioPlayerError?> = _error
+    private var errorListener: Player.Listener? = null
+    private var generation = 0L
 
     private var timerJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.Main)
 
     init {
         exoPlayer.addListener(object : Player.Listener {
-            override fun onPlayerError(error: PlaybackException) {
-                _error.value = error.message ?: "Unable to play audio"
-            }
-
             override fun onPositionDiscontinuity(
                 oldPosition: Player.PositionInfo,
                 newPosition: Player.PositionInfo,
@@ -64,7 +63,20 @@ class AudioPlayerImpl(context: Context) : AudioPlayer {
         timerJob?.cancel()
     }
 
-    override fun load(url: String) {
+    override fun load(url: String, requestId: Long) {
+        val sourceGeneration = ++generation
+        errorListener?.let(exoPlayer::removeListener)
+        errorListener = object : Player.Listener {
+            override fun onPlayerError(error: PlaybackException) {
+                if (sourceGeneration != generation) return
+                val missingLocal = !url.startsWith("http://", ignoreCase = true) &&
+                    !url.startsWith("https://", ignoreCase = true) &&
+                    generateSequence<Throwable>(error) { it.cause }.any { it is FileNotFoundException }
+                _error.value = AudioPlayerError(requestId,
+                    if (missingLocal) AudioErrorReason.LOCAL_ASSET_UNAVAILABLE else AudioErrorReason.SOURCE_ERROR,
+                    error.message ?: "Unable to play audio")
+            }
+        }.also(exoPlayer::addListener)
         _error.value = null
         _currentTimeMs.value = 0
         val mediaItem = MediaItem.fromUri(url)
@@ -86,6 +98,9 @@ class AudioPlayerImpl(context: Context) : AudioPlayer {
     }
 
     override fun release() {
+        generation++
+        errorListener?.let(exoPlayer::removeListener)
+        errorListener = null
         stopTimer()
         scope.cancel()
         exoPlayer.release()

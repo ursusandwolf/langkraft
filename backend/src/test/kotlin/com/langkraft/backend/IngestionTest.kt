@@ -237,9 +237,11 @@ class IngestionTest {
         val path = url.removePrefix("https://media.example")
         val media = client.get(path)
         assertEquals(HttpStatusCode.OK, media.status)
+        assertEquals("audio/ogg", media.headers[HttpHeaders.ContentType])
         assertEquals("audio-data", media.bodyAsText())
         val range = client.get(path) { header(HttpHeaders.Range, "bytes=0-4") }
         assertEquals(HttpStatusCode.PartialContent, range.status)
+        assertEquals("audio/ogg", range.headers[HttpHeaders.ContentType])
         assertEquals("audio", range.bodyAsText())
         assertEquals(HttpStatusCode.NotFound, client.get("/api/media/invalid.opus").status)
     }

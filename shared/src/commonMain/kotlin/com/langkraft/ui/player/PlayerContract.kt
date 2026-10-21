@@ -14,12 +14,15 @@ data class PlayerState(
     val isTranslating: Boolean = false,
     val isSaving: Boolean = false,
     val wordError: String? = null,
-    val error: String? = null
+    val error: String? = null,
+    val canPlayOnline: Boolean = false,
+    val isUsingRemoteAudio: Boolean = false
 )
 
 sealed class PlayerEvent {
     data class LoadContent(val contentId: String) : PlayerEvent()
     object PlayPause : PlayerEvent()
+    object PlayOnline : PlayerEvent()
     data class SeekTo(val timeMs: Long) : PlayerEvent()
     data class WordClicked(val word: String, val line: SubtitleLine) : PlayerEvent()
     object DismissWordDetails : PlayerEvent()

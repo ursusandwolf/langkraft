@@ -144,8 +144,57 @@ try {
       finally { await window.databaseRequest(worker, "close"); worker.terminate(); }
     });
     assert.deepEqual(restoredWords, saved.words);
+
+    // Keep SQLite, delete only its audio object, and recover via an explicit UI action.
+    await page.unroute("**/api/**");
+    await page.evaluate(async location => {
+      await window.storage.abortAudio(location.slice("indexeddb-audio:".length));
+    }, saved.content[0][1]);
+    let remoteRequests = 0;
+    page.on("request", request => { if (request.url().endsWith("/api/media/test.wav")) remoteRequests++; });
+    await page.mouse.click(1065, 28); // Library.
+    await page.getByRole("textbox", { name: /YouTube/ }).waitFor();
+    await page.waitForTimeout(300);
+    await page.mouse.click(75, 355); // Open content with its now-missing local asset.
+    await page.waitForFunction(() => window.testAudio && !window.testAudio.getAttribute("src"));
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: path.join(artifacts, "missing-local-audio.png") });
+    assert.equal(remoteRequests, 0, "Missing local audio must not silently start a network request");
+    await page.mouse.click(120, 225); // Play online, in the error action row.
+    await page.waitForFunction(() => window.testAudio.src.endsWith("/api/media/test.wav"));
+    await page.waitForFunction(() => !window.testAudio.paused && window.testAudio.currentTime > 0);
+    assert.equal(remoteRequests, 1);
+    await page.screenshot({ path: path.join(artifacts, "online-fallback.png") });
+    const localReference = await page.evaluate(async () => {
+      const worker = window.storage.createDatabaseWorker();
+      try { return await window.databaseRequest(worker, "exec", "SELECT localAudioPath FROM Content WHERE id='web-fixture'"); }
+      finally { await window.databaseRequest(worker, "close"); worker.terminate(); }
+    });
+    assert.equal(localReference[0][0], saved.content[0][1], "Fallback must not overwrite the saved local reference");
+
+    // A failed remote source ends in an error; it does not fall back again or loop.
+    await page.route("**/api/media/test.wav", route => route.fulfill({ status: 503, contentType: "text/plain", body: "Unavailable" }));
+    await page.mouse.click(1065, 28);
+    await page.getByRole("textbox", { name: /YouTube/ }).waitFor();
+    await page.waitForTimeout(300);
+    await page.mouse.click(75, 355);
+    await page.waitForTimeout(500);
+    const failedRemote = page.waitForResponse(response => response.url().endsWith("/api/media/test.wav"));
+    await page.mouse.click(120, 225);
+    assert.equal((await failedRemote).status(), 503);
+    await page.waitForFunction(() => window.testAudio.error != null);
+    await page.waitForTimeout(700);
+    assert.equal(remoteRequests, 2, "Remote failure must not cause automatic repeated requests");
+    await page.screenshot({ path: path.join(artifacts, "online-fallback-error.png") });
+    const retriedRemote = page.waitForResponse(response => response.url().endsWith("/api/media/test.wav"));
+    await page.mouse.click(45, 225); // Explicit RETRY keeps the remote source.
+    assert.equal((await retriedRemote).status(), 503);
+    await page.waitForTimeout(500);
+    assert.equal(remoteRequests, 3);
     assert.deepEqual(errors, []);
     console.log("PASS: import error/retry, playback, save word, release player, reload and offline audio");
+    console.log("PASS: missing local audio waits for explicit online playback and preserves SQLite reference");
+    console.log("PASS: failed remote audio does not loop and explicit retry keeps the remote source");
     await verifyLegacyMigration(browser, `http://127.0.0.1:${server.address().port}`);
   }
 } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }

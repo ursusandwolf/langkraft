@@ -43,7 +43,7 @@ fun ImmersionPlayerView(
         bottomBar = {
             PlayerControlBar(
                 isPlaying = state.isPlaying,
-                enabled = state.content != null && !state.isLoading,
+                enabled = state.content != null && !state.isLoading && state.error == null,
                 onPlayPause = { viewModel.onEvent(PlayerEvent.PlayPause) }
             )
         }
@@ -51,7 +51,18 @@ fun ImmersionPlayerView(
         Column(modifier = Modifier.fillMaxSize().padding(padding)) {
             state.error?.let { error ->
                 Text(error, color = MaterialTheme.colors.error, modifier = Modifier.padding(16.dp))
-                TextButton(onClick = viewModel::retryLoad) { Text("RETRY") }
+                Row {
+                    if (state.canPlayOnline) {
+                        TextButton(onClick = { viewModel.onEvent(PlayerEvent.PlayOnline) }) {
+                            Text("Воспроизвести по сети")
+                        }
+                    }
+                    TextButton(onClick = viewModel::retryLoad) { Text("RETRY") }
+                }
+            }
+            if (state.isUsingRemoteAudio && state.content != null) {
+                Text("Аудио по сети", modifier = Modifier.padding(horizontal = 16.dp),
+                    style = MaterialTheme.typography.caption)
             }
             if (state.isLoading) {
                 CircularProgressIndicator(modifier = Modifier.fillMaxSize().wrapContentSize())

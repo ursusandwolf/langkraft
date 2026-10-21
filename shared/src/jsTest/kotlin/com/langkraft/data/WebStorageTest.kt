@@ -2,6 +2,7 @@ package com.langkraft.data
 
 import app.cash.sqldelight.async.coroutines.awaitAsOneOrNull
 import com.langkraft.audio.AudioPlayerImpl
+import com.langkraft.audio.AudioErrorReason
 import com.langkraft.data.audio.IndexedDbAudioStorage
 import com.langkraft.data.database.createWebDatabase
 import com.langkraft.data.remote.ContentApi
@@ -36,6 +37,36 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class WebStorageTest {
+    @Test
+    fun missingLocalAudioReportsItsReasonAndLoadRequest() = runTest {
+        val player = AudioPlayerImpl()
+        try {
+            player.load("indexeddb-audio:missing-${Random.nextInt()}", requestId = 42)
+            val failure = withContext(Dispatchers.Default) {
+                withTimeout(10_000) { player.error.first { it != null }!! }
+            }
+            assertEquals(42L, failure.requestId)
+            assertEquals(AudioErrorReason.LOCAL_ASSET_UNAVAILABLE, failure.reason)
+            assertFalse(player.isPlaying.value)
+        } finally { player.release() }
+    }
+
+    @Test
+    fun aNewSourceIgnoresAMissingLocalReadFromThePreviousRequest() = runTest {
+        val bytes = waveBytes()
+        val location = IndexedDbAudioStorage().store("replacement", ByteReadChannel(bytes), bytes.size.toLong())
+        val player = AudioPlayerImpl()
+        try {
+            player.load("indexeddb-audio:missing-${Random.nextInt()}", requestId = 1)
+            player.load(location, requestId = 2)
+            player.seekTo(100)
+            withContext(Dispatchers.Default) {
+                withTimeout(10_000) { player.currentTimeMs.first { it >= 100 } }
+            }
+            assertNull(player.error.value)
+        } finally { player.release() }
+    }
+
     @Test
     fun equalStartTimesKeepInputOrderAfterUpdatesAndWorkerReopening() = runTest {
         val id = "ties-${Random.nextInt(1, Int.MAX_VALUE)}"
@@ -132,6 +163,21 @@ class WebStorageTest {
 
     @Test
     fun playerRestoresSavedAudioAndSeeksAfterMetadataLoads() = runTest {
+        val data = waveBytes()
+        val location = IndexedDbAudioStorage().store("seek-test", ByteReadChannel(data), data.size.toLong())
+        val player = AudioPlayerImpl()
+        try {
+            player.load(location)
+            player.seekTo(100)
+            withContext(Dispatchers.Default) {
+                withTimeout(10000) { player.currentTimeMs.first { it >= 100 } }
+            }
+            assertNull(player.error.value)
+        } finally { player.release() }
+        assertFalse(player.isPlaying.value)
+    }
+
+    private fun waveBytes(): ByteArray {
         // A short PCM WAV keeps this test independent of ffmpeg and codec tooling.
         val data = ByteArray(44 + 8000)
         fun text(offset: Int, value: String) {
@@ -144,17 +190,7 @@ class WebStorageTest {
         text(12, "fmt "); number(16, 16, 4); number(20, 1, 2); number(22, 1, 2)
         number(24, 8000, 4); number(28, 16000, 4); number(32, 2, 2); number(34, 16, 2)
         text(36, "data"); number(40, data.size - 44, 4)
-        val location = IndexedDbAudioStorage().store("seek-test", ByteReadChannel(data), data.size.toLong())
-        val player = AudioPlayerImpl()
-        try {
-            player.load(location)
-            player.seekTo(100)
-            withContext(Dispatchers.Default) {
-                withTimeout(10000) { player.currentTimeMs.first { it >= 100 } }
-            }
-            assertNull(player.error.value)
-        } finally { player.release() }
-        assertFalse(player.isPlaying.value)
+        return data
     }
 
     @Test

@@ -15,16 +15,17 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.w3c.dom.HTMLAudioElement
+import org.w3c.dom.events.Event
 import org.w3c.dom.url.URL
 
 class AudioPlayerImpl : AudioPlayer {
-    private val audio = window.document.createElement("audio") as HTMLAudioElement
+    private var audio = window.document.createElement("audio") as HTMLAudioElement
     private val _currentTimeMs = MutableStateFlow(0L)
     override val currentTimeMs: StateFlow<Long> = _currentTimeMs
     private val _isPlaying = MutableStateFlow(false)
     override val isPlaying: StateFlow<Boolean> = _isPlaying
-    private val _error = MutableStateFlow<String?>(null)
-    override val error: StateFlow<String?> = _error
+    private val _error = MutableStateFlow<AudioPlayerError?>(null)
+    override val error: StateFlow<AudioPlayerError?> = _error
     private val scope = CoroutineScope(Dispatchers.Main)
     private var timerJob: Job? = null
     private var loadJob: Job? = null
@@ -33,20 +34,45 @@ class AudioPlayerImpl : AudioPlayer {
     private var pendingSeek: Long? = null
     private var generation = 0
     private var released = false
+    private var requestId = 0L
+    private var sourceErrorListener: ((Event) -> Unit)? = null
 
-    init {
-        audio.onplay = { _isPlaying.value = true; startTimer() }
-        audio.onpause = { _isPlaying.value = false; timerJob?.cancel() }
-        audio.onended = {
-            _isPlaying.value = false
-            _currentTimeMs.value = (audio.currentTime * 1000).toLong()
-            timerJob?.cancel()
+    private fun bindEvents(element: HTMLAudioElement, sourceGeneration: Int, sourceRequest: Long) {
+        fun isCurrent() = !released && generation == sourceGeneration
+        element.onplay = { if (isCurrent()) { _isPlaying.value = true; startTimer() } }
+        element.onpause = { if (isCurrent()) { _isPlaying.value = false; timerJob?.cancel() } }
+        element.onended = {
+            if (isCurrent()) {
+                _isPlaying.value = false
+                _currentTimeMs.value = (element.currentTime * 1000).toLong()
+                timerJob?.cancel()
+            }
         }
-        audio.onseeked = { _currentTimeMs.value = (audio.currentTime * 1000).toLong(); Unit }
-        audio.onloadedmetadata = { applyPendingSeek(); Unit }
-        audio.addEventListener("error", {
-            if (!released) _error.value = "Unable to load audio"
-        })
+        element.onseeked = { if (isCurrent()) _currentTimeMs.value = (element.currentTime * 1000).toLong(); Unit }
+        element.onloadedmetadata = { if (isCurrent()) applyPendingSeek(); Unit }
+        sourceErrorListener = {
+            if (isCurrent() && element.error != null) {
+                timerJob?.cancel()
+                _isPlaying.value = false
+                _error.value = AudioPlayerError(sourceRequest, AudioErrorReason.SOURCE_ERROR, "Unable to load audio")
+            }
+        }
+        element.addEventListener("error", requireNotNull(sourceErrorListener))
+    }
+
+    private fun discardSource() {
+        sourceErrorListener?.let { audio.removeEventListener("error", it) }
+        sourceErrorListener = null
+        audio.onplay = null
+        audio.onpause = null
+        audio.onended = null
+        audio.onseeked = null
+        audio.onloadedmetadata = null
+        audio.pause()
+        audio.removeAttribute("src")
+        audio.load()
+        timerJob?.cancel()
+        _isPlaying.value = false
     }
 
     private fun startTimer() {
@@ -59,18 +85,20 @@ class AudioPlayerImpl : AudioPlayer {
         }
     }
 
-    override fun load(url: String) {
+    override fun load(url: String, requestId: Long) {
         check(!released) { "Audio player is released" }
-        generation++
-        pause()
+        val sourceGeneration = ++generation
+        this.requestId = requestId
+        playWhenReady = false
         loadJob?.cancel()
+        discardSource()
         revokeUrl()
         pendingSeek = null
         _error.value = null
         _currentTimeMs.value = 0
-        // Stop the previous source while IndexedDB loads the next track.
-        audio.removeAttribute("src")
-        audio.load()
+        // A fresh element keeps queued events from the previous source isolated.
+        audio = window.document.createElement("audio") as HTMLAudioElement
+        bindEvents(audio, sourceGeneration, requestId)
         if (url.startsWith("indexeddb-audio:")) {
             loadJob = scope.launch {
                 try {
@@ -81,7 +109,11 @@ class AudioPlayerImpl : AudioPlayer {
                 } catch (error: CancellationException) {
                     throw error
                 } catch (error: Throwable) {
-                    _error.value = error.message ?: "Unable to read saved audio"
+                    if (sourceGeneration == generation && !released) {
+                        val reason = if (error.asDynamic().name == "LocalAudioUnavailableError")
+                            AudioErrorReason.LOCAL_ASSET_UNAVAILABLE else AudioErrorReason.STORAGE_ERROR
+                        _error.value = AudioPlayerError(requestId, reason, error.message ?: "Unable to read saved audio")
+                    }
                 }
             }
         } else {
@@ -104,9 +136,14 @@ class AudioPlayerImpl : AudioPlayer {
 
     private fun playNow() {
         val request = generation
+        val sourceRequest = requestId
         audio.play().catch { error ->
             if (request == generation && playWhenReady && !released) {
-                _error.value = error.message ?: "Unable to play audio"
+                timerJob?.cancel()
+                _isPlaying.value = false
+                val reason = if (error.asDynamic().name == "NotAllowedError")
+                    AudioErrorReason.AUTOPLAY_BLOCKED else AudioErrorReason.SOURCE_ERROR
+                _error.value = AudioPlayerError(sourceRequest, reason, error.message ?: "Unable to play audio")
             }
         }
     }
@@ -138,9 +175,7 @@ class AudioPlayerImpl : AudioPlayer {
     override fun release() {
         released = true
         scope.cancel()
-        audio.pause()
-        audio.removeAttribute("src")
-        audio.load()
+        discardSource()
         revokeUrl()
         _isPlaying.value = false
     }

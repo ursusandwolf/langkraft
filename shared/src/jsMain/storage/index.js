@@ -2,6 +2,10 @@ const DATABASE = "langkraft-audio";
 const PREFIX = "indexeddb-audio:";
 let audioDatabase;
 
+class LocalAudioUnavailableError extends Error {
+  constructor(message) { super(message); this.name = "LocalAudioUnavailableError"; }
+}
+
 export function createDatabaseWorker() {
   return new Worker(new URL("./database.worker.js", import.meta.url), { type: "module" });
 }
@@ -148,20 +152,20 @@ export async function readAudioBlob(location) {
     const get = tx.objectStore("audio").get(id);
     get.onsuccess = () => {
       const entry = get.result;
-      if (!entry?.complete) return fail(new Error("Saved audio is missing or incomplete"));
+      if (!entry?.complete) return fail(new LocalAudioUnavailableError("Saved audio is missing or incomplete"));
       const chunks = [];
       let size = 0;
       const cursor = tx.objectStore("chunks").openCursor(IDBKeyRange.bound([id, 0], [id, Infinity]));
       cursor.onsuccess = () => {
         if (cursor.result) {
           const part = cursor.result.value;
-          if (part.index !== chunks.length) return fail(new Error("Saved audio has a missing chunk"));
+          if (part.index !== chunks.length) return fail(new LocalAudioUnavailableError("Saved audio has a missing chunk"));
           chunks.push(part.bytes);
           size += part.bytes.byteLength;
           cursor.result.continue();
         } else {
           if (size !== entry.size || chunks.length !== entry.count) {
-            return fail(new Error("Saved audio is incomplete"));
+            return fail(new LocalAudioUnavailableError("Saved audio is incomplete"));
           }
           done(new Blob(chunks, { type: "audio/ogg" }));
         }

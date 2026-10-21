@@ -22,12 +22,57 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ContentApiTest {
     private val content = ImmersionContent("id", "Title", "/api/media/id.opus",
         "/server/private/audio.opus", "https://youtu.be/video", 1)
+
+    @Test
+    fun successfulHtmlAndJsonResponsesNeverReachAudioStorage() = runTest {
+        for (type in listOf("text/html; charset=UTF-8", "application/json", "application/problem+json", "text/plain")) {
+            var stored = false
+            val client = HttpClient(MockEngine {
+                respond("not audio", headers = headersOf(HttpHeaders.ContentType, type))
+            })
+            val storage = object : AudioStorage {
+                override suspend fun store(contentId: String, source: ByteReadChannel, expectedBytes: Long?): String {
+                    stored = true
+                    return "/offline/invalid.opus"
+                }
+            }
+            try {
+                val error = assertFailsWith<UnexpectedAudioContentTypeException> {
+                    ContentApi(client, "https://backend").download(content, storage)
+                }
+                assertTrue(error.mediaType.startsWith(type.substringBefore(';')))
+                assertFalse(stored, "Unexpected media type must be rejected before storage: $type")
+            } finally { client.close() }
+        }
+    }
+
+    @Test
+    fun acceptsAudioOggAndGenericBinaryMediaTypesWithoutLosingBytes() = runTest {
+        for (type in listOf("audio/ogg; codecs=opus", "audio/opus", "audio/wav", "application/ogg", "application/octet-stream")) {
+            val bytes = "OggS-test-payload"
+            val client = HttpClient(MockEngine {
+                respond(bytes, headers = headersOf(HttpHeaders.ContentType, type))
+            })
+            var received: String? = null
+            val storage = object : AudioStorage {
+                override suspend fun store(contentId: String, source: ByteReadChannel, expectedBytes: Long?): String {
+                    received = source.readRemaining().readBytes().decodeToString()
+                    return "/offline/id.opus"
+                }
+            }
+            try {
+                assertEquals("/offline/id.opus", ContentApi(client, "https://backend").download(content, storage))
+                assertEquals(bytes, received)
+            } finally { client.close() }
+        }
+    }
 
     @Test
     fun postsJsonAndResolvesMediaUrlWithoutUsingServerLocalPath() = runTest {
