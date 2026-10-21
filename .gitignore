@@ -34,3 +34,18 @@ local.properties
 downloads/
 node_modules/
 !gradle/wrapper/gradle-wrapper.jar
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+!.env.sample
+*.jks
+*.keystore
+
+# Other generated files and OS metadata
+out/
+*.iml
+.DS_Store
+Thumbs.db
+Desktop.ini
