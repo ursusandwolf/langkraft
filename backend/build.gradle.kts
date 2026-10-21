@@ -27,8 +27,8 @@ dependencies {
     implementation("io.ktor:ktor-client-content-negotiation:2.3.5")
     implementation("io.ktor:ktor-client-logging:2.3.5")
     
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.0")
 
     // Logging
     implementation("ch.qos.logback:logback-classic:1.4.11")

@@ -70,3 +70,8 @@
 - Build сохраняет Kotlin 2/Compose 1.7; исправлено обновление локального npm storage package, обновлён Yarn lock. Web regression ждёт готовности Compose вместо фиксированного первого клика.
 - Повторный реальный YouTube импорт: Easy German 1, 48 реплик, 156 секунд, 200 ненулевых waveform bins; HTTP Range возвращает 206 и 256 запрошенных байтов.
 - Проверки и финальные ссылки CI/PR фиксируются в `INTEGRATION_COMPLETION.md` после выполнения.
+# INT-08 — 2026-10-22 — восстановлен Kotlin/JS регресс
+
+- Дополнительный Chromium-прогон обнаружил `IrLinkageError`: Compose разрешал coroutines-core 1.8.0, а test оставался 1.7.3. Core/test/swing выровнены на 1.8.0.
+- Повторно прошли 83 JVM-теста и 26 общих Kotlin-тестов в настоящем Chromium. `:shared:jsBrowserTest` включён в CI вместе с Playwright storage/UI development/production.
+- Инструкция AI-кодревью обновлена под async jobs, MP3, schema v3, SRS/auth/sync и текущие границы проверки.

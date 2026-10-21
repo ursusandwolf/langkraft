@@ -30,7 +30,7 @@ kotlin {
                 implementation(compose.runtime)
                 implementation(compose.foundation)
                 implementation(compose.material)
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
                 implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.4.1")
                 implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
                 implementation("app.cash.sqldelight:runtime:2.0.0")
@@ -49,7 +49,7 @@ kotlin {
         val commonTest by getting {
             dependencies {
                 implementation(kotlin("test"))
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.0")
             }
         }
         /*
@@ -73,7 +73,7 @@ kotlin {
                 implementation(compose.desktop.currentOs)
                 implementation("app.cash.sqldelight:sqlite-driver:2.0.0")
                 implementation("io.ktor:ktor-client-cio:2.3.5")
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.7.3")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.8.0")
                 
                 // VLCj for robust audio playback
                 implementation("uk.co.caprica:vlcj:4.8.0")
