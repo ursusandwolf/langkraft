@@ -43,6 +43,16 @@ open class FakeVocabularyRepository : VocabularyRepository {
 
 class SyncManagerTest {
 
+    @Test fun cancellationPropagatesAndClearsBusyState() = runTest {
+        val repository = object : FakeVocabularyRepository() {
+            override suspend fun sync(lastSyncTimestamp: Long): Long = throw kotlinx.coroutines.CancellationException("cancel")
+        }
+        val manager = SyncManager(repository)
+        kotlin.test.assertFailsWith<kotlinx.coroutines.CancellationException> { manager.sync() }
+        assertFalse(manager.isSyncing.value)
+        assertNull(manager.syncError.value)
+    }
+
     @Test
     fun test_sync_success_and_persistence() = runTest {
         val repository = FakeVocabularyRepository()

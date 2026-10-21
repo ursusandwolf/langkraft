@@ -6,6 +6,28 @@ import kotlin.test.assertTrue
 
 class SrtParserTest {
 
+    @Test fun `reject malformed or incomplete cues instead of silently dropping them`() {
+        val invalid = listOf("", "garbage", "1\n00:00:00,000 --> 00:00:01,000\n",
+            "1\n00:00:01,000 --> 00:00:00,000\nHallo", "1\n00:60:00,000 --> 00:60:01,000\nHallo",
+            "1\n999999999999999999999:00:00,000 --> 999999999999999999999:00:01,000\nHallo",
+            "1\n00:00:00,000 --> 00:00:01,000\nHallo\n\ninvalid block")
+        invalid.forEach { kotlin.test.assertFailsWith<SubtitleParseException> { SrtParser.parse("video", it) } }
+    }
+
+    @Test fun `duplicate intervals keep distinct stable IDs and both texts`() {
+        val text = "1\n00:00:00,000 --> 00:00:01,000\nA\n\n2\n00:00:00,000 --> 00:00:01,000\nB"
+        val cues = SrtParser.parse("video", text)
+        assertEquals(listOf("A", "B"), cues.map { it.originalText })
+        assertEquals(2, cues.map { it.id }.toSet().size)
+        assertEquals(cues, SrtParser.parse("video", text))
+    }
+
+    @Test fun `VTT preserves hours optional identifier settings and comments`() {
+        val text = "WEBVTT\n\nNOTE a comment\nignored\n\ncue-name\n00:00.000 --> 00:01.000 align:start\nHallo\n"
+        assertEquals("Hallo", SrtParser.parse("video", text).single().originalText)
+        kotlin.test.assertFailsWith<SubtitleParseException> { SrtParser.parse("video", "WEBVTT\n\nbroken cue") }
+    }
+
     @Test
     fun `test parse srt`() {
         val srt = """

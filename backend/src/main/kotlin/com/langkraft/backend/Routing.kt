@@ -114,6 +114,10 @@ fun Route.apiRoutes() {
 }
 
 fun StatusPagesConfig.configureBackendExceptions() {
+    exception<IngestionBusyException> { call, cause ->
+        call.response.headers.append("Retry-After", "5")
+        call.respondText(cause.message.orEmpty(), status = HttpStatusCode.ServiceUnavailable)
+    }
     exception<UnauthorizedException> { call, cause ->
         call.respond(HttpStatusCode.Unauthorized, cause.message ?: "Unauthorized")
     }
@@ -124,6 +128,7 @@ fun StatusPagesConfig.configureBackendExceptions() {
         call.respondText("AI Error: ${cause.message}", status = HttpStatusCode.InternalServerError)
     }
     exception<Exception> { call, cause ->
+        if (cause is kotlinx.coroutines.CancellationException) throw cause
         call.respondText("Internal Error: ${cause.message}", status = HttpStatusCode.InternalServerError)
     }
 }

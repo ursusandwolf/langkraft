@@ -41,11 +41,9 @@ dependencies {
     implementation("org.xerial:sqlite-jdbc:3.42.0.0")
     testImplementation("org.xerial:sqlite-jdbc:3.42.0.0")
 
-    // YtdlpJava replacement
-    implementation("com.github.sapher:youtubedl-java:1.1") 
-
     testImplementation(kotlin("test"))
     testImplementation("org.junit.jupiter:junit-jupiter:5.9.2")
+    testImplementation("io.ktor:ktor-server-test-host:2.3.5")
 }
 
 tasks.test {

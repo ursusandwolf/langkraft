@@ -18,6 +18,7 @@ import com.langkraft.domain.model.SubtitleLine
 import com.langkraft.io.FileSystem
 import com.langkraft.audio.AudioPlayer
 import com.langkraft.di.AppConfig
+import kotlinx.datetime.Clock
 
 class PlayerViewModel(
     private val contentRepository: LocalContentRepository,
@@ -92,7 +93,7 @@ class PlayerViewModel(
                 updateState { it.copy(currentTimeMs = event.timeMs, isUserScrolling = false) }
             }
             is PlayerEvent.UserScrollStarted -> {
-                updateState { it.copy(isUserScrolling = true, lastUserInteractionTime = System.currentTimeMillis()) }
+                updateState { it.copy(isUserScrolling = true, lastUserInteractionTime = Clock.System.now().toEpochMilliseconds()) }
             }
             is PlayerEvent.WordClicked -> {
                 linguisticDelegate.handleWordClicked(event.word, event.line)
@@ -152,7 +153,7 @@ class PlayerViewModel(
         
         // Handle User Scroll timeout (3 seconds)
         val shouldResetScroll = state.isUserScrolling && 
-            (System.currentTimeMillis() - state.lastUserInteractionTime > 3000)
+            (Clock.System.now().toEpochMilliseconds() - state.lastUserInteractionTime > 3000)
 
         val subtitles = state.content?.subtitles ?: emptyList()
         val newIndex = subtitles.indexOfFirst { timeMs >= it.startMs && timeMs <= it.endMs }

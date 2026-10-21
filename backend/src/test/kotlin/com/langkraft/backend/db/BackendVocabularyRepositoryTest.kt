@@ -7,21 +7,25 @@ import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.transactions.transaction
-import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.TestInstance
+import org.junit.jupiter.api.io.TempDir
+import java.nio.file.Path
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class BackendVocabularyRepositoryTest {
 
+    @TempDir
+    lateinit var tempDir: Path
+
+    private lateinit var db: Database
     private lateinit var repository: BackendVocabularyRepository
     private val userId = "user-1"
 
-    @BeforeAll
+    @BeforeEach
     fun setup() {
-        val db = Database.connect("jdbc:sqlite:file:testdbvocab?mode=memory&cache=shared", driver = "org.sqlite.JDBC")
+        db = Database.connect("jdbc:sqlite:${tempDir.resolve("vocabulary.db")}", driver = "org.sqlite.JDBC")
         transaction(db) {
             SchemaUtils.create(Users, VocabularySync)
             Users.insert {
@@ -85,10 +89,10 @@ class BackendVocabularyRepositoryTest {
         repository.sync(userId, listOf(SyncEntry(word1, "UPSERT")), 0)
         
         val word3 = VocabularyWord(id = "w3", word = "Word 3", contextSentence = "Ctx 3", lastUpdated = 3000)
-        transaction {
+        transaction(db) {
             VocabularySync.insert {
                 it[id] = "w3"
-                it[VocabularySync.userId] = userId
+                it[VocabularySync.userId] = this@BackendVocabularyRepositoryTest.userId
                 it[word] = word3.word
                 it[contextSentence] = word3.contextSentence
                 it[addedAt] = 0

@@ -85,6 +85,9 @@ kotlin {
                 implementation("app.cash.sqldelight:web-worker-driver:2.0.0")
             }
         }
+        val desktopTest by getting {
+            dependencies { implementation("io.ktor:ktor-client-mock:2.3.5") }
+        }
     }
 }
 

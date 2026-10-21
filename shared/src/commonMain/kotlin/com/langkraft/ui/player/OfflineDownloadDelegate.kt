@@ -4,6 +4,7 @@ import com.langkraft.domain.model.DownloadStatus
 import com.langkraft.domain.repository.AudioDownloader
 import com.langkraft.domain.repository.LocalContentRepository
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -27,6 +28,8 @@ class OfflineDownloadDelegate(
                 if (updated != null) {
                     updateState { it.copy(content = updated) }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 updateState { it.copy(error = "Download failed: ${e.message}") }
             }
