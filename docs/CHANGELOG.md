@@ -1,6 +1,26 @@
 # Changelog
 
 ## [Unreleased]
+### Integrated data and Web — INT-05 — 2026-10-22
+- Согласована схема Desktop/Web v3 для исторических main v1/v2 и dev, включая user_version=0. Миграции выполняются транзакционно; Desktop создаёт согласованный VACUUM INTO backup и отвергает неизвестную новую версию.
+- Репозитории переведены на async SQLDelight и единый DatabaseAccess с Mutex. PersistentJdbcDriver явно владеет одним JDBC-соединением: устранена подтверждённая на Windows утечка открытых файлов после транзакций.
+- UPDATE/INSERT вместо REPLACE сохраняет связи словаря и SRS. ordinal сохраняет порядок реплик с одинаковыми временами; waveform и offline-ссылка переживают повторный импорт. Проверяются владение репликами и дубли ID.
+- Ссылки на ещё не импортированный источник сохраняются в SyncMetadata; локальные FK остаются валидными. Повторный импорт восстанавливает доступные связи. Сохраняются теги, lapseCount, lastUpdated и очередь изменений.
+- Аудио записывается потоком в файл/IndexedDB. Неполные загрузки не публикуются, отмена удаляет временные данные; при ошибке записи ссылки в БД опубликованный asset удаляется.
+- Web подключает SQLite WASM worker, IndexedDB, Ktor JS, DI и общую навигацию Desktop (библиотека/плеер/SRS/письмо). Нативное поле URL исправляет ввод/вставку в Canvas UI. Устранена runtime ABI-ошибка старого koin-compose через Koin core API.
+- Перенесены ошибки браузерного аудио и явный Play online при отсутствии локального asset; свежие HTMLAudioElement и generation guards изолируют события старого источника.
+- Регресс: 36 shared + 27 backend JVM-тестов; Chromium storage (3 сценария), полный development/production Web-сценарий, перезагрузка/offline и мобильный viewport.
+
+### Auth and final regression — INT-06 — 2026-10-22
+- Добавлены восстановление JWT и Account/Sync now в Desktop/Web. BackendUserRepository явно получает свою БД; backend требует LANGKRAFT_JWT_SECRET вместо известной строки. TUI восстанавливает профиль Desktop.
+- Синхронизация использует серверный монотонный курсор, tombstones удаления и JSON-теги с поддержкой старого CSV. Две локальные SQLite БД проверены через настоящие Ktor routes/JWT с переносом SRS/тегов/исходных ссылок и удалением.
+- Подтверждение sync удаляет только отправленную ревизию; новая локальная правка во время запроса остаётся в очереди и не перезаписывается старым ответом. Добавлен регрессионный тест этой гонки.
+- Backend создаёт backup перед расширением sync-схемы и восстанавливает прерванные импортные задания в ERROR после перезапуска. Добавлен PartialContent; Range проверен на Ktor API.
+- Desktop использует ffplay при отсутствии VLC; добавлены CLI smoke режимы Desktop/TUI без окон. ffplay поддерживает выбранную скорость и снимает shutdown hook при release.
+- Реальный YouTube/yt-dlp/ffmpeg импорт: Easy German 1, 48 реплик, 156 секунд, waveform 200 точек. Оптимизированная Web-сборка проходит тот же сценарий, что development. Внешний Gemini не проверялся без API key.
+- Добавлен CI для integration/dev/main: JVM, Desktop/TUI smoke, Chromium storage и development/production UI. README переписан под итоговый стек, запуск, зависимости, данные, миграции и ограничения.
+- Ограничение окружения: Windows Application Control блокирует запуск ffplay. Обход не выполнялся; реальный вывод звука Desktop/TUI не подтверждён. Desktop wiring и виртуальный TUI прошли; ffmpeg/YouTube и Web-аудио проверены отдельно.
+
 ### Fixed — INT-04 — 2026-10-21 — защита аудио и импорта
 - INT-S2 выполнен в интеграционной рабочей копии. Аудиозагрузка проверяет HTTP 200, MIME, непустое тело и Content-Length до записи; новые файлы сохраняются как MP3. Ошибка/отмена удаляет временный файл, отмена возвращает статус IDLE и пробрасывается далее.
 - CancellationException сохраняется в use case, sync и offline delegate; флаг импорта сбрасывается в finally.

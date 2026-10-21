@@ -15,6 +15,13 @@ import org.jetbrains.exposed.sql.transactions.transaction
  * Repository to manage IngestionJob lifecycle backed by a persistent database.
  */
 class IngestionJobRepository(private val db: Database) {
+    fun recoverInterrupted() = transaction(db) {
+        IngestionJobs.update({ IngestionJobs.status notInList listOf("READY", "ERROR") }) {
+            it[status] = "ERROR"
+            it[error] = "Backend restarted; retry import"
+            it[lastUpdatedAt] = System.currentTimeMillis()
+        }
+    }
     private val json = Json {
         ignoreUnknownKeys = true
         encodeDefaults = true

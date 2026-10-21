@@ -1,5 +1,52 @@
 # UML changelog
 
+## INT-05 — 2026-10-22 — данные и Web
+
+```text
++---------------------------+     +---------------------------+
+| Content/Vocabulary Repo   |---->| DatabaseAccess            |
+| Repository                |     | Mutex + async operations  |
++---------------------------+     +-------------+-------------+
+                                                | owns access
+                                  +-------------v-------------+
+                                  | DatabaseHandle/AppDatabase|
+                                  +-------------+-------------+
+                                                | SqlDriver Adapter
+                           +--------------------+------------------+
+                           v                                       v
+              +-------------------------+           +-------------------------+
+              | PersistentJdbcDriver    |           | BrowserSqlDriver        |
+              | owned JDBC connection   |           | Worker + SQLite WASM    |
+              +-------------------------+           +-------------------------+
+
++---------------------------+     +---------------------------+
+| AudioDownloaderImpl       |---->| <<AudioStorage>>          |
+| response validation       |     | store / delete            |
++---------------------------+     +-------------+-------------+
+                                  FileAudioStorage / IndexedDB
+
+MainApp (common UI) --> platform DI --> Repository / AudioPlayer
+```
+
+Сохранены Repository и платформенные Adapter. Мигратор распознаёт схемы двух веток; Data Access сериализует работу соединения. Flow уведомляет UI, роли SRS не меняются.
+
+## INT-06 — 2026-10-22 — auth и sync
+
+```text
+AccountView --> UserSession --> HttpClient (JWT)
+                    |              |
+                    v              v
+               SyncMetadata    AuthService --> UserRepository
+
+SyncManager --> VocabularyRepository --> SyncService
+                 offline queue            |
+                 revision ack              v
+                               BackendVocabularyRepository
+                               server cursor + tombstones
+```
+
+Сохраняется Repository; offline queue и tombstones реализуют надёжную передачу изменений. Теги сериализуются без потери запятых. Новая правка не подтверждается ответом на старый запрос. Общий UI использует Koin core без несовместимой Compose-обёртки.
+
 ## INT-04 — 2026-10-21 — аудио, отмена и ограниченный импорт
 
 ```text

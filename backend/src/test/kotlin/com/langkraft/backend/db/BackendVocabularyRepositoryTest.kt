@@ -78,7 +78,7 @@ class BackendVocabularyRepositoryTest {
         repository.sync(userId, listOf(SyncEntry(word, "DELETE")), 0)
         
         val syncResult = repository.sync(userId, emptyList(), 0)
-        assertTrue(syncResult.isEmpty(), "Word should be deleted")
+        assertEquals("DELETE", syncResult.single().changeType, "Deletion must reach other clients")
     }
 
     @Test
@@ -86,7 +86,7 @@ class BackendVocabularyRepositoryTest {
         val word1 = VocabularyWord(id = "w1", word = "Word 1", contextSentence = "Ctx 1", lastUpdated = 1000)
         val word2 = VocabularyWord(id = "w2", word = "Word 2", contextSentence = "Ctx 2", lastUpdated = 2000)
         
-        repository.sync(userId, listOf(SyncEntry(word1, "UPSERT")), 0)
+        val checkpoint = repository.synchronize(userId, listOf(SyncEntry(word1, "UPSERT")), 0).serverTimestamp
         
         val word3 = VocabularyWord(id = "w3", word = "Word 3", contextSentence = "Ctx 3", lastUpdated = 3000)
         transaction(db) {
@@ -103,10 +103,11 @@ class BackendVocabularyRepositoryTest {
                 it[lapseCount] = 0
                 it[tags] = ""
                 it[lastUpdated] = 3000
+                it[serverUpdated] = checkpoint + 1
             }
         }
         
-        val result = repository.sync(userId, listOf(SyncEntry(word2, "UPSERT")), 1500)
+        val result = repository.sync(userId, listOf(SyncEntry(word2, "UPSERT")), checkpoint)
         
         assertEquals(1, result.size)
         assertEquals("w3", result.first().word.id, "Should return word3 which is newer than 1500 and not in request")

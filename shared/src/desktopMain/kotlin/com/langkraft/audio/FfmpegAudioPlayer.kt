@@ -12,6 +12,10 @@ import java.io.File
  * without relying on platform-specific signals like SIGSTOP/SIGCONT.
  */
 class FfmpegAudioPlayer : AudioPlayer {
+    private val _error = MutableStateFlow<AudioPlayerError?>(null)
+    override val error: StateFlow<AudioPlayerError?> = _error.asStateFlow()
+    private var playbackSpeed = 1.0
+    private val shutdownHook = Thread { stopProcess() }
     private val _currentTimeMs = MutableStateFlow(0L)
     override val currentTimeMs: StateFlow<Long> = _currentTimeMs.asStateFlow()
     
@@ -27,9 +31,7 @@ class FfmpegAudioPlayer : AudioPlayer {
 
     init {
         // Ensure process is killed when JVM exits
-        Runtime.getRuntime().addShutdownHook(Thread {
-            stopProcess()
-        })
+        Runtime.getRuntime().addShutdownHook(shutdownHook)
     }
 
     override fun load(url: String) {
@@ -60,8 +62,9 @@ class FfmpegAudioPlayer : AudioPlayer {
     }
 
     override fun setPlaybackSpeed(speed: Double) {
-        // Implementation for speed would require complex ffplay filters (-af atempo)
-        // and process restart. Not implemented for simplicity in this TUI version.
+        require(speed in 0.5..2.0)
+        playbackSpeed = speed
+        if (_isPlaying.value) startProcess(_currentTimeMs.value)
     }
 
     private fun startProcess(startMs: Long) {
@@ -69,15 +72,17 @@ class FfmpegAudioPlayer : AudioPlayer {
         
         val seconds = startMs / 1000.0
         val builder = ProcessBuilder(
-            "ffplay", 
+            System.getenv("FFPLAY_EXECUTABLE") ?: "ffplay",
             "-nodisp", 
             "-autoexit", 
             "-loglevel", "quiet", 
             "-ss", seconds.toString(), 
+            "-af", "atempo=$playbackSpeed",
             currentUrl
         )
         
         try {
+            _error.value = null
             process = builder.start()
             lastStartSystemTime = System.currentTimeMillis()
             timeAtLastStartMs = startMs
@@ -86,7 +91,7 @@ class FfmpegAudioPlayer : AudioPlayer {
             startTimer()
         } catch (e: Exception) {
             _isPlaying.value = false
-            // Optional: notify error via flow
+            _error.value = AudioPlayerError(0, AudioErrorReason.SOURCE_ERROR, "Cannot start ffplay: ${e.message}")
         }
     }
 
@@ -102,7 +107,7 @@ class FfmpegAudioPlayer : AudioPlayer {
         timerJob = scope.launch {
             while (isActive && _isPlaying.value) {
                 val elapsed = System.currentTimeMillis() - lastStartSystemTime
-                _currentTimeMs.value = timeAtLastStartMs + elapsed
+                _currentTimeMs.value = timeAtLastStartMs + (elapsed * playbackSpeed).toLong()
                 
                 // Check if process is still alive
                 if (process?.isAlive == false) {
@@ -117,5 +122,6 @@ class FfmpegAudioPlayer : AudioPlayer {
     override fun release() {
         stopProcess()
         scope.cancel()
+        runCatching { Runtime.getRuntime().removeShutdownHook(shutdownHook) }
     }
 }

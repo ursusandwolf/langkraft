@@ -23,17 +23,24 @@ import com.langkraft.domain.srs.SpacedRepetitionAlgorithm
 import com.langkraft.domain.srs.Sm2Algorithm
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.plugins.defaultRequest
+import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.request.bearerAuth
+import com.langkraft.data.sync.UserSession
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 import io.ktor.http.*
 import org.koin.core.context.startKoin
 import org.koin.dsl.KoinAppDeclaration
 import org.koin.dsl.module
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 
 fun initKoin(appDeclaration: KoinAppDeclaration = {}) =
     startKoin {
-        appDeclaration()
         modules(commonModule)
+        appDeclaration()
     }
 
 data class AppConfig(
@@ -45,12 +52,16 @@ val commonModule = module {
 
     // Network
     single {
+        val owner = this
         HttpClient {
+            install(HttpTimeout) { requestTimeoutMillis=30_000; connectTimeoutMillis=10_000 }
+            defaultRequest { owner.get<UserSession>().token.value?.let { bearerAuth(it) } }
             install(ContentNegotiation) {
                 json(Json { ignoreUnknownKeys = true })
             }
         }
     }
+    single { UserSession(get(), get<AppConfig>().backendUrl) { get<HttpClient>() } }
 
     // Repositories
     single { SqlDelightContentRepository(get()) }

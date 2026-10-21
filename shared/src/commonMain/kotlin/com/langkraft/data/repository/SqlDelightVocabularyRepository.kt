@@ -1,6 +1,9 @@
 package com.langkraft.data.repository
 
 import com.langkraft.db.AppDatabase
+import app.cash.sqldelight.async.coroutines.awaitAsList
+import app.cash.sqldelight.async.coroutines.awaitAsOneOrNull
+import kotlinx.coroutines.CancellationException
 import com.langkraft.domain.model.*
 import com.langkraft.domain.repository.VocabularyRepository
 import com.langkraft.io.Logger
@@ -15,11 +18,12 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 
 class SqlDelightVocabularyRepository(
-    private val db: AppDatabase,
+    access: com.langkraft.data.database.DatabaseAccess,
     private val httpClient: HttpClient,
     private val baseUrl: io.ktor.http.Url
-) : BaseSqlDelightRepository(), VocabularyRepository {
+) : BaseSqlDelightRepository(access), VocabularyRepository {
 
+    private val db = access.database
     private val json = Json { ignoreUnknownKeys = true }
 
     override fun getWordsToReview(): Flow<List<VocabularyWord>> {
@@ -32,8 +36,11 @@ class SqlDelightVocabularyRepository(
         return db.appDatabaseQueries.countVocabularyToReview(now).asFlowOne { it.toInt() }
     }
 
-    override suspend fun saveWord(word: VocabularyWord) {
+    override suspend fun saveWord(word: VocabularyWord) = access.run(dispatcher) {
         db.appDatabaseQueries.transaction {
+            val revision = maxOf(Clock.System.now().toEpochMilliseconds(),
+                (db.appDatabaseQueries.selectPendingChange(word.id).awaitAsOneOrNull()?.timestamp ?: 0L) + 1,
+                (db.appDatabaseQueries.selectWordById(word.id).awaitAsOneOrNull()?.lastUpdated ?: 0L) + 1)
             db.appDatabaseQueries.upsertWord(
                 id = word.id,
                 word = word.word,
@@ -49,30 +56,33 @@ class SqlDelightVocabularyRepository(
                 easeFactor = word.easeFactor,
                 lapseCount = word.lapseCount.toLong(),
                 tags = json.encodeToString(word.tags),
-                lastUpdated = Clock.System.now().toEpochMilliseconds()
+                lastUpdated = revision
             )
             db.appDatabaseQueries.insertPendingChange(
                 wordId = word.id,
                 changeType = "UPSERT",
-                timestamp = Clock.System.now().toEpochMilliseconds()
+                timestamp = revision
             )
         }
     }
 
-    override suspend fun deleteWord(id: String) {
+    override suspend fun deleteWord(id: String) = access.run(dispatcher) {
         db.appDatabaseQueries.transaction {
+            val revision = maxOf(Clock.System.now().toEpochMilliseconds(),
+                (db.appDatabaseQueries.selectPendingChange(id).awaitAsOneOrNull()?.timestamp ?: 0L) + 1,
+                (db.appDatabaseQueries.selectWordById(id).awaitAsOneOrNull()?.lastUpdated ?: 0L) + 1)
             db.appDatabaseQueries.deleteWord(id)
             db.appDatabaseQueries.insertPendingChange(
                 wordId = id,
                 changeType = "DELETE",
-                timestamp = Clock.System.now().toEpochMilliseconds()
+                timestamp = revision
             )
         }
     }
 
     override suspend fun sync(lastSyncTimestamp: Long): Long {
-        val pendingChanges = db.appDatabaseQueries.getAllPendingChanges().executeAsList()
-        val processedIds = pendingChanges.map { it.wordId }
+        val pendingChanges = access.run(dispatcher) { db.appDatabaseQueries.getAllPendingChanges().awaitAsList() }
+        val processedIds = pendingChanges
 
         if (pendingChanges.isEmpty()) {
             return fetchServerChanges(lastSyncTimestamp, emptyList(), emptyList())
@@ -80,7 +90,7 @@ class SqlDelightVocabularyRepository(
 
         val upsertIds = pendingChanges.filter { it.changeType == "UPSERT" }.map { it.wordId }
         val wordsById = if (upsertIds.isNotEmpty()) {
-            db.appDatabaseQueries.selectWordsByIds(upsertIds).executeAsList()
+            access.run(dispatcher) { db.appDatabaseQueries.selectWordsByIds(upsertIds).awaitAsList() }
                 .associate { it.id to it.toDomain() }
         } else {
             emptyMap()
@@ -97,7 +107,14 @@ class SqlDelightVocabularyRepository(
                     changeType = "DELETE"
                 )
             } else {
-                wordsById[change.wordId]?.let { SyncEntry(it, "UPSERT") }
+                wordsById[change.wordId]?.let { word ->
+                    val references = access.run(dispatcher) {
+                        db.appDatabaseQueries.getSyncMetadata("source_refs:${word.id}").awaitAsOneOrNull()
+                            ?.let { json.decodeFromString<List<String?>>(it) }
+                    }
+                    SyncEntry(word.copy(contentId=word.contentId ?: references?.getOrNull(0),
+                        subtitleLineId=word.subtitleLineId ?: references?.getOrNull(1)), "UPSERT")
+                }
             }
         }
 
@@ -107,7 +124,7 @@ class SqlDelightVocabularyRepository(
     private suspend fun fetchServerChanges(
         lastSyncTimestamp: Long, 
         clientChanges: List<SyncEntry>,
-        processedIds: List<String>
+        processedIds: List<com.langkraft.db.PendingSyncChange>
     ): Long {
         return try {
             val response: SyncResponse = httpClient.post(baseUrl) {
@@ -116,28 +133,44 @@ class SqlDelightVocabularyRepository(
                 setBody(SyncRequest(lastSyncTimestamp, clientChanges))
             }.body()
 
-            db.appDatabaseQueries.transaction {
+            access.run(dispatcher) { db.transaction {
                 response.serverChanges.forEach { entry ->
+                    val pending = db.appDatabaseQueries.selectPendingChange(entry.word.id).awaitAsOneOrNull()
+                    val sent = processedIds.firstOrNull { it.wordId == entry.word.id }
+                    if (pending != null && pending != sent) return@forEach
                     if (entry.changeType == "DELETE") {
                         db.appDatabaseQueries.deleteWord(entry.word.id)
+                        db.appDatabaseQueries.deleteSyncMetadata("source_refs:${entry.word.id}")
                     } else {
                         val word = entry.word
+                        // A second client may not have imported the source video. Preserve remote
+                        // references separately while keeping local foreign keys valid.
+                        db.appDatabaseQueries.setSyncMetadata("source_refs:${word.id}",
+                            json.encodeToString(listOf(word.contentId, word.subtitleLineId)))
+                        val localContent = word.contentId?.takeIf {
+                            db.appDatabaseQueries.selectContentById(it).awaitAsOneOrNull() != null
+                        }
+                        val localSubtitle = word.subtitleLineId?.takeIf {
+                            db.appDatabaseQueries.selectSubtitleById(it).awaitAsOneOrNull()?.contentId == localContent && localContent != null
+                        }
                         db.appDatabaseQueries.upsertWord(
-                            word.id, word.word, word.lemma, word.translation, word.contextSentence,
-                            word.contentId, word.subtitleLineId, word.addedAt, word.nextReviewMs,
-                            word.intervalDays.toLong(), word.easeFactor, word.status.name,
-                            word.lapseCount.toLong(), json.encodeToString(word.tags), word.lastUpdated
+                            id=word.id, word=word.word, lemma=word.lemma, translation=word.translation, contextSentence=word.contextSentence,
+                            contentId=localContent, subtitleLineId=localSubtitle, addedAt=word.addedAt, nextReviewAt=word.nextReviewMs,
+                            intervalDays=word.intervalDays.toLong(), easeFactor=word.easeFactor, status=word.status.name,
+                            lapseCount=word.lapseCount.toLong(), tags=json.encodeToString(word.tags), lastUpdated=word.lastUpdated
                         )
                     }
                 }
                 if (processedIds.isNotEmpty()) {
-                    db.appDatabaseQueries.deletePendingChanges(processedIds)
+                    processedIds.forEach { change -> db.appDatabaseQueries.deleteAcknowledgedChange(change.wordId, change.timestamp, change.changeType) }
                 }
-            }
+            } }
             response.serverTimestamp
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Logger.e("Sync failed", e)
-            lastSyncTimestamp
+            throw e
         }
     }
 
@@ -152,11 +185,11 @@ class SqlDelightVocabularyRepository(
     }
 
     override suspend fun getSyncMetadata(key: String): String? {
-        return db.appDatabaseQueries.getSyncMetadata(key).executeAsOneOrNull()
+        return access.run(dispatcher) { db.appDatabaseQueries.getSyncMetadata(key).awaitAsOneOrNull() }
     }
 
     override suspend fun setSyncMetadata(key: String, value: String) {
-        db.appDatabaseQueries.setSyncMetadata(key, value)
+        access.run(dispatcher) { db.appDatabaseQueries.setSyncMetadata(key, value) }
     }
 
     private fun com.langkraft.db.Vocabulary.toDomain(): VocabularyWord {

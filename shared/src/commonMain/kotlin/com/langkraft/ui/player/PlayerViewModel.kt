@@ -34,6 +34,12 @@ class PlayerViewModel(
     private val offlineDelegate = OfflineDownloadDelegate(audioDownloader, contentRepository, scope, ::updateState, { currentState })
 
     init {
+        scope.launch {
+            audioPlayer.error.collect { failure ->
+                if (failure != null) updateState { it.copy(error = failure.message,
+                    canPlayOnline = failure.reason == com.langkraft.audio.AudioErrorReason.LOCAL_ASSET_UNAVAILABLE && !it.isUsingRemoteAudio) }
+            }
+        }
         // Observe player state
         scope.launch {
             audioPlayer.currentTimeMs.collect { timeMs ->
@@ -116,6 +122,14 @@ class PlayerViewModel(
             is PlayerEvent.DismissDeepAnalysis -> {
                 updateState { it.copy(deepAnalysis = null) }
             }
+            is PlayerEvent.PlayOnline -> {
+                currentState.content?.let { content ->
+                    audioPlayer.load(content.copy(localAudioPath=null, downloadStatus=DownloadStatus.IDLE).getPlaybackUrl(appConfig.backendUrl))
+                    updateState { it.copy(error=null, canPlayOnline=false, isUsingRemoteAudio=true) }
+                    audioPlayer.play()
+                }
+            }
+            is PlayerEvent.DismissError -> updateState { it.copy(error=null) }
             is PlayerEvent.DismissMemorization -> {
                 updateState { it.copy(memorizationText = null) }
             }
@@ -137,7 +151,7 @@ class PlayerViewModel(
                 updateState { it.copy(isLoading = false, error = "Content not found") }
                 return@launch
             }
-            updateState { it.copy(isLoading = false, content = content) }
+            updateState { it.copy(isLoading = false, content = content, error=null, canPlayOnline=false, isUsingRemoteAudio=false) }
             
             audioPlayer.load(content.getPlaybackUrl(appConfig.backendUrl))
         }

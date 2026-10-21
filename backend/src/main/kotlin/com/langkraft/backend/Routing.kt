@@ -79,7 +79,7 @@ fun Route.apiRoutes() {
             call.respond(job)
         }
 
-        staticFiles("/media", File("downloads"))
+        staticFiles("/media", File(application.environment.config.propertyOrNull("storage.downloads_dir")?.getString() ?: "downloads"))
     }
 
     // AUTHENTICATED API ROUTES

@@ -20,6 +20,7 @@ class OfflineDownloadDelegate(
     fun handleToggleOffline() {
         val currentContent = getState().content ?: return
         if (currentContent.downloadStatus == DownloadStatus.DOWNLOADING) return
+        if (currentContent.downloadStatus == DownloadStatus.COMPLETED && !getState().canPlayOnline && !getState().isUsingRemoteAudio) return
 
         scope.launch {
             try {

@@ -1,6 +1,10 @@
 package com.langkraft.data.repository
 
 import com.langkraft.db.AppDatabase
+import app.cash.sqldelight.async.coroutines.awaitAsList
+import app.cash.sqldelight.async.coroutines.awaitAsOneOrNull
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import com.langkraft.domain.model.DownloadStatus
 import com.langkraft.domain.model.ImmersionContent
 import com.langkraft.domain.model.SubtitleLine
@@ -15,42 +19,58 @@ import kotlinx.coroutines.flow.map
 import kotlinx.datetime.Clock
 
 class SqlDelightContentRepository(
-    private val db: AppDatabase
-) : BaseSqlDelightRepository(), LocalContentRepository {
+    access: com.langkraft.data.database.DatabaseAccess
+) : BaseSqlDelightRepository(access), LocalContentRepository {
+    private val db = access.database
 
     override fun getAllContent(): Flow<List<ImmersionContent>> {
         return db.appDatabaseQueries.selectAllContent().asFlowList { it.toDomain() }
     }
 
-    override suspend fun getContentById(id: String): ImmersionContent? {
-        val content = db.appDatabaseQueries.selectContentById(id).executeAsOneOrNull() ?: return null
-        val subtitles = db.appDatabaseQueries.selectSubtitlesForContent(id).executeAsList().map { it.toDomain() }
-        return content.toDomain().copy(subtitles = subtitles)
+    override suspend fun getContentById(id: String): ImmersionContent? = access.run(dispatcher) {
+        val content = db.appDatabaseQueries.selectContentById(id).awaitAsOneOrNull() ?: return@run null
+        val subtitles = db.appDatabaseQueries.selectSubtitlesForContent(id).awaitAsList().map { it.toDomain() }
+        content.toDomain().copy(subtitles = subtitles)
     }
 
-    override suspend fun saveContent(content: ImmersionContent) {
+    override suspend fun saveContent(content: ImmersionContent) = access.run(dispatcher) {
+        val ids = content.subtitles.map { it.id }
+        require(ids.toSet().size == ids.size && content.subtitles.all { it.contentId == content.id }) { "Invalid subtitle ownership or duplicate ID" }
         db.transaction {
-            db.appDatabaseQueries.deleteSubtitlesByContentId(content.id)
+            val existing = db.appDatabaseQueries.selectContentById(content.id).awaitAsOneOrNull()
+            val keepOffline = existing?.downloadStatus == DownloadStatus.COMPLETED.name && content.downloadStatus != DownloadStatus.COMPLETED
+            if (ids.isNotEmpty()) require(db.appDatabaseQueries.selectConflictingSubtitles(ids, content.id).awaitAsList().isEmpty()) { "Subtitle belongs to another content" }
             db.appDatabaseQueries.insertContent(
                 id = content.id,
                 title = content.title,
                 audioUrl = content.audioUrl,
-                localAudioPath = content.localAudioPath,
+                localAudioPath = if (keepOffline) existing?.localAudioPath else content.localAudioPath,
                 sourceUrl = content.sourceUrl,
                 durationSeconds = content.durationSeconds,
                 createdAt = Clock.System.now().toEpochMilliseconds(),
-                downloadStatus = content.downloadStatus.name
+                downloadStatus = if (keepOffline) DownloadStatus.COMPLETED.name else content.downloadStatus.name,
+                waveform = if (content.waveform.isEmpty() && existing != null) existing.waveform else Json.encodeToString(content.waveform)
             )
             
-            content.subtitles.forEach { line ->
+            content.subtitles.forEachIndexed { index, line ->
                 db.appDatabaseQueries.insertSubtitleLine(
                     id = line.id,
                     contentId = content.id,
                     startMs = line.startMs,
                     endMs = line.endMs,
                     originalText = line.originalText,
-                    translationText = line.translationText
+                    translationText = line.translationText,
+                    ordinal = index.toLong()
                 )
+            }
+            if (ids.isEmpty()) db.appDatabaseQueries.deleteSubtitlesByContentId(content.id)
+            else db.appDatabaseQueries.deleteObsoleteSubtitles(content.id, ids)
+            db.appDatabaseQueries.selectSourceReferenceMetadata().awaitAsList().forEach { metadata ->
+                val refs = runCatching { Json.decodeFromString<List<String?>>(metadata.value_) }.getOrNull()
+                if (refs?.getOrNull(0) == content.id) {
+                    db.appDatabaseQueries.updateWordReferences(content.id,
+                        refs.getOrNull(1)?.takeIf { it in ids }, metadata.key.removePrefix("source_refs:"))
+                }
             }
         }
     }
@@ -73,7 +93,7 @@ class SqlDelightContentRepository(
             sourceUrl = sourceUrl,
             durationSeconds = durationSeconds,
             subtitles = emptyList(),
-            waveform = emptyList(),
+            waveform = runCatching { Json.decodeFromString<List<Float>>(waveform) }.getOrDefault(emptyList()),
             downloadStatus = DownloadStatus.valueOf(downloadStatus)
         )
     }

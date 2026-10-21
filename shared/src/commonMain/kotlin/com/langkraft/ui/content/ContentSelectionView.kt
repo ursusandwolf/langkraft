@@ -49,11 +49,11 @@ fun ContentSelectionView(
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text("Import from YouTube", style = MaterialTheme.typography.h6)
                     Spacer(modifier = Modifier.height(8.dp))
-                    OutlinedTextField(
+                    NativeUrlInput(
                         value = urlInput,
                         onValueChange = { urlInput = it },
-                        label = { Text("YouTube URL") },
-                        modifier = Modifier.fillMaxWidth()
+                        enabled = !state.isImporting,
+                        modifier = Modifier.fillMaxWidth().height(56.dp)
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Button(

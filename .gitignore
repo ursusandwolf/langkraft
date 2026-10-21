@@ -23,3 +23,9 @@ local.properties
 # Project specific
 downloads/
 temp/
+/data/
+/backend/data/
+*.db
+*.db-*
+*.bak
+node_modules/

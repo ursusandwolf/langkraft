@@ -14,6 +14,7 @@ dependencies {
     implementation("io.ktor:ktor-server-netty:2.3.5")
     implementation("io.ktor:ktor-server-content-negotiation:2.3.5")
     implementation("io.ktor:ktor-server-status-pages:2.3.5")
+    implementation("io.ktor:ktor-server-partial-content:2.3.5")
     implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.5")
     implementation("io.insert-koin:koin-ktor:3.5.0")
     implementation("io.insert-koin:koin-logger-slf4j:3.5.0")
@@ -44,6 +45,7 @@ dependencies {
     testImplementation(kotlin("test"))
     testImplementation("org.junit.jupiter:junit-jupiter:5.9.2")
     testImplementation("io.ktor:ktor-server-test-host:2.3.5")
+    testImplementation("app.cash.sqldelight:sqlite-driver:2.0.0")
 }
 
 tasks.test {

@@ -1,84 +1,144 @@
 # Langkraft 🇩🇪
 
-**Langkraft** (from German *Lang* + *Kraft* - long-term power/strength) is an immersion-first German language learning platform. Unlike traditional apps that focus on grammar drills, Langkraft centers the learning experience around **comprehensible input** and **listening**.
+Приложение для изучения немецкого через прослушивание YouTube с субтитрами, контекстный словарь и интервальное повторение.
 
-## Текущая стадия проекта — 21 октября 2026
+## Состояние проекта — 22 октября 2026
 
-**Проект находится на стадии разработки и стабилизации перед интеграцией веток. Готовность к выпуску не подтверждена.** В коде dev уже есть Desktop/TUI, асинхронный импорт YouTube, словарь, SRS, авторизация, синхронизация и интеграция Gemini с mock-режимом. Наличие реализации пока не означает, что все пользовательские сценарии проверены.
+Проект находится на стадии интеграции и стабилизации. Основой выбрана расширенная реализация **dev**: Desktop/TUI, SRS, авторизация, синхронизация и Gemini. Из main перенесены проверки импорта, процессы с таймаутом, SQLite WASM/IndexedDB и обработка ошибок плеера. Исторические main и dev разошлись на 6 и 51 уникальный коммит; прямое слияние давало 29 конфликтующих файлов.
 
-### Почему main и dev отличаются
+Исходная dev не компилировалась для JS и имела 7 падающих backend-тестов. Эти ошибки исправлены. В интеграционной версии проверены:
 
-Ветки развивались независимо после общего коммита `1831c5a`. На момент аудита в dev — 51 уникальный коммит, в main — 6. В dev сосредоточена расширенная функциональность, а main содержит отдельную Web-реализацию и исправления надёжности. Поэтому main сейчас не отражает весь объём разработки.
+| Область | Проверка |
+| --- | --- |
+| Общий код и backend | JVM-тесты, включая миграции обеих схем, SRS и синхронизацию двух локальных БД через Ktor/JWT |
+| Данные | Повторное открытие, сохранение тегов/SRS/ссылок/очереди sync, защита новой offline-правки от старого ответа сервера |
+| Web | Development-сборка и Chromium: ошибка/повтор импорта, job polling, воспроизведение, сохранение слова и аудио, перезагрузка и offline-аудио |
+| Хранилище браузера | Реальные SQLite WASM и IndexedDB; завершение worker, rollback, foreign keys и неполные загрузки |
+| Desktop/TUI | Сборка и запуск DI/БД/аудиодвижка без окон; TUI проверен через виртуальный терминал |
+| Внешние media tools | Реальный импорт Easy German 1: 48 реплик, 156 секунд MP3, 200 точек waveform |
 
-Основой дальнейшей интеграции выбрана **dev (`3003225`)**. Исправления из **main (`945ab35`)** предстоит адаптировать к её архитектуре. Пробное слияние выявило **29 конфликтующих файлов**, включая модели, БД, импорт и плеер. Автоматическое принятие одной стороны может потерять функциональность или исправления.
+Это не заявление о готовности production. Android target отключён. Работа платных Gemini API и конкретного аудиоустройства/VLC проверяется отдельно в окружении пользователя. Полный запуск Web без сети требует закешированного приложения: offline здесь означает доступ к сохранённой библиотеке и аудио в уже загруженном приложении.
 
-Для проверки создана отдельная ветка `integration/dev-base-20261021`. Слияние и публикация изменений в main/dev в рамках аудита не выполнялись.
+На машине текущей проверки Windows Application Control блокирует ffplay. Поэтому звук Desktop/TUI не подтверждён; проверки DI/БД/запуска пройдены, воспроизведение в Chromium подтверждено.
 
-### Проверки и прогресс интеграционной ветки
+Актуальные этапы и результаты: [план спринтов](docs/todo.md), [интеграция](docs/INTEGRATION_PLAN_2026-10-21.md), [changelog](docs/CHANGELOG.md), [текстовый UML-журнал](docs/CHANGELOG_UML.md).
 
-Исходная dev не проходила JS-компиляцию и 7 backend-тестов. В рабочей копии интеграционной ветки эти ошибки исправлены (INT-03); завершён перенос защиты аудиоответов и импорта (INT-04). Изменения ещё не слиты в dev/main.
+## Зависимости
 
-| Область | Результат | Что это означает |
+- **JDK 21**. Gradle 8.14 загружается через wrapper; отдельный Gradle не нужен.
+- **Node.js 22+ и npm** для браузерных проверок и JavaScript runtime yt-dlp. Локальные проверки выполнялись также на Node 24.
+- **yt-dlp, ffmpeg и ffprobe** в PATH для импорта. **ffplay** нужен для TUI и Desktop без VLC.
+- Для Desktop предпочтителен **VLC той же разрядности, что JVM**. Если VLC недоступен, используется ffplay.
+- Для браузерных тестов — Chromium, устанавливаемый Playwright.
+
+Версии библиотек зафиксированы в Gradle и lock-файле npm: Kotlin 2.0.21, Compose Multiplatform 1.7.0, Ktor 2.3.5, Koin 3.5.0, SQLDelight (plugin 2.0.2/runtime 2.0.0), Exposed 0.46.0, SQLite JDBC, kotlinx.coroutines и kotlinx.datetime. Desktop использует VLCJ, TUI — Lanterna. Библиотеки вручную скачивать не нужно; первый запуск требует сети.
+
+В Windows можно установить проверенные media tools локально:
+
+```powershell
+.\tools\media\Setup-MediaTools.ps1
+$env:Path = "$(Resolve-Path .\tools\media\build);$env:Path"
+```
+
+Скрипт проверяет SHA-256 и извлекает yt-dlp/ffmpeg/ffprobe/ffplay в игнорируемый Git каталог. Альтернатива — собственные установленные инструменты. Для runner можно задать `YT_DLP_EXECUTABLE`, `FFMPEG_EXECUTABLE` и `FFPLAY_EXECUTABLE`; ffmpeg/ffprobe для самого yt-dlp должны быть доступны в PATH.
+
+## Запуск в PowerShell
+
+Из корня репозитория, в первом терминале:
+
+```powershell
+# Создать секрет один раз и сохранить его в настройках своего окружения.
+$bytes = New-Object byte[] 48
+$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+$rng.GetBytes($bytes)
+$env:LANGKRAFT_JWT_SECRET = [Convert]::ToBase64String($bytes)
+$rng.Dispose()
+.\gradlew.bat :backend:run
+```
+
+Backend: `http://localhost:8080`. Без JWT secret длиной хотя бы 32 символа backend не запускается. После смены секрета сохранённые токены потребуют повторного входа. Для Gemini задайте `GEMINI_API_KEY`; без ключа используется mock.
+
+Во втором терминале выберите клиент:
+
+```powershell
+# Web: открыть http://127.0.0.1:3000
+.\gradlew.bat :webApp:jsBrowserDevelopmentRun
+
+# Или Desktop
+.\gradlew.bat :shared:run
+
+# Или TUI — запускать в интерактивном терминале
+.\gradlew.bat :shared:runTui
+```
+
+Web использует текущий origin и proxy `/api` к backend. Desktop/TUI по умолчанию обращаются к `http://localhost:8080`. Вкладка **Learn** импортирует контент, **Review** запускает SRS, **Write** — письменные упражнения. В **Account** доступны регистрация, вход и **Sync now**. Словарь доступен локально без входа; облачная синхронизация требует аккаунта. JWT хранится в локальной БД; Sign out удаляет токен и сохраняет библиотеку. TUI использует профиль Desktop и восстанавливает ранее сохранённый токен.
+
+Для Bash используются `./gradlew` и обычные переменные окружения, например `export LANGKRAFT_JWT_SECRET=...`. Тесты `--smoke` не открывают окна:
+
+```powershell
+.\gradlew.bat :shared:run --args=--smoke
+.\gradlew.bat :shared:runTui --args=--smoke
+```
+
+## Где хранятся данные и как работает миграция
+
+| Данные | По умолчанию | Настройка |
 | --- | --- | --- |
-| JVM-код shared и backend | Компиляция прошла | Подтверждена сборка кода, но не полный пользовательский сценарий |
-| Shared-тесты на JVM | **28/28 успешно после INT-04** | Проверены sync, SRS, ViewModel, аудиоответы и отмена |
-| Backend-тесты | **26/26 успешно после INT-04** | Проверены репозитории, очередь, HTTP-ошибки, SRT/VTT, waveform, timeout и отмена дерева процессов |
-| JS-компиляция shared и webApp | **Проходит после INT-03** | Dispatcher вынесен в платформенные реализации, время берётся из kotlinx.datetime.Clock |
-| Web-запуск и offline | **Не подтверждены** | Отсутствуют регистрации БД/плеера в Web DI; запись файлов в JS пока является заглушкой |
-| Desktop/TUI и внешние сервисы | Полный регресс не выполнен | Запуск, реальный импорт, воспроизведение, Gemini и синхронизация двух клиентов требуют отдельных проверок |
+| Desktop/TUI | `~/.langkraft/langkraft.db`, аудио в `~/.langkraft/audio` | `LANGKRAFT_DATA_DIR` |
+| Backend | `data/langkraft.db` относительно рабочего каталога backend | `LANGKRAFT_BACKEND_DATA_DIR` |
+| Исходные медиа backend | `downloads/jobId/` | `LANGKRAFT_DOWNLOADS_DIR` |
+| Web | IndexedDB текущего origin: SQLite и отдельное хранилище аудио | Не переносится между разными origin автоматически |
 
-В INT-04 очередь ограничена, процессы получили таймаут и обработку отмены, добавлены проверки аудиоответов и субтитров. Для выпуска ещё нужно подключить браузерное хранилище, согласовать миграции БД, исключить потерю связей словаря при повторном импорте и проверить восстановление заданий после перезапуска. Перед внешним развёртыванием требуется заменить фиксированный JWT secret конфигурационным секретом.
+Desktop/Web используют объединённую схему **v3**. Миграция распознаёт dev (включая старую БД с `user_version=0`) и main v1/v2, переносит названия столбцов и добавляет поля без сброса словаря. Повторный импорт сохраняет SRS и offline-ссылку; одинаковые времена реплик не объединяются. Неизвестные локальному клиенту ссылки на исходный контент сохраняются в metadata синхронизации.
 
-Текущие ограничения импорта: только HTTPS-ссылки на отдельные YouTube-видео с известной длительностью до 4 часов; по умолчанию принимаются до 12 незавершённых заданий (4 воркера + 8 ожидающих). Перегрузка возвращает HTTP 503 с Retry-After. yt-dlp ограничен 600 секундами, waveform ffmpeg — 120 секундами. Новые медиа сохраняются отдельно для каждого jobId, локальное аудио — MP3. Проверки MIME отбрасывают явный неаудиоконтент, но не проверяют декодирование файла.
+Перед Desktop-миграцией создаётся согласованный SQLite backup `langkraft.db.before-schema-3.bak` через `VACUUM INTO`; backend перед обновлением sync-схемы создаёт `.before-sync-v2.bak`. Закройте старые клиенты перед обновлением. Для отката остановите приложение и восстановите backup вместе с прежним кодом: запуск старого main поверх v3 не является безопасным откатом. БД более новой версии отвергается, а не пересоздаётся.
 
-### Ближайшие этапы
+Очистка данных сайта в браузере удаляет и библиотеку, и offline-аудио. Если сохранённое аудио отсутствует, плеер предлагает явное **Play online**, сохраняя словарь и SRS.
 
-1. **Выполнено в интеграционной рабочей копии:** восстановить JS-компиляцию и backend-тесты (27/27 JVM-тестов).
-2. **Выполнено в интеграционной рабочей копии:** адаптировать проверки HTTP/MIME, корректную отмену операций и защиту импорта из main (INT-04; всего 54 JVM-теста).
-3. Согласовать миграции БД и браузерное хранилище, сохранив SRS, синхронизацию и Desktop/TUI.
-4. Выполнить регресс платформ и пользовательских сценариев; затем интегрировать изменения в dev и подготовить слияние dev → main.
+## Ограничения импорта
 
-Четыре спринта и их статус: [roadmap](docs/todo.md). Подробные находки, порядок переноса и критерии допуска: [план интеграции](docs/INTEGRATION_PLAN_2026-10-21.md). Изменения фиксируются в [changelog](docs/CHANGELOG.md) и [текстовом UML-журнале](docs/CHANGELOG_UML.md). Результаты проверок main нельзя считать результатами проверок dev.
+Принимаются HTTPS-ссылки на отдельные YouTube-видео с известной положительной длительностью до 4 часов. По умолчанию разрешены 4 воркера и 8 дополнительных незавершённых заданий; перегрузка возвращает HTTP 503 с `Retry-After`. yt-dlp ограничен 600 секундами, waveform ffmpeg — 120 секундами. Неисправные субтитры отвергаются целиком. Отмена/остановка завершает дерево процессов; незавершённые задания после перезапуска получают ERROR и требуют повторного импорта.
 
-## 🚀 The Philosophy
-- **Immersion First:** Language is acquired through interesting content, not memorized through rules.
-- **Listening Centric:** The primary goal is to bridge the gap between "hearing noise" and "understanding meaning."
-- **Context is King:** Every word you learn is tied to the exact audio fragment and sentence where you first encountered it.
-- **Zero Friction:** Import content directly from YouTube and start learning instantly.
+Полная загрузка аудио проверяет HTTP 200, MIME и количество байтов. Это не проверка кодека; файлы должны декодироваться выбранным аудиодвижком. Новые медиа сохраняются как MP3. Выдача backend поддерживает Range для перемотки.
 
-## 🛠 Tech Stack
-- **Multiplatform UI:** [Compose Multiplatform](https://www.jetbrains.com/lp/compose-multiplatform/) 1.7.0; Desktop UI and Lanterna TUI. Web requires the fixes described above; Android is currently excluded from the Gradle build.
-- **Core Logic:** Kotlin Multiplatform (KMP).
-- **Database:** [SQLDelight](https://cashapp.github.io/sqldelight/) (SQLite) for offline-first persistence.
-- **Audio Engine:** VLCJ (Desktop), FFmpeg (TUI), and HTML5 Audio (Web implementation).
-- **Backend:** Ktor Server for content ingestion.
-- **Media Extraction:** [yt-dlp](https://github.com/yt-dlp/yt-dlp) integrated via a custom Java/Kotlin wrapper.
-- **AI Layer:** Google Gemini backend integration with a mock fallback; end-to-end verification is pending.
+Общие квоты/retention медиа, очистка следов аварийного завершения IndexedDB и координация нескольких вкладок остаются в техническом backlog. Приложение пока не стоит развёртывать как публичный сервис без отдельной проверки эксплуатации и лимитов.
 
-## 🏗 Architecture
-Langkraft follows **Clean Architecture** principles to ensure the learning logic remains independent of platforms and frameworks:
-
-- **`:shared`**:
-    - `commonMain`: Domain models, Repositories, UseCases, and Compose UI.
-    - `desktopMain`/`jsMain`/`androidMain`: Platform-specific implementations; Android target is currently disabled.
-- **`:backend`**: Ktor service for asynchronous YouTube ingestion (MP3 audio and subtitles), authentication, AI and vocabulary synchronization.
-- **`:webApp`**: Web entry point; currently blocked by the issues above. `androidApp` sources exist but the module is not included in settings.
-
-## 🗺 Roadmap
-The current roadmap is the integration and stabilization sequence above. Existing ingestion, AI and SRS implementations must be preserved and verified while fixes are ported from main.
-
-## 🛠 Getting Started
-1. Clone the repository.
-2. Install JDK 21 and ensure `yt-dlp`, `ffmpeg` and `ffprobe` are available on PATH for media operations. Desktop VLCJ playback also requires VLC/native libraries.
-3. Open the project in **IntelliJ IDEA** or **Android Studio**.
-4. Run the baseline checks from the project directory (PowerShell):
+## Проверки и production Web
 
 ```powershell
 .\gradlew.bat :shared:desktopTest :backend:test
-.\gradlew.bat :shared:compileKotlinJs :webApp:compileKotlinJs
+.\gradlew.bat :webApp:jsBrowserDevelopmentWebpack
+Push-Location tools/web-storage-tests
+npm ci
+npx playwright install chromium
+npm test
+npm run test:app
+Pop-Location
+
+.\gradlew.bat :webApp:jsBrowserProductionWebpack
+$env:WEB_APP_BUNDLE = Join-Path (Get-Location) 'webApp/build/kotlin-webpack/js/productionExecutable'
+Push-Location tools/web-storage-tests
+npm run test:app
+Pop-Location
+Remove-Item Env:WEB_APP_BUNDLE
 ```
 
-Both commands pass in the integration working copy after INT-03; the original dev revision retains the failures described above. Gradle needs network access on the first run to download dependencies. These checks do not start the application; Android installation and a working Web launch are not currently supported by this verified baseline.
+CI выполняет JVM-тесты, smoke Desktop/TUI, storage-проверки и Web-сценарии для development/production. Живой YouTube намеренно запускается отдельно от воспроизводимых тестов:
 
----
-*Developed with ❤️ for language learners who want to finally understand German.*
+```powershell
+# При запущенном backend и установленных media tools
+Push-Location tools/web-storage-tests
+npm run test:youtube
+Pop-Location
+```
+
+Production bundle находится в `webApp/build/kotlin-webpack/js/productionExecutable`. При размещении нужно также отдавать `index.html` и Skiko-ресурсы из `webApp/build/processedResources/js/main`, сохранив имена файлов; `.wasm` отдавать как `application/wasm`, `/api` направлять на backend. Проверки публикации в конкретном hosting-окружении выполняются отдельно.
+
+## Структура проекта
+
+- `shared/commonMain` — модели, Repository, use cases, общий Compose UI и SRS.
+- `shared/desktopMain`, `jsMain`, `jvmMain` — платформенные БД, аудио и IO.
+- `backend` — Ktor API, auth, sync, задания импорта и CLI Adapter.
+- `webApp` — инициализация Web/DI, HTML и proxy разработки.
+- `tools` — media installer и Playwright-регресс.
+- `androidApp`/`androidMain` — исходники сохранены; Android не включён в текущую сборку.

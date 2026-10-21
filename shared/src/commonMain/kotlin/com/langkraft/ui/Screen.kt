@@ -6,4 +6,5 @@ sealed class Screen {
     data object SrsTraining : Screen()
     data class Player(val contentId: String) : Screen()
     data object Writing : Screen()
+    data object Account : Screen()
 }

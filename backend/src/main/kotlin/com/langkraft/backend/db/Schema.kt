@@ -43,6 +43,8 @@ object VocabularySync : Table("vocabulary_sync") {
     val lapseCount = integer("lapse_count")
     val tags = text("tags")
     val lastUpdated = long("last_updated")
+    val serverUpdated = long("server_updated").default(0)
+    val deleted = bool("deleted").default(false)
 
     override val primaryKey = PrimaryKey(id)
 }

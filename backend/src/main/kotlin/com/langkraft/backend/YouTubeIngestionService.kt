@@ -28,6 +28,7 @@ class YouTubeIngestionService(
     private var closed = false
 
     init {
+        jobRepository.recoverInterrupted()
         scope.launch {
             while (isActive) {
                 delay(cleanupIntervalMs)

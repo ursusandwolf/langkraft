@@ -21,11 +21,13 @@ class BackendRemoteSource(
 
     override suspend fun fetchFromYouTube(url: String): ImmersionContent {
         val request = IngestRequest(url)
-        val response = httpClient.post(baseUrl) {
+        val startResponse = httpClient.post(baseUrl) {
             url { appendEncodedPathSegments("api", "ingest") }
             contentType(ContentType.Application.Json)
             setBody(request)
-        }.body<IngestResponse>()
+        }
+        check(startResponse.status.isSuccess()) { "Import service returned HTTP ${startResponse.status.value}" }
+        val response = startResponse.body<IngestResponse>()
 
         val jobId = response.jobId
 
@@ -38,6 +40,7 @@ class BackendRemoteSource(
             if (jobResponse.status == HttpStatusCode.NotFound) {
                 throw Exception("Job not found")
             }
+            check(jobResponse.status.isSuccess()) { "Import status returned HTTP ${jobResponse.status.value}" }
 
             val job = jobResponse.body<IngestionJob>()
             if (job.status == ContentProcessingStatus.READY && job.content != null) {
