@@ -16,6 +16,7 @@ import io.ktor.client.engine.mock.MockEngine
 import io.ktor.utils.io.ByteReadChannel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
@@ -42,6 +43,26 @@ class RepositoryTest {
             SubtitleLine("first", "content", 0, 1000, "Guten", null)
         ))
     private val word = VocabularyWord("word", "Guten", null, "good", "Guten Tag", "content", "first")
+
+    @Test
+    fun equalStartTimesKeepInputOrderAfterUpdatesAndReopening() = runTest {
+        val url = "jdbc:sqlite:${folder.newFile("ties.db").absolutePath}"
+        val tied = content.copy(subtitles = listOf(
+            SubtitleLine("z-first", "content", 0, 2000, "First", null),
+            SubtitleLine("a-second", "content", 0, 1000, "Second", null)
+        ))
+        suspend fun assertOrder(repository: SqlDelightContentRepository, expected: List<SubtitleLine>) {
+            assertEquals(expected, repository.getAllContent().first().single().subtitles)
+            assertEquals(expected, repository.getContentById("content")!!.subtitles)
+        }
+        fixture(url).use { f ->
+            f.contents.saveContent(tied)
+            assertOrder(f.contents, tied.subtitles)
+            f.contents.saveContent(tied.copy(subtitles = tied.subtitles.reversed()))
+            assertOrder(f.contents, tied.subtitles.reversed())
+        }
+        fixture(url, create = false).use { f -> assertOrder(f.contents, tied.subtitles.reversed()) }
+    }
 
     @Test
     fun libraryFlowEmitsCompleteContentAndOrderedSubtitles() = runTest {

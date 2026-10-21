@@ -4,6 +4,7 @@ import { readFile, mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { chromium } from "playwright";
+import { verifyLegacyMigration } from "./migration.test.js";
 
 const directory = process.env.WEB_APP_BUNDLE ? path.resolve(process.env.WEB_APP_BUNDLE) :
   fileURLToPath(new URL("../../../webApp/build/dist/js/developmentExecutable/", import.meta.url));
@@ -145,5 +146,6 @@ try {
     assert.deepEqual(restoredWords, saved.words);
     assert.deepEqual(errors, []);
     console.log("PASS: import error/retry, playback, save word, release player, reload and offline audio");
+    await verifyLegacyMigration(browser, `http://127.0.0.1:${server.address().port}`);
   }
 } finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }

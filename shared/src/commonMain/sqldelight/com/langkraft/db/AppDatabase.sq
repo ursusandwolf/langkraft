@@ -17,6 +17,7 @@ CREATE TABLE SubtitleLine (
     endMs INTEGER NOT NULL,
     textDe TEXT NOT NULL,           -- Original German text
     textEn TEXT,                    -- Optional English translation
+    ordinal INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (contentId) REFERENCES Content(id) ON DELETE CASCADE
 );
 
@@ -52,7 +53,7 @@ selectLibrary:
 SELECT Content.*, SubtitleLine.id AS subtitleId, SubtitleLine.startMs,
        SubtitleLine.endMs, SubtitleLine.textDe, SubtitleLine.textEn
 FROM Content LEFT JOIN SubtitleLine ON Content.id = SubtitleLine.contentId
-ORDER BY Content.createdAt DESC, Content.id, SubtitleLine.startMs, SubtitleLine.id;
+ORDER BY Content.createdAt DESC, Content.id, SubtitleLine.startMs, SubtitleLine.ordinal, SubtitleLine.id;
 
 insertContent {
     UPDATE Content SET title = :title, audioUrl = :audioUrl,
@@ -63,7 +64,7 @@ insertContent {
 }
 
 selectSubtitlesForContent:
-SELECT * FROM SubtitleLine WHERE contentId = ? ORDER BY startMs ASC;
+SELECT * FROM SubtitleLine WHERE contentId = ? ORDER BY startMs ASC, ordinal ASC, id ASC;
 
 selectConflictingSubtitles:
 SELECT id FROM SubtitleLine WHERE id IN :ids AND contentId != :contentId;
@@ -76,9 +77,9 @@ DELETE FROM SubtitleLine WHERE contentId = ?;
 
 insertSubtitleLine {
     UPDATE SubtitleLine SET contentId = :contentId, startMs = :startMs,
-        endMs = :endMs, textDe = :textDe, textEn = :textEn WHERE id = :id;
-    INSERT OR IGNORE INTO SubtitleLine(id, contentId, startMs, endMs, textDe, textEn)
-    VALUES (:id, :contentId, :startMs, :endMs, :textDe, :textEn);
+        endMs = :endMs, textDe = :textDe, textEn = :textEn, ordinal = :ordinal WHERE id = :id;
+    INSERT OR IGNORE INTO SubtitleLine(id, contentId, startMs, endMs, textDe, textEn, ordinal)
+    VALUES (:id, :contentId, :startMs, :endMs, :textDe, :textEn, :ordinal);
 }
 
 upsertWord {

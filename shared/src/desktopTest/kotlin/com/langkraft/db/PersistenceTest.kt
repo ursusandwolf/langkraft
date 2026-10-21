@@ -16,7 +16,7 @@ class PersistenceTest {
             queries.insertContent(id = "content", title = "Updated", audioUrl = "/audio.opus",
                 localAudioPath = "/offline", sourceUrl = "source", durationSeconds = 10, createdAt = 2)
             queries.insertSubtitleLine(id = "line", contentId = "content", startMs = 0,
-                endMs = 1000, textDe = "Guten Tag", textEn = "Good day")
+                endMs = 1000, textDe = "Guten Tag", textEn = "Good day", ordinal = 0)
             assertEquals(1, queries.selectSubtitlesForContent("content").awaitAsList().size)
             driver.executeQuery(null, "SELECT contentId, subtitleLineId FROM Vocabulary", { cursor ->
                 cursor.next()
@@ -49,7 +49,7 @@ class PersistenceTest {
         queries.insertContent(id = "content", title = "Title", audioUrl = "/audio.opus",
             localAudioPath = null, sourceUrl = "source", durationSeconds = 10, createdAt = 1)
         queries.insertSubtitleLine(id = "line", contentId = "content", startMs = 0,
-            endMs = 1000, textDe = "Guten Tag", textEn = null)
+            endMs = 1000, textDe = "Guten Tag", textEn = null, ordinal = 0)
         queries.upsertWord(id = "word", word = "Tag", lemma = null, translation = null,
             contextSentence = "Guten Tag", contentId = "content", subtitleLineId = "line",
             addedAt = 1, status = "NEW")

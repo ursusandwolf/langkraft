@@ -25,7 +25,8 @@ fun main() {
     embeddedServer(Netty, host = "0.0.0.0", port = port) {
         module(YouTubeIngestionService(
             downloadsDir = System.getenv("DOWNLOADS_DIR") ?: "downloads",
-            mediaBaseUrl = System.getenv("PUBLIC_BASE_URL") ?: "http://localhost:$port"
+            mediaBaseUrl = System.getenv("PUBLIC_BASE_URL") ?: "http://localhost:$port",
+            maxConcurrentImports = System.getenv("MAX_CONCURRENT_IMPORTS")?.toInt() ?: 2
         ))
     }.start(wait = true)
 }
@@ -40,6 +41,8 @@ fun Application.module(ingestionService: YouTubeIngestionService = YouTubeIngest
                 call.respond(call.cancelOnDisconnect { ingestionService.ingest(request.url) })
             } catch (exception: InvalidSourceUrlException) {
                 call.respond(HttpStatusCode.BadRequest, mapOf("error" to exception.message))
+            } catch (exception: IngestionBusyException) {
+                call.respond(HttpStatusCode.ServiceUnavailable, mapOf("error" to exception.message))
             } catch (exception: IngestionException) {
                 call.application.environment.log.warn("YouTube ingestion failed", exception)
                 call.respond(HttpStatusCode.BadGateway, mapOf("error" to "Unable to import video"))

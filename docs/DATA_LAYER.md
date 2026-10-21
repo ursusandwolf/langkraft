@@ -40,11 +40,13 @@ The local `@langkraft/web-storage` runtime package lives under `shared/src/jsMai
 
 `getAllContent()` emits content with ordered subtitles through SQLDelight query notifications. `saveContent()` updates content and subtitles in one transaction; unchanged subtitle IDs retain word links, removed subtitles clear only their subtitle references, and IDs owned by other content are rejected.
 
+Schema version 2 adds `SubtitleLine.ordinal`, populated from the input list on each save. Both library and player queries order by `startMs, ordinal, id`, so equal-start cues retain their input order after updates and reopening. The version 1 migration adds the column without rebuilding tables or changing vocabulary/SRS data. Old cues receive ordinal 0 and use ID as a deterministic fallback; their original equal-start ordering cannot be recovered from the stored data. Saving content again records the supplied order.
+
 `saveWord()` preserves the review schedule and original added timestamp. `getWordsToReview()` observes writes and reevaluates due dates every minute while collected. The clock and dispatcher are injectable for tests.
 
 `ContentApi` posts JSON to `/api/ingest`, resolves audio links against the backend, and discards server-local paths. Non-success responses raise `ContentApiException`; cancellation propagates. Its HTTP client permits the backend's extraction timeout.
 
-`IngestContentUseCase` saves remote metadata, downloads audio, then saves the local location. If audio fails, remote content and subtitles remain available. Ordinary failures return `Result.failure`; cancellation is rethrown. Query and async-generation changes do not alter table layouts or schema version.
+`IngestContentUseCase` saves remote metadata, downloads audio, then saves the local location. If audio fails, remote content and subtitles remain available. Ordinary failures return `Result.failure`; cancellation is rethrown.
 
 ## JVM support and deferred Android
 

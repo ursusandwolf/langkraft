@@ -9,6 +9,15 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.testing.testApplication
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -16,6 +25,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Rule
 import org.junit.rules.TemporaryFolder
 import java.io.File
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -26,6 +36,78 @@ import kotlin.test.assertTrue
 class IngestionTest {
     @get:Rule
     val directory = TemporaryFolder()
+
+    @Test
+    fun httpOverloadIsRejectedWithoutQueuingAndSuccessReleasesSlots() = testApplication {
+        val started = Channel<Unit>(2)
+        val finish = CompletableDeferred<Unit>()
+        val calls = AtomicInteger()
+        val runner = YtDlpRunner { args ->
+            calls.incrementAndGet()
+            started.send(Unit)
+            finish.await()
+            successfulDownload().execute(args)
+        }
+        application { module(YouTubeIngestionService(directory.root.path, "https://media.example", runner, 2)) }
+        suspend fun import(url: String = "https://youtu.be/video") = client.post("/api/ingest") {
+            header(HttpHeaders.ContentType, "application/json")
+            setBody("""{"url":"$url"}""")
+        }
+        withTimeout(10_000) {
+            coroutineScope {
+                val first = async { import() }
+                val second = async { import() }
+                try {
+                    repeat(2) { started.receive() }
+                    val busy = import()
+                    assertEquals(HttpStatusCode.ServiceUnavailable, busy.status)
+                    assertEquals(setOf("error"), Json.parseToJsonElement(busy.bodyAsText()).jsonObject.keys)
+                    assertEquals(HttpStatusCode.BadRequest, import("https://example.com/video").status)
+                    assertEquals(2, calls.get())
+                } finally { finish.complete(Unit) }
+                assertEquals(HttpStatusCode.OK, first.await().status)
+                assertEquals(HttpStatusCode.OK, second.await().status)
+            }
+            assertEquals(HttpStatusCode.OK, import().status)
+            assertEquals(3, calls.get())
+        }
+    }
+
+    @Test
+    fun cancellationAndFailureReleaseImportCapacity() = runBlocking {
+        val started = CompletableDeferred<Unit>()
+        val calls = AtomicInteger()
+        val service = YouTubeIngestionService(directory.root.path, runner = YtDlpRunner { args ->
+            when (calls.incrementAndGet()) {
+                1 -> {
+                    val output = args[args.indexOf("--output") + 1]
+                    File(output.replace("%(ext)s", "opus.part")).writeText("partial")
+                    started.complete(Unit)
+                    awaitCancellation()
+                }
+                2 -> throw IngestionException("Download failed")
+                else -> successfulDownload().execute(args)
+            }
+        }, maxConcurrentImports = 1)
+        val first = launch { service.ingest("https://youtu.be/video") }
+        try {
+            withTimeout(10_000) { started.await() }
+            assertFailsWith<IngestionBusyException> { service.ingest("https://youtu.be/video") }
+        } finally { first.cancelAndJoin() }
+        assertTrue(directory.root.listFiles().orEmpty().isEmpty())
+        assertFailsWith<IngestionException> { service.ingest("https://youtu.be/video") }
+        assertNotNull(service.mediaFile("${service.ingest("https://youtu.be/video").id}.opus"))
+        assertEquals(3, calls.get())
+    }
+
+    @Test
+    fun importLimitMustBePositive() {
+        for (limit in listOf(0, -1)) {
+            assertFailsWith<IllegalArgumentException> {
+                YouTubeIngestionService(directory.root.path, maxConcurrentImports = limit)
+            }
+        }
+    }
 
     private fun service(runner: YtDlpRunner = successfulDownload()) = YouTubeIngestionService(
         directory.root.path, "https://media.example", runner

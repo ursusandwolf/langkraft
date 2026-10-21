@@ -37,6 +37,33 @@ import kotlin.test.assertTrue
 
 class WebStorageTest {
     @Test
+    fun equalStartTimesKeepInputOrderAfterUpdatesAndWorkerReopening() = runTest {
+        val id = "ties-${Random.nextInt(1, Int.MAX_VALUE)}"
+        val content = ImmersionContent(id, "Ties", "audio", null, "source", 2, listOf(
+            SubtitleLine("$id-z", id, 0, 2000, "First", null),
+            SubtitleLine("$id-a", id, 0, 1000, "Second", null)
+        ))
+        val client = HttpClient(MockEngine { error("No network expected") })
+        val handle = createWebDatabase()
+        try {
+            val repository = SqlDelightContentRepository(handle.access, ContentApi(client, "https://backend"),
+                IndexedDbAudioStorage(), { 0L })
+            repository.saveContent(content)
+            assertEquals(content, repository.getContentById(id))
+            assertEquals(content, repository.getAllContent().first().single { it.id == id })
+            repository.saveContent(content.copy(subtitles = content.subtitles.reversed()))
+        } finally { handle.close() }
+        val reopened = createWebDatabase()
+        try {
+            val repository = SqlDelightContentRepository(reopened.access, ContentApi(client, "https://backend"),
+                IndexedDbAudioStorage(), { 0L })
+            val expected = content.copy(subtitles = content.subtitles.reversed())
+            assertEquals(expected, repository.getContentById(id))
+            assertEquals(expected, repository.getAllContent().first().single { it.id == id })
+        } finally { reopened.close(); client.close() }
+    }
+
+    @Test
     fun cancelledTransactionRollsBackAndLeavesTheConnectionUsable() = runTest {
         val handle = createWebDatabase()
         val id = "cancelled-${Random.nextInt(1, Int.MAX_VALUE)}"
@@ -164,7 +191,7 @@ class WebStorageTest {
                         entered.complete(Unit)
                         resume.await()
                         appDatabaseQueries.insertSubtitleLine(id = "$id-line", contentId = id,
-                            startMs = 0, endMs = 1000, textDe = "Hallo", textEn = null)
+                            startMs = 0, endMs = 1000, textDe = "Hallo", textEn = null, ordinal = 0)
                     }
                 }
             }

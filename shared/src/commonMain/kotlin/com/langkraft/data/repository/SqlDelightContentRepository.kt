@@ -64,9 +64,9 @@ class SqlDelightContentRepository(
             queries.insertContent(id = content.id, title = content.title, audioUrl = content.audioUrl,
                 localAudioPath = content.localAudioPath, sourceUrl = content.sourceUrl,
                 durationSeconds = content.durationSeconds, createdAt = nowMillis())
-            content.subtitles.forEach {
+            content.subtitles.forEachIndexed { index, it ->
                 queries.insertSubtitleLine(id = it.id, contentId = it.contentId, startMs = it.startMs,
-                    endMs = it.endMs, textDe = it.textDe, textEn = it.textEn)
+                    endMs = it.endMs, textDe = it.textDe, textEn = it.textEn, ordinal = index.toLong())
             }
             if (ids.isEmpty()) queries.deleteSubtitlesForContent(content.id)
             else queries.deleteObsoleteSubtitles(content.id, ids)

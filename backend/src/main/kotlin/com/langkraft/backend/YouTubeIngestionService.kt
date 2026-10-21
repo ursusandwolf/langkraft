@@ -4,6 +4,7 @@ import com.langkraft.domain.model.ImmersionContent
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.doubleOrNull
@@ -17,20 +18,32 @@ import kotlin.coroutines.coroutineContext
 
 class InvalidSourceUrlException : IllegalArgumentException("Enter an HTTPS YouTube video URL")
 class IngestionException(message: String, cause: Throwable? = null) : IOException(message, cause)
+class IngestionBusyException : Exception("Import capacity reached; try again later")
 
 class YouTubeIngestionService(
     downloadsDir: String = "downloads",
     private val mediaBaseUrl: String = "http://localhost:8080",
-    private val runner: YtDlpRunner = ProcessYtDlpRunner()
+    private val runner: YtDlpRunner = ProcessYtDlpRunner(),
+    maxConcurrentImports: Int = 2
 ) {
+    private val importSlots = Semaphore(maxConcurrentImports)
     private val directory = File(downloadsDir).absoluteFile.apply {
         check(isDirectory || mkdirs()) { "Cannot create downloads directory" }
     }
 
-    suspend fun ingest(url: String): ImmersionContent = withContext(Dispatchers.IO) {
+    suspend fun ingest(url: String): ImmersionContent {
         validateSourceUrl(url)
-        val videoId = UUID.randomUUID().toString()
+        if (!importSlots.tryAcquire()) throw IngestionBusyException()
         try {
+            return withContext(Dispatchers.IO) { ingestContent(url) }
+        } finally {
+            importSlots.release()
+        }
+    }
+
+    private suspend fun ingestContent(url: String): ImmersionContent {
+        val videoId = UUID.randomUUID().toString()
+        return try {
             runner.execute(listOf(
                 "--ignore-config", "--no-playlist",
                 "--js-runtimes", "node",
