@@ -1,7 +1,7 @@
 plugins {
     kotlin("jvm")
     id("io.ktor.plugin") version "2.3.5"
-    kotlin("plugin.serialization") version "2.0.21"
+    kotlin("plugin.serialization")
 }
 
 application {
@@ -27,6 +27,9 @@ dependencies {
     implementation("io.ktor:ktor-client-content-negotiation:2.3.5")
     implementation("io.ktor:ktor-client-logging:2.3.5")
     
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
+
     // Logging
     implementation("ch.qos.logback:logback-classic:1.4.11")
 

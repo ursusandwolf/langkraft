@@ -40,7 +40,14 @@ fun main() {
                     } catch (failure: kotlinx.coroutines.CancellationException) { throw failure }
                     catch (failure: Throwable) { error = failure.message ?: "Cannot open local storage" }
                 }
-                if (handle != null) MainApp()
+                if (handle != null) {
+                    MainApp()
+                    LaunchedEffect(Unit) {
+                        withFrameNanos { }
+                        withFrameNanos { }
+                        document.documentElement?.setAttribute("data-app-ready", "true")
+                    }
+                }
                 else Column {
                     if (error == null) Text("Opening local library?")
                     else {

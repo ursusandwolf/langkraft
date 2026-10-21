@@ -3,7 +3,7 @@ plugins {
     id("org.jetbrains.compose")
     id("org.jetbrains.kotlin.plugin.compose")
     id("app.cash.sqldelight")
-    kotlin("plugin.serialization") version "2.0.21"
+    kotlin("plugin.serialization")
 }
 
 /*
@@ -20,7 +20,7 @@ kotlin {
     // androidTarget()
     jvm("desktop") // For testing on desktop
     js(IR) {
-        browser()
+        browser { testTask { useKarma { useChromeHeadless() } } }
         binaries.executable()
     }
 
@@ -32,6 +32,7 @@ kotlin {
                 implementation(compose.material)
                 implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
                 implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.4.1")
+                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
                 implementation("app.cash.sqldelight:runtime:2.0.0")
                 implementation("app.cash.sqldelight:coroutines-extensions:2.0.0")
                 implementation("app.cash.sqldelight:async-extensions:2.0.0")

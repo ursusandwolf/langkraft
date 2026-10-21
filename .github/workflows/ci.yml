@@ -24,6 +24,8 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
       - run: bash ./gradlew --no-daemon :shared:desktopTest :backend:test
       - name: Desktop and TUI wiring
         env:
@@ -34,6 +36,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: always()
         with:
+          retention-days: 14
           name: jvm-reports
           path: |
             shared/build/reports/tests/
@@ -53,6 +56,8 @@ jobs:
           cache: npm
           cache-dependency-path: tools/web-storage-tests/package-lock.json
       - uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
       - run: npm ci
         working-directory: tools/web-storage-tests
       - run: npx playwright install --with-deps chromium
@@ -69,5 +74,6 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: always()
         with:
+          retention-days: 14
           name: browser-reports
           path: tools/web-storage-tests/build/app/

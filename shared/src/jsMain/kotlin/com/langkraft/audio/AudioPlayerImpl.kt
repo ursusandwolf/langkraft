@@ -85,7 +85,7 @@ actual class AudioPlayerImpl : AudioPlayer {
         }
     }
 
-    actual override fun load(url: String) {
+    actual override fun load(url: String, requestId: Long) {
         check(!released) { "Audio player is released" }
         val sourceGeneration = ++generation
         this.requestId = requestId

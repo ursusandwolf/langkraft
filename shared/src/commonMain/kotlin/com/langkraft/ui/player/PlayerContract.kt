@@ -17,6 +17,8 @@ data class PlayerState(
     val selectedWordContext: SubtitleLine? = null,
     val wordTranslation: TranslationResult? = null,
     val isTranslatingWord: Boolean = false,
+    val isSavingWord: Boolean = false,
+    val wordError: String? = null,
     val deepAnalysis: DeepAnalysisResult? = null,
     val isAnalyzing: Boolean = false,
     val sentenceTranslations: Map<String, String> = emptyMap(), // subtitle line id -> translation

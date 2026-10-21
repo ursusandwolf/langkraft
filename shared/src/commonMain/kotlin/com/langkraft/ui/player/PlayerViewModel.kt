@@ -4,6 +4,10 @@ import com.langkraft.domain.repository.LocalContentRepository
 import com.langkraft.domain.repository.AudioDownloader
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ensureActive
+import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 
@@ -27,8 +31,14 @@ class PlayerViewModel(
     linguisticAssistant: LinguisticAssistant,
     private val audioPlayer: AudioPlayer,
     private val fileSystem: FileSystem,
-    private val appConfig: AppConfig
-) : StateViewModel<PlayerState>(PlayerState()) {
+    private val appConfig: AppConfig,
+    baseContext: CoroutineContext = Dispatchers.Main
+) : StateViewModel<PlayerState>(PlayerState(), baseContext) {
+
+    private var loadJob: Job? = null
+    private var loadGeneration = 0L
+    private var audioRequest = 0L
+    private var saveInFlight = false
 
     private val linguisticDelegate = PlayerLinguisticDelegate(linguisticAssistant, scope, ::updateState, { currentState })
     private val offlineDelegate = OfflineDownloadDelegate(audioDownloader, contentRepository, scope, ::updateState, { currentState })
@@ -36,7 +46,7 @@ class PlayerViewModel(
     init {
         scope.launch {
             audioPlayer.error.collect { failure ->
-                if (failure != null) updateState { it.copy(error = failure.message,
+                if (failure != null && failure.requestId == audioRequest) updateState { it.copy(error = failure.message,
                     canPlayOnline = failure.reason == com.langkraft.audio.AudioErrorReason.LOCAL_ASSET_UNAVAILABLE && !it.isUsingRemoteAudio) }
             }
         }
@@ -117,14 +127,14 @@ class PlayerViewModel(
                 linguisticDelegate.handleToggleLemmatization(event.line)
             }
             is PlayerEvent.DismissWordDetails -> {
-                updateState { it.copy(selectedWord = null, wordTranslation = null) }
+                linguisticDelegate.dismissWord()
             }
             is PlayerEvent.DismissDeepAnalysis -> {
                 updateState { it.copy(deepAnalysis = null) }
             }
             is PlayerEvent.PlayOnline -> {
                 currentState.content?.let { content ->
-                    audioPlayer.load(content.copy(localAudioPath=null, downloadStatus=DownloadStatus.IDLE).getPlaybackUrl(appConfig.backendUrl))
+                    audioPlayer.load(content.copy(localAudioPath=null, downloadStatus=DownloadStatus.IDLE).getPlaybackUrl(appConfig.backendUrl), ++audioRequest)
                     updateState { it.copy(error=null, canPlayOnline=false, isUsingRemoteAudio=true) }
                     audioPlayer.play()
                 }
@@ -136,24 +146,55 @@ class PlayerViewModel(
         }
     }
 
+    fun retryTranslation() {
+        val word = currentState.selectedWord ?: return
+        val line = currentState.selectedWordContext ?: return
+        linguisticDelegate.handleWordClicked(word, line)
+    }
+
     fun saveWord(word: VocabularyWord) {
+        if (saveInFlight) return
+        saveInFlight = true
+        val selection = linguisticDelegate.selectionGeneration
+        updateState { it.copy(isSavingWord = true, wordError = null) }
         scope.launch {
-            vocabularyRepository.saveWord(word)
-            updateState { it.copy(selectedWord = null, wordTranslation = null) }
+            try {
+                vocabularyRepository.saveWord(word)
+                if (selection == linguisticDelegate.selectionGeneration) linguisticDelegate.dismissWord()
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (exception: Exception) {
+                if (selection == linguisticDelegate.selectionGeneration) updateState { it.copy(wordError = exception.message ?: "Cannot save word") }
+            } finally {
+                saveInFlight = false
+                updateState { it.copy(isSavingWord = false) }
+            }
         }
     }
 
     private fun loadContent(id: String) {
-        scope.launch {
-            updateState { it.copy(isLoading = true) }
-            val content = contentRepository.getContentById(id)
-            if (content == null) {
-                updateState { it.copy(isLoading = false, error = "Content not found") }
-                return@launch
+        val generation = ++loadGeneration
+        ++audioRequest
+        loadJob?.cancel()
+        linguisticDelegate.reset()
+        audioPlayer.pause()
+        updateState { PlayerState(isLoading = true) }
+        loadJob = scope.launch {
+            try {
+                val content = contentRepository.getContentById(id)
+                ensureActive()
+                if (generation != loadGeneration) return@launch
+                if (content == null) {
+                    updateState { it.copy(isLoading = false, error = "Content not found") }
+                    return@launch
+                }
+                updateState { it.copy(isLoading = false, content = content) }
+                audioPlayer.load(content.getPlaybackUrl(appConfig.backendUrl), audioRequest)
+            } catch (exception: CancellationException) {
+                throw exception
+            } catch (exception: Exception) {
+                if (generation == loadGeneration) updateState { it.copy(isLoading = false, error = exception.message ?: "Cannot load content") }
             }
-            updateState { it.copy(isLoading = false, content = content, error=null, canPlayOnline=false, isUsingRemoteAudio=false) }
-            
-            audioPlayer.load(content.getPlaybackUrl(appConfig.backendUrl))
         }
     }
 
@@ -170,7 +211,7 @@ class PlayerViewModel(
             (Clock.System.now().toEpochMilliseconds() - state.lastUserInteractionTime > 3000)
 
         val subtitles = state.content?.subtitles ?: emptyList()
-        val newIndex = subtitles.indexOfFirst { timeMs >= it.startMs && timeMs <= it.endMs }
+        val newIndex = subtitles.indexOfFirst { timeMs >= it.startMs && timeMs < it.endMs }
 
         if (state.isLooping && state.content != null) {
             val currentLine = if (newIndex != -1) subtitles[newIndex] else null

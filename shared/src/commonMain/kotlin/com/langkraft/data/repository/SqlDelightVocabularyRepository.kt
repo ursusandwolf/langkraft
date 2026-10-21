@@ -11,6 +11,8 @@ import io.ktor.client.*
 import io.ktor.client.call.*
 import io.ktor.client.request.*
 import io.ktor.http.*
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.datetime.Clock
@@ -26,17 +28,25 @@ class SqlDelightVocabularyRepository(
     private val db = access.database
     private val json = Json { ignoreUnknownKeys = true }
 
-    override fun getWordsToReview(): Flow<List<VocabularyWord>> {
-        val now = Clock.System.now().toEpochMilliseconds()
-        return db.appDatabaseQueries.selectVocabularyToReview(now).asFlowList { it.toDomain() }
-    }
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override fun getWordsToReview(): Flow<List<VocabularyWord>> = reviewClock().flatMapLatest { now ->
+        db.appDatabaseQueries.selectVocabularyToReview(now).asFlowList { it.toDomain() }
+    }.distinctUntilChanged()
 
-    override fun getReviewCount(): Flow<Int> {
-        val now = Clock.System.now().toEpochMilliseconds()
-        return db.appDatabaseQueries.countVocabularyToReview(now).asFlowOne { it.toInt() }
+    @OptIn(ExperimentalCoroutinesApi::class)
+    override fun getReviewCount(): Flow<Int> = reviewClock().flatMapLatest { now ->
+        db.appDatabaseQueries.countVocabularyToReview(now).asFlowOne { it.toInt() }
+    }.distinctUntilChanged()
+
+    private fun reviewClock(): Flow<Long> = flow {
+        while (currentCoroutineContext().isActive) {
+            emit(Clock.System.now().toEpochMilliseconds())
+            delay(60_000)
+        }
     }
 
     override suspend fun saveWord(word: VocabularyWord) = access.run(dispatcher) {
+        require(word.id.isNotBlank() && word.word.isNotBlank()) { "Word and ID must not be blank" }
         db.appDatabaseQueries.transaction {
             val revision = maxOf(Clock.System.now().toEpochMilliseconds(),
                 (db.appDatabaseQueries.selectPendingChange(word.id).awaitAsOneOrNull()?.timestamp ?: 0L) + 1,

@@ -40,20 +40,27 @@ const server=createServer(async(req,res)=>{
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const browser=await chromium.launch({headless:true,args:['--enable-unsafe-swiftshader']});
 const errors=[];
+let page;
 try {
-  const page=await browser.newPage({viewport:{width:1200,height:800}});
+  page=await browser.newPage({viewport:{width:1200,height:800}});
   page.on('pageerror',e=>errors.push(e.message||e.name));
   await page.addInitScript(()=>{
     const original=HTMLMediaElement.prototype.load;
     HTMLMediaElement.prototype.load=function(){window.activeAudio=this;return original.call(this);};
   });
   const origin=`http://127.0.0.1:${server.address().port}`;
-  const open=async()=>{await page.goto(origin);await page.waitForFunction(()=>!document.getElementById('startup'));await page.waitForTimeout(1800);await page.addScriptTag({url:origin+'/storage-probe/harness.js'});};
+  const open=async()=>{await page.goto(origin);await page.waitForFunction(()=>document.documentElement.dataset.appReady==='true',null,{timeout:60000});await page.waitForTimeout(400);await page.addScriptTag({url:origin+'/storage-probe/harness.js'});};
   const query=(sql,params=[])=>page.evaluate(async({sql,params})=>{const client=window.storage.createDatabaseClient();try{return await client.request('exec',sql,params);}finally{client.close();}},{sql,params});
   const waitQuery=async(sql,predicate)=>{const deadline=Date.now()+12000;while(Date.now()<deadline){const rows=await query(sql);if(predicate(rows))return rows;await page.waitForTimeout(100);}throw new Error('Timed out: '+sql);};
   await open();
   await page.screenshot({path:path.join(artifacts,'stats.png')});
-  await page.mouse.click(600,775); await page.waitForTimeout(500);
+  // Software rendering on fresh Linux runners may paint after the Kotlin startup callback.
+  const input=page.getByRole('textbox',{name:'YouTube URL'});
+  const navigationDeadline=Date.now()+30000;
+  while(!await input.isVisible()) {
+    assert.ok(Date.now()<navigationDeadline,'Library did not render');
+    await page.mouse.click(600,775);await page.waitForTimeout(500);
+  }
   await page.getByRole('textbox',{name:'YouTube URL'}).fill('https://youtu.be/invalid');await page.waitForTimeout(200);await page.mouse.click(1110,207);
   await page.waitForTimeout(600);assert.equal(imports,1);assert.deepEqual(await query('SELECT id FROM Content'),[]);
   await page.getByRole('textbox',{name:'YouTube URL'}).fill(content.sourceUrl);await page.waitForTimeout(200);await page.mouse.click(1110,207);
@@ -82,4 +89,4 @@ try {
   assert.deepEqual(errors,[]);
   console.log('PASS: Web import error/retry, async job polling, playback, durable audio, vocabulary and offline reload');
   console.log('PASS: desktop and mobile rendering without runtime errors');
-} finally {await browser.close();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
+} catch(error) {if(page) await page.screenshot({path:path.join(artifacts,'failure.png')}).catch(()=>{});console.error('Browser errors:',errors);throw error;} finally {await browser.close();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}

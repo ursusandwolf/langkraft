@@ -150,3 +150,33 @@ SyncManager --> VocabularyRepository --> SyncService
 ```
 
 Сохраняются Repository и Adapter, внедрение зависимостей Koin. Разные реализации AudioPlayer используют общий интерфейс; выбор зависит от платформы. Планируемые ограничения очереди, миграции и async Web-доступ ещё не реализованы и не обозначаются как выполненные шаблоны.
+# INT-07 — 2026-10-22
+
+```text
++--------------------------+     delegates     +---------------------------+
+| PlayerViewModel          |------------------>| PlayerLinguisticDelegate  |
+| <<Presentation Model>>   |                   | selectionGeneration       |
+| loadGeneration           |                   | wordJob / content epoch   |
+| audioRequest / save guard|                   | dismiss / retry / reset   |
++------------+-------------+                   +-------------+-------------+
+             | uses                                          | uses
+             v                                               v
++--------------------------+                   +---------------------------+
+| AudioPlayer <<Bridge>>   |                   | LinguisticAssistant       |
+| load(url, requestId)     |                   | <<Strategy>>              |
+| error(requestId, reason) |                   +---------------------------+
++------------+-------------+
+             ^ implements
+      +------+------------------+
+      | Web / VLC / ffplay      |
+      +-------------------------+
+
++--------------------------------------+     implements     +----------------------+
+| SqlDelightVocabularyRepository        |------------------->| VocabularyRepository |
+| <<Repository>>                       |                    +----------------------+
+| reviewClock + SQL query observations |
+| pending revision + acknowledgement   |
++--------------------------------------+
+```
+
+Делегирование сохраняет расширенные функции dev. Поколение запроса ограничивает область применения асинхронного результата; это механизм согласованности, а не отдельный GoF-паттерн. Контракт AudioPlayer отделяет платформенные движки, Repository — хранение и sync от UI.

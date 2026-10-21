@@ -42,7 +42,7 @@ fun ImmersionPlayerView(
     }
 
     // Auto-scroll logic tied to index changes
-    LaunchedEffect(state.currentSubtitleIndex) {
+    LaunchedEffect(state.content?.id, state.currentSubtitleIndex) {
         val index = state.currentSubtitleIndex
         if (index != -1 && !state.isUserScrolling) {
             listState.animateScrollToItem(index)
@@ -165,7 +165,10 @@ fun ImmersionPlayerView(
                                 word = word,
                                 contextLine = state.selectedWordContext,
                                 result = state.wordTranslation,
-                                isSaving = false,
+                                isSaving = state.isSavingWord,
+                                isTranslating = state.isTranslatingWord,
+                                error = state.wordError,
+                                onRetry = viewModel::retryTranslation,
                                 onSave = { viewModel.saveWord(it) },
                                 onDismiss = { viewModel.onEvent(PlayerEvent.DismissWordDetails) }
                             )

@@ -14,6 +14,7 @@ import java.io.File
 class FfmpegAudioPlayer : AudioPlayer {
     private val _error = MutableStateFlow<AudioPlayerError?>(null)
     override val error: StateFlow<AudioPlayerError?> = _error.asStateFlow()
+    private var requestId = 0L
     private var playbackSpeed = 1.0
     private val shutdownHook = Thread { stopProcess() }
     private val _currentTimeMs = MutableStateFlow(0L)
@@ -34,7 +35,10 @@ class FfmpegAudioPlayer : AudioPlayer {
         Runtime.getRuntime().addShutdownHook(shutdownHook)
     }
 
-    override fun load(url: String) {
+    override fun load(url: String, requestId: Long) {
+        this.requestId = requestId
+        _error.value = null
+        stopProcess()
         currentUrl = url
         _currentTimeMs.value = 0
         timeAtLastStartMs = 0
@@ -91,7 +95,7 @@ class FfmpegAudioPlayer : AudioPlayer {
             startTimer()
         } catch (e: Exception) {
             _isPlaying.value = false
-            _error.value = AudioPlayerError(0, AudioErrorReason.SOURCE_ERROR, "Cannot start ffplay: ${e.message}")
+            _error.value = AudioPlayerError(requestId, AudioErrorReason.SOURCE_ERROR, "Cannot start ffplay: ${e.message}")
         }
     }
 
