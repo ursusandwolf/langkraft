@@ -1,3 +1,18 @@
+# INT-08 — 2026-10-22 — восстановлен Kotlin/JS регресс
+
+- Дополнительный Chromium-прогон обнаружил `IrLinkageError`: Compose разрешал coroutines-core 1.8.0, а test оставался 1.7.3. Core/test/swing выровнены на 1.8.0.
+- Повторно прошли 83 JVM-теста и 26 общих Kotlin-тестов в настоящем Chromium. `:shared:jsBrowserTest` включён в CI вместе с Playwright storage/UI development/production.
+- Инструкция AI-кодревью обновлена под async jobs, MP3, schema v3, SRS/auth/sync и текущие границы проверки.
+
+# INT-07 — 2026-10-22 — ручная интеграция истории main
+
+- Разобраны конфликты main с dev-базой. Сохранены async jobs, SRS, sync, Desktop/TUI и общая Web-навигация; решения описаны в `INTEGRATION_RESOLUTION.md`.
+- Перенесены периодическое обновление due words, стабильный ID сохраняемого слова, защита повторной записи, ошибки/повтор перевода, отмена загрузки и изоляция поздних ответов. Audio errors привязаны к request ID.
+- Добавлены шесть регрессионных тестов PlayerRaceTest и активные строгие parser cases из main. Исходные несовместимые fixtures сохранены в `archive/main-reference` с картой замен.
+- Build сохраняет Kotlin 2/Compose 1.7; исправлено обновление локального npm storage package, обновлён Yarn lock. Web regression ждёт готовности Compose вместо фиксированного первого клика.
+- Повторный реальный YouTube импорт: Easy German 1, 48 реплик, 156 секунд, 200 ненулевых waveform bins; HTTP Range возвращает 206 и 256 запрошенных байтов.
+- Проверки и финальные ссылки CI/PR фиксируются в `INTEGRATION_COMPLETION.md` после выполнения.
+
 # Changelog
 
 ## [Unreleased]
@@ -62,16 +77,3 @@
 ## [0.5.0] - 2026-05-13
 ### Added
 ... (rest of the file remains same)
-# INT-07 — 2026-10-22 — ручная интеграция истории main
-
-- Разобраны конфликты main с dev-базой. Сохранены async jobs, SRS, sync, Desktop/TUI и общая Web-навигация; решения описаны в `INTEGRATION_RESOLUTION.md`.
-- Перенесены периодическое обновление due words, стабильный ID сохраняемого слова, защита повторной записи, ошибки/повтор перевода, отмена загрузки и изоляция поздних ответов. Audio errors привязаны к request ID.
-- Добавлены шесть регрессионных тестов PlayerRaceTest и активные строгие parser cases из main. Исходные несовместимые fixtures сохранены в `archive/main-reference` с картой замен.
-- Build сохраняет Kotlin 2/Compose 1.7; исправлено обновление локального npm storage package, обновлён Yarn lock. Web regression ждёт готовности Compose вместо фиксированного первого клика.
-- Повторный реальный YouTube импорт: Easy German 1, 48 реплик, 156 секунд, 200 ненулевых waveform bins; HTTP Range возвращает 206 и 256 запрошенных байтов.
-- Проверки и финальные ссылки CI/PR фиксируются в `INTEGRATION_COMPLETION.md` после выполнения.
-# INT-08 — 2026-10-22 — восстановлен Kotlin/JS регресс
-
-- Дополнительный Chromium-прогон обнаружил `IrLinkageError`: Compose разрешал coroutines-core 1.8.0, а test оставался 1.7.3. Core/test/swing выровнены на 1.8.0.
-- Повторно прошли 83 JVM-теста и 26 общих Kotlin-тестов в настоящем Chromium. `:shared:jsBrowserTest` включён в CI вместе с Playwright storage/UI development/production.
-- Инструкция AI-кодревью обновлена под async jobs, MP3, schema v3, SRS/auth/sync и текущие границы проверки.
