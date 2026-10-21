@@ -31,12 +31,12 @@ class IngestionTest {
         directory.root.path, "https://media.example", runner
     )
 
-    private fun successfulDownload() = YtDlpRunner { arguments ->
+    private fun successfulDownload(subtitles: String = "1\n00:00:00,000 --> 00:00:01,000\nGuten Tag\n") = YtDlpRunner { arguments ->
         assertTrue("--no-playlist" in arguments)
         assertEquals("node", arguments[arguments.indexOf("--js-runtimes") + 1])
         val output = arguments[arguments.indexOf("--output") + 1]
         File(output.replace("%(ext)s", "opus")).writeText("audio-data")
-        File(output.replace("%(ext)s", "de.srt")).writeText("1\n00:00:00,000 --> 00:00:01,000\nGuten Tag\n")
+        File(output.replace("%(ext)s", "de.srt")).writeText(subtitles)
         File(output.replace("%(ext)s", "info.json")).writeText("""{"title":"Test video","duration":12.5}""")
     }
 
@@ -70,6 +70,65 @@ class IngestionTest {
             File(output.replace("%(ext)s", "opus")).writeText("partial")
         })
         assertFailsWith<IngestionException> { service.ingest("https://youtu.be/video") }
+        assertTrue(directory.root.listFiles().orEmpty().isEmpty())
+    }
+
+    @Test
+    fun invalidSubtitlesRemoveOnlyTheFailedImportsFiles() = runTest {
+        val existing = service().ingest("https://youtu.be/existing")
+        val existingFiles = directory.root.listFiles().orEmpty().associate { it.name to it.readBytes().toList() }
+        for (subtitles in listOf("", "\uFEFF\n \n", "1", "1\n00:00:01,000 --> 00:00:02,000\nHallo\n\n2")) {
+            val failure = assertFailsWith<IngestionException> {
+                service(successfulDownload(subtitles)).ingest("https://youtu.be/invalid")
+            }
+            // Coroutine stack-trace recovery may wrap the original exception.
+            assertTrue(generateSequence<Throwable>(failure) { it.cause }.any { it is SubtitleParseException },
+                failure.stackTraceToString())
+            assertEquals(existingFiles, directory.root.listFiles().orEmpty().associate { it.name to it.readBytes().toList() })
+            assertNotNull(service().mediaFile("${existing.id}.opus"))
+        }
+    }
+
+    @Test
+    fun otherLanguagesAndUnconvertedVttDoNotReplaceGermanSrt() = runTest {
+        for (extension in listOf("en.srt", "de.vtt")) {
+            val service = service(YtDlpRunner { args ->
+                successfulDownload().execute(args)
+                val output = args[args.indexOf("--output") + 1]
+                val german = File(output.replace("%(ext)s", "de.srt"))
+                assertTrue(german.renameTo(File(output.replace("%(ext)s", extension))))
+            })
+            assertFailsWith<IngestionException> { service.ingest("https://youtu.be/video") }
+            assertTrue(directory.root.listFiles().orEmpty().isEmpty())
+        }
+    }
+
+    @Test
+    fun requestsVttConversionAndParsesTheConvertedGermanFixture() = runTest {
+        // Boundary fixture: yt-dlp/FFmpeg produces SRT before the service reads it.
+        // Real offline FFmpeg conversion is repeatable using docs/SUBTITLES.md.
+        val converted = javaClass.getResource("/subtitles/german.srt")!!.readText()
+        val service = service(YtDlpRunner { args ->
+            assertEquals("de", args[args.indexOf("--sub-langs") + 1])
+            assertEquals("srt/best", args[args.indexOf("--sub-format") + 1])
+            assertEquals("srt", args[args.indexOf("--convert-subs") + 1])
+            successfulDownload(converted).execute(args)
+        })
+        val imported = service.ingest("https://youtu.be/video")
+        assertEquals(listOf("Guten Tag zusammen!", "Wie geht es dir?"), imported.subtitles.map { it.textDe })
+        assertEquals(listOf(1001L, 2500L), imported.subtitles.map { it.startMs })
+        assertEquals(listOf(3500L, 4000L), imported.subtitles.map { it.endMs })
+    }
+
+    @Test
+    fun httpMalformedSubtitlesReturnAnErrorWithoutPartialContent() = testApplication {
+        application { module(service(successfulDownload("1\n00:00:00,000 --> 00:00:01,000\nHallo\n\n2"))) }
+        val response = client.post("/api/ingest") {
+            header(HttpHeaders.ContentType, "application/json")
+            setBody("""{"url":"https://youtu.be/video"}""")
+        }
+        assertEquals(HttpStatusCode.BadGateway, response.status)
+        assertEquals(setOf("error"), Json.parseToJsonElement(response.bodyAsText()).jsonObject.keys)
         assertTrue(directory.root.listFiles().orEmpty().isEmpty())
     }
 

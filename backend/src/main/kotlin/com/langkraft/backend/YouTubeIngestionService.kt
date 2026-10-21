@@ -48,7 +48,6 @@ class YouTubeIngestionService(
                 throw IngestionException("Audio, German subtitles or metadata are missing")
             }
             val subtitles = SrtParser.parse(videoId, srt.readText())
-            if (subtitles.isEmpty()) throw IngestionException("German subtitles are empty")
             val metadata = Json.parseToJsonElement(info.readText()).jsonObject
             ImmersionContent(
                 id = videoId,
@@ -65,6 +64,7 @@ class YouTubeIngestionService(
         } catch (exception: Exception) {
             deleteFiles(videoId)
             if (exception is IngestionException) throw exception
+            if (exception is SubtitleParseException) throw IngestionException("Invalid German subtitles: ${exception.message}", exception)
             throw IngestionException("Unable to import YouTube content", exception)
         }
     }

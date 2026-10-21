@@ -30,7 +30,7 @@ Langkraft follows **Clean Architecture** principles to ensure the learning logic
 
 ## 🗺 Roadmap
 
-The five sprints are: repository implementations, a runnable Web app, real YouTube import verification, CI, and subtitle parsing improvements. Sprints 1–3 are complete; the CI workflow is implemented, with its first hosted run pending. Subtitle robustness follows CI. Real import, Opus playback, HTTP Range and cancellation were verified on 2026-10-21; see [results and repeatable checks](docs/YOUTUBE_VERIFICATION.md). Android follows the Web stages. See [the sprint plan](docs/todo.md) for tasks, acceptance criteria and the remaining product roadmap.
+The five sprints are: repository implementations, a runnable Web app, real YouTube import verification, CI, and subtitle parsing improvements. Sprints 1–3 and 5 are complete; the CI workflow is implemented, with its first hosted run pending. Subtitle validation and failed-import cleanup pass JVM regression tests; VTT conversion is verified offline with FFmpeg. Real import, Opus playback, HTTP Range and cancellation were verified on 2026-10-21; see [results and repeatable checks](docs/YOUTUBE_VERIFICATION.md). AI translation and SRS training remain future product work. Android follows the Web stages. See [the sprint plan](docs/todo.md) for tasks, acceptance criteria and the remaining product roadmap.
 
 ## 🛠 Getting Started
 1. Install JDK 21. The checked-in Gradle Wrapper downloads the pinned Gradle distribution.
@@ -51,7 +51,7 @@ Open **http://127.0.0.1:3000**. On macOS/Linux use `PUBLIC_BASE_URL=http://127.0
 
 The backend listens on port 8080 by default. `PORT` changes the listening port; `DOWNLOADS_DIR` changes media storage. The Web dev server proxies `/api` to port 8080, including media downloads. `PUBLIC_BASE_URL` must match the Web origin above, so downloads use the proxy. For production, serve the Web bundle and proxy `/api` on one HTTPS origin; see [deployment notes](docs/WEB_APP.md).
 
-POST JSON `{"url":"https://www.youtube.com/watch?v=VIDEO_ID"}` to `/api/ingest`. The response contains content metadata, subtitles and an absolute `.opus` audio URL. Imports require German subtitles; playlists are disabled. Invalid source URLs return 400; extraction failures return 502. `GET /api/media/{id}.opus` serves audio with HTTP Range support and returns 404 for unknown files.
+POST JSON `{"url":"https://www.youtube.com/watch?v=VIDEO_ID"}` to `/api/ingest`. The response contains content metadata, subtitles and an absolute `.opus` audio URL. Imports require German subtitles; playlists are disabled. Invalid source URLs return 400; extraction failures and invalid subtitles return 502. Subtitle validation rejects the entire import and removes its files; VTT is converted to SRT by yt-dlp/FFmpeg. See [subtitle rules and regression checks](docs/SUBTITLES.md). `GET /api/media/{id}.opus` serves audio with HTTP Range support and returns 404 for unknown files.
 
 Run the JVM regression tests and compile the Web library:
 

@@ -79,6 +79,32 @@ class IngestionRepositoryTest {
     }
 
     @Test
+    fun rejectedImportDoesNotSavePartialContentOrDownloadAudio() = runTest {
+        val requests = mutableListOf<String>()
+        val client = HttpClient(MockEngine { request ->
+            requests += request.url.encodedPath
+            respond("""{"error":"Unable to import video"}""", HttpStatusCode.BadGateway)
+        })
+        val handle = createJvmDatabase(folder.newFile("library.db"))
+        val audioDirectory = File(folder.root, "audio")
+        try {
+            val dispatcher = StandardTestDispatcher(testScheduler)
+            val repository = SqlDelightContentRepository(handle.access,
+                ContentApi(client, "https://backend"), FileAudioStorage(audioDirectory, dispatcher),
+                { 100L }, dispatcher)
+            repository.saveContent(content)
+            assertTrue(IngestContentUseCase(repository)("https://youtu.be/invalid-subtitles").isFailure)
+            assertEquals(listOf("/api/ingest"), requests)
+            assertEquals(listOf(content), repository.getAllContent().first())
+            assertEquals(content, repository.getContentById(content.id))
+            assertTrue(audioDirectory.listFiles().orEmpty().isEmpty())
+        } finally {
+            handle.close()
+            client.close()
+        }
+    }
+
+    @Test
     fun failedAudioDownloadKeepsRemoteContentAndSubtitles() = runTest {
         val client = HttpClient(MockEngine { request ->
             if (request.url.encodedPath == "/api/ingest") respond(Json.encodeToString(content))
