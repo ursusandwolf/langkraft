@@ -43,7 +43,7 @@ fun MainApp() {
     val session = remember { koin.get<com.langkraft.data.sync.UserSession>() }
     LaunchedEffect(session) { session.restore() }
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Dashboard) }
-    
+
     val scaffoldState = rememberScaffoldState()
 
     Scaffold(
@@ -86,7 +86,7 @@ fun MainApp() {
                     DashboardView(rememberViewModel())
                 }
                 is Screen.ContentSelection -> {
-                    ContentSelectionView(rememberViewModel(), onContentSelected = { 
+                    ContentSelectionView(rememberViewModel(), onContentSelected = {
                         currentScreen = Screen.Player(it.id)
                     })
                 }

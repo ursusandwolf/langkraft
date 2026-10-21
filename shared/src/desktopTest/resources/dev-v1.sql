@@ -31,7 +31,7 @@ CREATE TABLE Vocabulary (
     contentId TEXT,                 -- Reference to source content
     subtitleLineId TEXT,            -- Reference to specific timestamp
     addedAt INTEGER NOT NULL,
-    
+
     -- Spaced Repetition (SRS) data
     nextReviewAt INTEGER,           -- Timestamp for next review
     intervalDays INTEGER NOT NULL DEFAULT 0,
@@ -40,7 +40,7 @@ CREATE TABLE Vocabulary (
     lapseCount INTEGER NOT NULL DEFAULT 0,
     tags TEXT NOT NULL DEFAULT '',
     lastUpdated INTEGER NOT NULL DEFAULT 0,
-    
+
     FOREIGN KEY (contentId) REFERENCES Content(id) ON DELETE SET NULL,
     FOREIGN KEY (subtitleLineId) REFERENCES SubtitleLine(id) ON DELETE SET NULL
 );

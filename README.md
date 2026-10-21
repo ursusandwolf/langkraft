@@ -58,6 +58,8 @@ $rng.Dispose()
 
 Backend: `http://localhost:8080`. Без JWT secret длиной хотя бы 32 символа backend не запускается. После смены секрета сохранённые токены потребуют повторного входа. Для Gemini задайте `GEMINI_API_KEY`; без ключа используется mock.
 
+Для длительного backend-процесса параллельно со сборками используйте отдельный дистрибутив: `./gradlew.bat :backend:installDist`, затем `java -cp "backend/build/install/backend/lib/*" io.ktor.server.netty.EngineMain`. Wildcard classpath также обходит ограничение длины Windows batch-команды. Не пересобирайте этот дистрибутив, пока он работает.
+
 Во втором терминале выберите клиент:
 
 ```powershell
