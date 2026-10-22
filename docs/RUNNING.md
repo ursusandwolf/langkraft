@@ -99,14 +99,16 @@ java -cp "backend/build/install/backend/lib/*" io.ktor.server.netty.EngineMain
 | `GEMINI_API_KEY` | Опциональный ключ backend AI; без него mock |
 | `LANGKRAFT_BACKEND_DATA_DIR` | Backend `langkraft.db`; default `data` относительно cwd процесса |
 | `LANGKRAFT_DOWNLOADS_DIR` | Backend media в каталогах jobId; default `downloads` относительно cwd |
-| `LANGKRAFT_DATA_DIR` | Desktop/TUI профиль; default `~/.langkraft`, внутри DB и `audio/` |
+| `LANGKRAFT_DATA_DIR` | Desktop/TUI профиль; default `~/.langkraft`, внутри DB, `audio/` и `download-locks/` |
 | `YT_DLP_EXECUTABLE` | Исполняемый yt-dlp; default `yt-dlp` |
 | `FFMPEG_EXECUTABLE` | Исполняемый ffmpeg для waveform; default `ffmpeg` |
 | `FFPLAY_EXECUTABLE` | Исполняемый ffplay; default `ffplay` |
 
 Порт 8080, host `0.0.0.0`, JWT issuer/audience/24h validity и параметры worker/queue/cleanup заданы в [application.conf](../backend/src/main/resources/application.conf). Worker count=4, queue capacity=8, cleanup interval=1 час, job expiry=24 часа. Это очистка **записей jobs**, а не реализованная TTL-политика всех media-файлов. Импорт ограничен известной положительной длительностью до четырёх часов; yt-dlp timeout 600 с, waveform ffmpeg 120 с. Общая дисковая квота остаётся backlog.
 
-Client DB v3 использует SQLDelight, backend DB — Exposed/SQLite. Это разные базы, несмотря на одинаковое имя `langkraft.db`: не направляйте обе переменные каталогов в один каталог. Web хранит SQLite и audio в IndexedDB выбранного origin. Desktop/TUI используют общий профиль, но конкурентная работа нескольких процессов с ним отдельно не подтверждена.
+Client DB v3 использует SQLDelight, backend DB — Exposed/SQLite. Это разные базы, несмотря на одинаковое имя `langkraft.db`: не направляйте обе переменные каталогов в один каталог. Web хранит SQLite и audio в IndexedDB выбранного origin. Desktop/TUI используют общий профиль; native content lock и SQL recovery проверены в отдельных JVM. Полная конкурентная работа SRS/sync/migrations с общим профилем отдельно не подтверждена.
+
+Desktop/TUI восстанавливают помеченный DOWNLOADING после завершения владельца: ERROR без прежнего audio либо COMPLETED с прежней ссылкой. Активные/legacy/неизвестные операции не сбрасываются. Пустые файлы download-locks сохраняются между запусками; не удаляйте/переименовывайте их при работающих процессах. Файловая уборка `.part`/непривязанных MP3 после аварии пока не реализована. Подробности — [ADR recovery](ADR_AUDIO_DOWNLOAD_RECOVERY.md).
 
 Миграция клиента распознаёт dev v0/v1 и main v1/v2, сохраняя SRS, tags и pending sync. Перед JVM-миграцией создаётся `langkraft.db.before-schema-3.bak`; backend создаёт `.before-sync-v2.bak`. Закройте старые клиенты до обновления. Для отката остановите процессы и восстановите backup **вместе с совместимым кодом**. Старый main не следует запускать поверх v3. Очистка данных сайта удаляет локальную библиотеку и аудио; это не диагностика без потери данных.
 

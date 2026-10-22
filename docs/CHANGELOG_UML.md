@@ -1,3 +1,31 @@
+# REL-04 — 2026-10-22 — Desktop/TUI: platform lease
+
+```text
++-------------------------+                  +--------------------------+
+| AudioDownloaderImpl     |------uses-------->| AudioDownloadCoordinator |
+| AudioDownloadRecovery   |                  | <<Platform Port>>        |
++------------+------------+                  +-------------+------------+
+             | SQL + protocol                              ^ implements
+             v                              +-------------+------------+
++-------------------------+                 | FileAudioDownloadCoordinator|
+| DatabaseAccess          |                 | <<JVM Adapter>>          |
+| Content + SyncMetadata  |                 | JVM claimed registry     |
++-------------------------+                 | FileChannel / FileLock   |
+                                            +-------------+------------+
+                                                          | owns
+                                            +-------------v------------+
+                                            | AudioDownloadLease       |
+                                            | jvm-file-lock-v1         |
+                                            | idempotent release       |
+                                            +--------------------------+
+
+DesktopModule -> same profile / download-locks -> downloader + DB startup recovery
+active OS lock -> preserve DOWNLOADING
+free OS lock + known SQL marker -> ERROR / COMPLETED with old path
+```
+
+Порт и общий Application Service сохранены; Java NIO — платформенный Adapter. Взаимное исключение внутри JVM дополняет кооперативный межпроцессный lock. Schema/Repository не изменялись. Уборка файлов после аварии потребует отдельного pending-журнала, текущий фикс восстанавливает SQL-статус.
+
 # REL-03 — 2026-10-22 — pending-публикация и проверка SQL-ссылок
 
 ```text

@@ -2,12 +2,18 @@ package com.langkraft.data.database
 
 import app.cash.sqldelight.driver.jdbc.sqlite.JdbcSqliteDriver
 import com.langkraft.db.AppDatabase
+import com.langkraft.data.audio.AudioDownloadCoordinator
+import com.langkraft.data.audio.AudioDownloadRecovery
+import com.langkraft.data.audio.FileAudioDownloadCoordinator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
 import app.cash.sqldelight.db.QueryResult
 
-suspend fun createJvmDatabase(file: File): DatabaseHandle = withContext(Dispatchers.IO) {
+suspend fun createJvmDatabase(
+    file: File,
+    coordinator: AudioDownloadCoordinator = FileAudioDownloadCoordinator(File(file.absoluteFile.parentFile, "download-locks"))
+): DatabaseHandle = withContext(Dispatchers.IO) {
     file.absoluteFile.parentFile?.let { check(it.isDirectory || it.mkdirs()) }
     val existed = file.isFile && file.length() > 0
     Class.forName("org.sqlite.JDBC")
@@ -19,7 +25,7 @@ suspend fun createJvmDatabase(file: File): DatabaseHandle = withContext(Dispatch
             if (!backup.exists()) driver.execute(null, "VACUUM INTO '${backup.absolutePath.replace("'", "''")}'", 0).await()
         }
         initializeDatabase(driver)
-        DatabaseHandle(driver)
+        DatabaseHandle(driver).also { AudioDownloadRecovery(it.access, coordinator).recover() }
     }
     catch (error: Throwable) { driver.close(); throw error }
 }
