@@ -9,6 +9,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlin.coroutines.CoroutineContext
 import org.junit.Rule
 import org.junit.rules.TemporaryFolder
 import java.io.File
@@ -63,6 +65,28 @@ class FileAudioStorageTest {
         assertContentEquals(byteArrayOf(9), File(existing).readBytes())
         assertTrue(folder.root.listFiles().orEmpty().none { it.name.endsWith(".part") })
         channel.cancel(null)
+    }
+
+    @Test
+    fun cancellationWhileReturningPublishedLocationDeletesTheUnownedFile() = runTest {
+        val caller = QueuedDispatcher()
+        val storage = FileAudioStorage(folder.root, StandardTestDispatcher(testScheduler))
+        val operation = backgroundScope.launch(caller) {
+            storage.store("content", ByteReadChannel(byteArrayOf(1, 2)), 2)
+        }
+        caller.drain()
+        runCurrent()
+        assertTrue(folder.root.listFiles().orEmpty().any { it.extension == "mp3" })
+        operation.cancel()
+        repeat(3) { caller.drain(); runCurrent() }
+        operation.join()
+        assertTrue(folder.root.listFiles().orEmpty().isEmpty())
+    }
+
+    private class QueuedDispatcher : CoroutineDispatcher() {
+        private val pending = ArrayDeque<Runnable>()
+        override fun dispatch(context: CoroutineContext, block: Runnable) { pending.addLast(block) }
+        fun drain() { while (pending.isNotEmpty()) pending.removeFirst().run() }
     }
 
     @Test

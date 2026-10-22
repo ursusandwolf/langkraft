@@ -1,14 +1,16 @@
 # Langkraft 🇩🇪
 
-Для передачи исходников на независимое ревью: `python tools/review/Create-ReviewArchive.py` (Python 3.10+). Скрипт упаковывает текущий коммит в `build/review/`, исключает тесты/fixtures/архивные варианты и локальные артефакты, добавляет manifest с SHA-256 и проверяет ZIP. Инструкция ревьюеру — [docs/AI_CODE_REVIEW.md](docs/AI_CODE_REVIEW.md). Полный репозиторий сохраняет тесты.
-
 Приложение для изучения немецкого через прослушивание YouTube с субтитрами, контекстный словарь и интервальное повторение.
+
+Начать работу: [подробный запуск и диагностика](docs/RUNNING.md). Разрабатывать: [руководство разработчика](docs/DEVELOPER_GUIDE.md), [UML классов](docs/UML_CLASSES.md), [слой данных](docs/DATA_LAYER.md). Изменения: [changelog](docs/CHANGELOG.md), [UML-журнал](docs/CHANGELOG_UML.md), [план](docs/todo.md).
 
 ## Состояние проекта — 22 октября 2026
 
 Интеграция **dev → main завершена**, история обеих веток сохранена через [PR #1](https://github.com/ursusandwolf/langkraft/pull/1) и [PR #2](https://github.com/ursusandwolf/langkraft/pull/2). Основой стала расширенная реализация dev: Desktop/TUI, SRS, авторизация, синхронизация и Gemini. Из main перенесены проверки импорта, управление процессами, SQLite WASM/IndexedDB и защиты плеера. До интеграции ветки имели 6 и 51 уникальный коммит; после переноса исправлений вручную разобраны 43 конфликтующих файла. Сейчас проект готов к независимому ревью; эксплуатационная стабилизация продолжается.
 
-Исходная dev не компилировалась для JS и имела 7 падающих backend-тестов. Эти ошибки исправлены. Локально и в [успешном CI](https://github.com/ursusandwolf/langkraft/actions/runs/39696795929) прошли 83 JVM-теста, 26 Kotlin-тестов в Chromium, storage/UI development/production и smoke Desktop/TUI. Итоговые проверки и коммиты: [отчёт](docs/INTEGRATION_COMPLETION.md).
+Итог интеграции: 83 JVM-теста и 26 Kotlin/Chromium-тестов, storage/UI development/production и smoke Desktop/TUI прошли [CI](https://github.com/ursusandwolf/langkraft/actions/runs/39697774903). Исторический отчёт: [INTEGRATION_COMPLETION](docs/INTEGRATION_COMPLETION.md). После интеграции исправлена передача владения offline-аудио при отмене и ошибке привязки к SQLite (LK-02); регрессионные сценарии и границы исправления записаны в changelog.
+
+После LK-02 локально проходят 90 JVM-тестов, 26 Kotlin/Chromium-тестов и storage/UI/offline для development/production. Основные пользовательские возможности и границы проверки:
 
 | Область | Проверка |
 | --- | --- |
@@ -28,7 +30,7 @@
 ## Зависимости
 
 - **JDK 21**. Gradle 8.14 загружается через wrapper; отдельный Gradle не нужен.
-- **Node.js 22+ и npm** для браузерных проверок и JavaScript runtime yt-dlp. Локальные проверки выполнялись также на Node 24.
+- **Node.js 22+ и npm** для Web-сборки, браузерных проверок и JavaScript runtime yt-dlp. Gradle использует установленный Node. Локальные проверки выполнялись также на Node 24.
 - **yt-dlp, ffmpeg и ffprobe** в PATH для импорта. **ffplay** нужен для TUI и Desktop без VLC.
 - Для Desktop предпочтителен **VLC той же разрядности, что JVM**. Если VLC недоступен, используется ffplay.
 - Для браузерных тестов — Chromium, устанавливаемый Playwright.
@@ -58,7 +60,7 @@ $rng.Dispose()
 .\gradlew.bat :backend:run
 ```
 
-Backend: `http://localhost:8080`. Без JWT secret длиной хотя бы 32 символа backend не запускается. После смены секрета сохранённые токены потребуют повторного входа. Для Gemini задайте `GEMINI_API_KEY`; без ключа используется mock.
+Backend: `http://localhost:8080`. Без JWT secret длиной хотя бы 32 символа backend не запускается. После смены секрета сохранённые токены потребуют повторного входа. `GEMINI_API_KEY` включает Gemini для защищённых backend AI-маршрутов; без ключа backend использует mock. **Клиентский DI сейчас всегда подключает `MockLinguisticAssistant`**: один ключ не переключит перевод в UI на backend. Подключение удалённого AI-клиента — отдельная задача.
 
 Для длительного backend-процесса параллельно со сборками используйте отдельный дистрибутив: `./gradlew.bat :backend:installDist`, затем `java -cp "backend/build/install/backend/lib/*" io.ktor.server.netty.EngineMain`. Wildcard classpath также обходит ограничение длины Windows batch-команды. Не пересобирайте этот дистрибутив, пока он работает.
 
@@ -136,13 +138,19 @@ npm run test:youtube
 Pop-Location
 ```
 
-Production bundle находится в `webApp/build/kotlin-webpack/js/productionExecutable`. При размещении нужно также отдавать `index.html` и Skiko-ресурсы из `webApp/build/processedResources/js/main`, сохранив имена файлов; `.wasm` отдавать как `application/wasm`, `/api` направлять на backend. Проверки публикации в конкретном hosting-окружении выполняются отдельно.
+Production bundle находится в `webApp/build/kotlin-webpack/js/productionExecutable`. При размещении нужно также отдавать `index.html`, `browser-locale.js` и Skiko-ресурсы из `webApp/build/processedResources/js/main`, сохранив имена файлов; `.wasm` отдавать как `application/wasm`, `/api` направлять на backend. Проверки публикации в конкретном hosting-окружении выполняются отдельно.
 
 ## Структура проекта
 
-- `shared/commonMain` — модели, Repository, use cases, общий Compose UI и SRS.
-- `shared/desktopMain`, `jsMain`, `jvmMain` — платформенные БД, аудио и IO.
+- `shared/src/commonMain` — модели, Repository, use cases, общий Compose UI и SRS.
+- `shared/src/desktopMain`, `jsMain`, `jvmMain` — платформенные БД, аудио и IO.
 - `backend` — Ktor API, auth, sync, задания импорта и CLI Adapter.
 - `webApp` — инициализация Web/DI, HTML и proxy разработки.
 - `tools` — media installer и Playwright-регресс.
 - `androidApp`/`androidMain` — исходники сохранены; Android не включён в текущую сборку.
+
+В Gradle подключены только `:shared`, `:backend`, `:webApp`. Desktop и TUI — точки входа JVM-target внутри shared, а не самостоятельные Gradle-модули. Карта зависимостей и правила изменения слоёв приведены в руководстве разработчика.
+
+## Архив для ревью
+
+`python tools/review/Create-ReviewArchive.py` (Python 3.10+) упаковывает текущий **коммит** в `build/review/`, исключает тесты/fixtures/архивные варианты и локальные артефакты, добавляет manifest с SHA-256 и проверяет ZIP. Незакоммиченные изменения в архив не попадут. Инструкция ревьюеру — [AI_CODE_REVIEW](docs/AI_CODE_REVIEW.md); полный репозиторий сохраняет тесты.

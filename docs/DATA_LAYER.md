@@ -6,6 +6,8 @@ Content owns ordered SubtitleLine records. UPDATE/INSERT avoids REPLACE cascade 
 
 PendingSyncChange uses monotonic local revisions. Acknowledgement clears only the exact sent revision; a stale response cannot overwrite a newer pending edit. Backend sync uses JWT identity, server cursor and delete tombstones. Due-word queries refresh every minute and on database changes.
 
-AudioStorage streams into a temporary file or IndexedDB chunks. A durable location is returned only on complete validation. A failed database link removes the newly published asset. Browser audio is read as a Blob and object URLs are revoked when switching sources.
+AudioStorage streams into a temporary file or IndexedDB chunks. A durable location is returned only on complete validation. FileAudioStorage also cleans up if cancellation interrupts the dispatcher return after publication. AudioDownloaderImpl preserves the previous offline path, transfers ownership in a short cancellation-safe SQL link, and propagates cancellation without deleting an already linked asset. Failed-link compensation checks persisted references under DatabaseAccess before deleting; an unreadable commit outcome retains the asset for future recovery. Cleanup failures remain suppressed on the primary exception. Crash recovery and orphan garbage collection remain separate work. Browser audio is read as a Blob and object URLs are revoked when switching sources.
 
 See README for paths, backup/restore and verification commands; INTEGRATION_RESOLUTION.md records the branch decisions.
+
+Current class relationships and contribution rules: [UML_CLASSES.md](UML_CLASSES.md), [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md). The LK-02 query addition does not change schema v3.

@@ -54,6 +54,9 @@ SELECT * FROM Content ORDER BY createdAt DESC;
 selectContentById:
 SELECT * FROM Content WHERE id = ?;
 
+selectContentReferencingAudio:
+SELECT id FROM Content WHERE localAudioPath = ? LIMIT 1;
+
 insertContent {
 UPDATE Content SET title=:title, audioUrl=:audioUrl, localAudioPath=:localAudioPath,
     sourceUrl=:sourceUrl, durationSeconds=:durationSeconds, downloadStatus=:downloadStatus, waveform=:waveform WHERE id=:id;
