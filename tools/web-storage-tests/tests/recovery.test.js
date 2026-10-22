@@ -187,6 +187,70 @@ try {
     } finally {client.close();}
   });
   assert.deepEqual(quota,{rejected:true,auth:[["PRIVATE-RECOVERY-TOKEN"]],status:[["DOWNLOADING"]]});
+  const boundedSnapshot = await page.evaluate(async () => {
+    const db = await new Promise((resolve, reject) => {
+      const request = indexedDB.open('langkraft-audio');
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const id = 'oversized-snapshot-probe';
+    const write = operation => new Promise((resolve, reject) => {
+      const tx = db.transaction(['audio', 'chunks'], 'readwrite');
+      tx.oncomplete = resolve;
+      tx.onabort = () => reject(tx.error);
+      operation(tx);
+    });
+    await write(tx => {
+      tx.objectStore('audio').add({ id, complete: true, count: 66, size: 66 * 1024 * 1024 });
+      const bytes = new Uint8Array(1024 * 1024);
+      for (let index = 0; index < 66; index++) tx.objectStore('chunks').add({ id, index, bytes });
+    });
+    const before = (await indexedDB.databases()).map(entry => entry.name).sort();
+    const getAll = IDBObjectStore.prototype.getAll;
+    const openCursor = IDBObjectStore.prototype.openCursor;
+    let reads = 0;
+    IDBObjectStore.prototype.getAll = function(...args) {
+      if (this.transaction.db.name === 'langkraft-audio') throw new Error('Bulk audio snapshot is forbidden');
+      return getAll.apply(this, args);
+    };
+    IDBObjectStore.prototype.openCursor = function(...args) {
+      const request = openCursor.apply(this, args);
+      if (this.transaction.db.name === 'langkraft-audio' && this.name === 'chunks') {
+        request.addEventListener('success', () => { if (request.result?.key[0] === id) reads++; });
+      }
+      return request;
+    };
+    let message;
+    let preserved;
+    let after;
+    try {
+      try { await window.recovery.cloneWebProfile(); }
+      catch (error) { message = error.message; }
+      after = (await indexedDB.databases()).map(entry => entry.name).sort();
+      preserved = await new Promise((resolve, reject) => {
+        const tx = db.transaction(['audio', 'chunks'], 'readonly');
+        const manifest = tx.objectStore('audio').get(id);
+        const chunks = tx.objectStore('chunks').count(IDBKeyRange.bound([id, 0], [id, Infinity]));
+        tx.oncomplete = () => resolve({ size: manifest.result.size, chunks: chunks.result });
+        tx.onabort = () => reject(tx.error);
+      });
+    } finally {
+      IDBObjectStore.prototype.getAll = getAll;
+      IDBObjectStore.prototype.openCursor = openCursor;
+      await write(tx => {
+        tx.objectStore('audio').delete(id);
+        tx.objectStore('chunks').delete(IDBKeyRange.bound([id, 0], [id, Infinity]));
+      });
+      db.close();
+    }
+    return { message, reads, preserved, before, after };
+  });
+  assert.match(boundedSnapshot.message, /64 MiB/);
+  assert.ok(boundedSnapshot.reads > 0 && boundedSnapshot.reads < 66,
+    'Snapshot must stop reading chunks as soon as its byte budget is exceeded');
+  assert.deepEqual(boundedSnapshot.preserved, { size: 66 * 1024 * 1024, chunks: 66 });
+  assert.deepEqual(boundedSnapshot.after, boundedSnapshot.before, 'Oversized source must not create a destination');
+  console.log('PASS: oversized recovery stops its cursor at the byte budget without bulk reads or source mutations');
   const missing = await context.newPage();
   await missing.goto(origin);await missing.waitForFunction(() => !!window.recovery);
   const missingResult = await missing.evaluate(async () => {
