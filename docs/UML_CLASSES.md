@@ -174,6 +174,7 @@ classDiagram
         +confirmLinked(location)
     }
     class FileAudioStorage
+    class JournaledFileAudioStorage
     class IndexedDbAudioStorage
     class PendingAudioStorage {
         <<interface>>
@@ -227,8 +228,11 @@ classDiagram
     AudioDownloadRecovery --> AudioDownloadCoordinator
     AudioDownloadRecovery --> DatabaseAccess
     AudioStorage <|.. FileAudioStorage
+    AudioStorage <|.. JournaledFileAudioStorage
+    JournaledFileAudioStorage ..> FileAudioStorage : delegates
     AudioStorage <|.. IndexedDbAudioStorage
     PendingAudioStorage <|.. IndexedDbAudioStorage
+    PendingAudioStorage <|.. JournaledFileAudioStorage
     PendingAudioStorage ..> PendingAudioAsset
     PendingAudioRecovery --> PendingAudioStorage
     PendingAudioRecovery --> AudioDownloadCoordinator
@@ -240,7 +244,7 @@ classDiagram
 
 StateViewModel в коде generic `StateViewModel<S>`; Player использует PlayerState. AudioPlayerImpl — expect/actual с реализациями Web HTMLAudioElement и Desktop VLC; FfmpegAudioPlayer — JVM реализация на ffplay. Koin выбирает движок, исходники Android сохранены вне активной сборки. AudioPlayer/AudioStorage — платформенные порты и адаптеры. UI — **Presentation Model/MVVM**, делегаты разделяют операции, StateFlow — **Observer**.
 
-AudioDownloadCoordinator имеет Web и Desktop/TUI адаптеры. FileAudioDownloadCoordinator удерживает native FileLock/канал и использует реестр JVM; createJvmDatabase вызывает общую AudioDownloadRecovery для SQL-меток `jvm-file-lock-v1`. Файловое pending-хранилище пока не реализовано; PendingAudioStorage реализован только IndexedDbAudioStorage.
+AudioDownloadCoordinator имеет Web и Desktop/TUI адаптеры. FileAudioDownloadCoordinator удерживает native FileLock/канал и использует реестр JVM; createJvmDatabase вызывает общие AudioDownloadRecovery и PendingAudioRecovery. JournaledFileAudioStorage — **Decorator** над FileAudioStorage и файловый адаптер PendingAudioStorage. beforeWrite сохраняет sidecar до `.part`, confirmLinked удаляет журнал после SQL link; уборка файлов повторяема с удалением журнала последним. IndexedDbAudioStorage реализует тот же recovery-порт через транзакцию IndexedDB.
 
 Для LK-02 важны три владельца: storage до возврата location → downloader до SQL link → БД после link. Компенсация удаляет только новый объект без SQL-ссылок. В Web отдельные asset lock и content lease защищают запись чанков и полный цикл скачивания. recoverIncompleteAudio убирает incomplete, AudioDownloadRecovery восстанавливает SQL DOWNLOADING, PendingAudioRecovery сверяет готовые pending-объекты. ConfirmLinked снимает pending после SQL link. Активные, legacy/no-lock и подтверждённые объекты сохраняются. Связи с браузерными API показаны в [UML-ченджлоге](CHANGELOG_UML.md); ограничения — в [ADR](ADR_AUDIO_DOWNLOAD_RECOVERY.md).
 

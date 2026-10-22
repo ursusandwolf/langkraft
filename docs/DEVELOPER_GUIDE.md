@@ -60,7 +60,9 @@ Web recovery (REL-S2/LK-03): storage/index.js удерживает Web Lock на
 
 AudioDownloadCoordinator — отдельный порт владения Content на весь download. WebAudioDownloadCoordinator использует Web Lock; FileAudioDownloadCoordinator в Desktop/TUI — native FileChannel lock и реестр JVM. UncoordinatedAudioDownloads остаётся fallback для платформ без подключённого адаптера. Downloader транзакционно записывает DOWNLOADING вместе с известной меткой в SyncMetadata и удаляет её при завершении/компенсации. При старте Web и Desktop/TUI AudioDownloadRecovery восстанавливает только помеченные операции со свободным lock: ERROR без прежнего пути либо COMPLETED с прежней ссылкой. Таймаут не доказывает смерть владельца. [Архитектурное решение](ADR_AUDIO_DOWNLOAD_RECOVERY.md).
 
-DesktopModule использует единый dataDirectory для БД, audio и download-locks. Пустые lock-файлы сохраняются: их наличие не означает активной загрузки, а удаление/переименование во время работы нарушает протокол. FileAudioDownloadCoordinator находится в desktopMain и не включает Android автоматически. Файловая pending-recovery пока не подключена: после аварии `.part`/непривязанные MP3 остаются до следующего этапа.
+DesktopModule использует единый dataDirectory для БД, audio и download-locks. Пустые lock-файлы сохраняются: их наличие не означает активной загрузки, а удаление/переименование во время работы нарушает протокол. FileAudioDownloadCoordinator находится в desktopMain и не включает Android автоматически.
+
+Desktop/TUI получают JournaledFileAudioStorage — Decorator над потоковым FileAudioStorage и адаптер PendingAudioStorage. Callback beforeWrite сохраняет sidecar `.mp3.pending` до создания `.part`. Общая recovery под свободным native lease проверяет все SQL-ссылки, сохраняет связанные файлы и удаляет непривязанные final/partial; journal удаляется последним для безопасного повторения. confirmLinked снимает sidecar после SQL COMMIT. Старые/неизвестные записи и файлы без sidecar сохраняются, общая retention не реализована.
 
 PendingAudioRecovery отдельно сверяет опубликованные pendingVersion=1 объекты. Web storage устанавливает pending только под полным content lease; после SQL link AudioStorage.confirmLinked снимает метку. Если вкладка закрылась, recovery берёт свободный lease, под DatabaseAccess проверяет все Content и либо подтверждает ссылку, либо атомарно удаляет manifest/chunks. Отказ SQL не допускает удаления. Новые ссылки на pending audio должны вводиться под lease исходного contentId; локальный DatabaseAccess не заменяет блокировку между вкладками. Legacy/no-lock и уже подтверждённые объекты остаются вне этой уборки.
 
@@ -68,7 +70,7 @@ OfflineDownloadDelegate → AudioDownloaderImpl → HTTP stream → AudioStorage
 
 AudioDownloaderImpl сначала читает фактическую запись БД, сохраняет прежний путь при DOWNLOADING и отвергает повторный уже запущенный download. Поток остаётся отменяемым. Короткая завершающая привязка выполняется под DatabaseAccess в NonCancellable; после успешной привязки владельцем становится БД. Отмена всё равно пробрасывается вызывающему коду, но уже связанный файл и COMPLETED не откатываются.
 
-При неуспехе компенсация под тем же DatabaseAccess проверяет ссылки **всех** Content. Удаляется только непривязанный новый объект, прежнее audio сохраняется. Ошибка удаления добавляется как suppressed к исходной. Если исход SQL нельзя перечитать, файл сохраняется для последующей сверки вместо удаления по предположению. Web pending recovery закрывает аварию между публикацией и SQL link для нового lease-протокола; файловый pending-журнал Desktop/TUI, legacy/no-lock и общая retention остаются LK-02/LK-03 backlog.
+При неуспехе компенсация под тем же DatabaseAccess проверяет ссылки **всех** Content. Удаляется только непривязанный новый объект, прежнее audio сохраняется. Ошибка удаления добавляется как suppressed к исходной. Если исход SQL нельзя перечитать, файл сохраняется для последующей сверки вместо удаления по предположению. Web/Desktop/TUI pending recovery закрывает завершение процесса между публикацией и SQL link для нового lease-протокола; legacy/no-lock и общая retention остаются LK-02/LK-03 backlog.
 
 ### UI и воспроизведение
 
@@ -93,6 +95,7 @@ SqlDelightVocabularyRepository отправляет pending UPSERT/DELETE, пр�
 | Repository | LocalContentRepository → SqlDelightContentRepository; VocabularyRepository → SqlDelightVocabularyRepository; VocabularySyncRepository → BackendVocabularyRepository | Отделить работу UI/use case от SQL/Exposed и сетевого sync |
 | Strategy | SpacedRepetitionAlgorithm → Sm2Algorithm; LinguisticAssistant → Mock/Gemini | Подменять алгоритм/провайдера через контракт |
 | Decorator | backend CachingLinguisticAssistant оборачивает LinguisticAssistant | Добавлять кэш без изменения контракта AI |
+| Decorator / recovery adapter | JournaledFileAudioStorage оборачивает FileAudioStorage | Сохранять потоковую запись и дополнять её pending-журналом/сверкой без включения Android |
 | Adapter / platform port | BackendRemoteSource, ExecutableProcessRunner, AudioStorage и AudioPlayer реализации | Адаптировать HTTP, ProcessBuilder, файловую систему/IndexedDB и аудиодвижки |
 | Presentation Model / MVVM | StateViewModel, PlayerViewModel, SrsTrainingViewModel и Compose Views | Хранить состояние и обработку действий вне представления |
 | Observer | StateFlow и SQLDelight Query.Listener/asFlow | Перерисовка/перечитывание при изменении состояния/данных |

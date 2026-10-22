@@ -18,6 +18,8 @@ class FileAudioDownloadCoordinator(
     private val directory: File,
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : AudioDownloadCoordinator {
+    private val owned = ConcurrentHashMap.newKeySet<String>()
+    internal fun owns(contentId: String): Boolean = owned.contains(contentId)
     private companion object {
         // Never open a second channel for a file held by this JVM: on some OSes
         // closing that channel can release the first channel's native lock too.
@@ -58,11 +60,13 @@ class FileAudioDownloadCoordinator(
                                 try { opened.close() }
                                 catch (cleanup: Throwable) {
                                     if (failure == null) failure = cleanup else failure.addSuppressed(cleanup)
-                                } finally { if (!opened.isOpen) claimed.remove(key) }
+                                } finally {
+                                    if (!opened.isOpen) { owned.remove(contentId); claimed.remove(key) }
+                                }
                                 failure?.let { throw it }
                             }
                         }
-                    }.also { allocated = it }
+                    }.also { owned.add(contentId); allocated = it }
                 } catch (error: Throwable) {
                     try { channel?.close() } catch (cleanup: Throwable) { error.addSuppressed(cleanup) }
                     if (channel?.isOpen != true) claimed.remove(key)

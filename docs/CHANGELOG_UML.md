@@ -1,3 +1,30 @@
+# REL-05 — 2026-10-22 — файловый Decorator и replay-журнал
+
+```text
++---------------------------+             +----------------------------+
+| AudioDownloaderImpl       |-----uses---->| AudioStorage <<Port>>      |
+| SQL link -> confirmLinked |             +--------------+-------------+
++---------------------------+                            ^ implements
+                                         +--------------+-------------+
++---------------------------+            | JournaledFileAudioStorage  |
+| PendingAudioRecovery      |---uses----->| <<Decorator + Adapter>>    |
+| free lease + ALL SQL refs  |   via       | pending sidecar / resolve  |
++---------------------------+ PendingPort +--------------+-------------+
+                                                        | delegates
+                                         +--------------v-------------+
+                                         | FileAudioStorage           |
+                                         | beforeWrite -> journal     |
+                                         | stream -> .part -> .mp3    |
+                                         +----------------------------+
+
+native content lease -> force journal -> create .part -> publish MP3
+SQL COMMIT -> confirmLinked -> remove journal
+crash -> free lease -> SQL refs? keep + confirm : delete payload then journal
+partial cleanup failure -> journal remains -> replay on next startup
+```
+
+JournaledFileAudioStorage реализует оба порта AudioStorage/PendingAudioStorage и декорирует потоковый FileAudioStorage. Журнал — долговечная запись незавершённой передачи владения. В IndexedDB используется транзакция, в файловой системе — проверяемое идемпотентное повторение с удалением журнала последним; распределённой транзакции с SQLite нет.
+
 # REL-04 — 2026-10-22 — Desktop/TUI: platform lease
 
 ```text

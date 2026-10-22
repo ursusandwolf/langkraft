@@ -14,6 +14,12 @@ internal class NativeFileLockProbe(directory: File) {
                 public static void main(String[] args) throws Exception {
                     try (FileChannel channel = FileChannel.open(Path.of(args[0]), StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
                         FileLock lock = channel.tryLock();
+                        if (lock != null && args.length > 2) {
+                            try (FileChannel partial = FileChannel.open(Path.of(args[2]), StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE)) {
+                                partial.write(java.nio.ByteBuffer.wrap(new byte[] {1, 2, 3}));
+                                partial.force(true);
+                            }
+                        }
                         System.out.println(lock == null ? "BUSY" : "HELD");
                         System.out.flush();
                         if (lock != null && args.length > 1) {
@@ -26,10 +32,11 @@ internal class NativeFileLockProbe(directory: File) {
         """.trimIndent())
     }
 
-    fun start(file: File, hold: Boolean = false): Process {
+    fun start(file: File, hold: Boolean = false, partial: File? = null): Process {
         val binary = File(System.getProperty("java.home"), "bin/java" + if (System.getProperty("os.name").startsWith("Windows")) ".exe" else "")
         val arguments = mutableListOf(binary.path, source.path, file.path)
-        if (hold) arguments.add("hold")
+        if (hold || partial != null) arguments.add("hold")
+        if (partial != null) arguments.add(partial.path)
         return ProcessBuilder(arguments).redirectErrorStream(true).start()
     }
 

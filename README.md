@@ -10,7 +10,7 @@
 
 Итог интеграции: 83 JVM-теста и 26 Kotlin/Chromium-тестов, storage/UI development/production и smoke Desktop/TUI прошли [CI](https://github.com/ursusandwolf/langkraft/actions/runs/39697774903). Исторический отчёт: [INTEGRATION_COMPLETION](docs/INTEGRATION_COMPLETION.md). После интеграции исправлена передача владения offline-аудио при отмене и ошибке привязки к SQLite (LK-02); регрессионные сценарии и границы исправления записаны в changelog.
 
-В текущем спринте REL-S2 проходят 121 JVM-тест (80 shared + 41 backend) и smoke Desktop/TUI. Web recovery проверена на этапе REL-03: 26 Kotlin/Chromium-тестов, семь storage-сценариев и UI/offline development/production. Восстанавливаются новые Web-загрузки и помеченный SQL DOWNLOADING Desktop/TUI; файловый pending-журнал и legacy/no-lock recovery ещё в плане. Основные пользовательские возможности и границы проверки:
+В текущем спринте REL-S2 проходят 132 JVM-теста (91 shared + 41 backend), 26 Kotlin/Chromium-тестов и smoke Desktop/TUI. Полные Web UI/offline development/production и семь storage-сценариев проверены на этапе REL-03. Восстанавливаются новые Web/Desktop/TUI загрузки: SQL DOWNLOADING и непривязанные pending-объекты, включая файловые `.part`/MP3 по журналу. Legacy/no-lock recovery и общая retention ещё в плане. Основные пользовательские возможности и границы проверки:
 
 | Область | Проверка |
 | --- | --- |

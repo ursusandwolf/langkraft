@@ -16,7 +16,9 @@ import kotlin.coroutines.coroutineContext
 /** Used by Android and JVM; incomplete downloads are never exposed as playable files. */
 class FileAudioStorage(
     private val directory: File,
-    private val dispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
+    /** Persist platform recovery metadata before any payload bytes are created. */
+    private val beforeWrite: suspend (contentId: String, location: String) -> Unit = { _, _ -> }
 ) : AudioStorage {
     override suspend fun delete(location: String) = withContext(dispatcher) {
         val file = File(location).canonicalFile
@@ -36,6 +38,7 @@ class FileAudioStorage(
                 check(directory.isDirectory || directory.mkdirs()) { "Cannot create audio storage" }
                 val file = File(directory, "$contentId-${UUID.randomUUID()}.mp3").also { published = it }
                 val partial = File(directory, "${file.name}.part").also { temporary = it }
+                beforeWrite(contentId, file.absolutePath)
                 var total = 0L
                 FileOutputStream(partial).use { output ->
                     val buffer = ByteArray(64 * 1024)

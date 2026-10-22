@@ -8,10 +8,10 @@ import kotlinx.coroutines.withContext
 
 data class PendingAudioAsset(val location: String, val contentId: String, val recoveryProtocol: String)
 
-/** Enumerates only published assets with a known, durable pending marker. */
+/** Enumerates only assets with a known, durable pending marker. */
 interface PendingAudioStorage {
     suspend fun listPending(): List<PendingAudioAsset>
-    /** Resolve atomically; false means the candidate was already resolved/removed. */
+    /** Resolve durably and idempotently; false means skipped/already resolved. */
     suspend fun resolvePending(location: String, referenced: Boolean): Boolean
 }
 
@@ -29,7 +29,7 @@ class PendingAudioRecovery(
                 access.run(ioDispatcher) {
                     val referenced = appDatabaseQueries.selectContentReferencingAudio(asset.location).awaitAsOneOrNull() != null
                     // Keep the local DB mutex and content lease through the short
-                    // IDB mutation; no SQLite transaction spans the second store.
+                    // storage mutation; no SQLite transaction spans the second store.
                     if (storage.resolvePending(asset.location, referenced)) resolved++
                 }
             } finally { withContext(NonCancellable) { lease.release() } }
