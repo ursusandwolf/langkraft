@@ -98,6 +98,10 @@ java -cp "backend/build/install/backend/lib/*" io.ktor.server.netty.EngineMain
 | `LANGKRAFT_JWT_SECRET` | Обязательный backend secret ≥32 символов |
 | `GEMINI_API_KEY` | Опциональный ключ backend AI; без него mock |
 | `LANGKRAFT_MEDIA_RETENTION_MS` | TTL новых backend MP3/job-каталогов в миллисекундах; 0 по умолчанию выключает удаление |
+| `LANGKRAFT_MAX_IMPORT_BYTES` | Максимальные логические байты одного backend job со всеми промежуточными файлами; default 0 выключает limit |
+| `LANGKRAFT_MAX_TOTAL_BYTES` | Общий backend media budget с резервами queued/active jobs; default 0, требует положительный MAX_IMPORT_BYTES |
+| `LANGKRAFT_BUDGET_CHECK_INTERVAL_MS` | Интервал верхнего монитора размера, default 200 мс, допустимо 10–60000 |
+| `LANGKRAFT_MAX_DURATION_SECONDS` | Максимальная длительность импорта, default 14400 (4 часа), допустимо 1–86400 |
 | `LANGKRAFT_BACKEND_DATA_DIR` | Backend `langkraft.db`; default `data` относительно cwd процесса |
 | `LANGKRAFT_DOWNLOADS_DIR` | Backend media в каталогах jobId; default `downloads` относительно cwd |
 | `LANGKRAFT_DATA_DIR` | Desktop/TUI профиль; default `~/.langkraft`, внутри DB, `audio/` и `download-locks/` |
@@ -105,7 +109,9 @@ java -cp "backend/build/install/backend/lib/*" io.ktor.server.netty.EngineMain
 | `FFMPEG_EXECUTABLE` | Исполняемый ffmpeg для waveform; default `ffmpeg` |
 | `FFPLAY_EXECUTABLE` | Исполняемый ffplay; default `ffplay` |
 
-Порт 8080, host `0.0.0.0`, JWT issuer/audience/24h validity и параметры worker/queue/cleanup заданы в [application.conf](../backend/src/main/resources/application.conf). Worker count=4, queue capacity=8, cleanup interval=1 час, job expiry=24 часа (только READY/ERROR). Импорт ограничен известной положительной длительностью до четырёх часов; yt-dlp timeout 600 с, waveform ffmpeg 120 с. Общая дисковая квота остаётся backlog.
+Порт 8080, host `0.0.0.0`, JWT issuer/audience/24h validity и параметры worker/queue/cleanup заданы в [application.conf](../backend/src/main/resources/application.conf). Worker count=4, queue capacity=8, cleanup interval=1 час, job expiry=24 часа (только READY/ERROR). По умолчанию импорт принимает известную положительную длительность до четырёх часов; live отклоняется. yt-dlp timeout 600 с, waveform ffmpeg 120 с.
+
+Byte-бюджет включается явно, например `LANGKRAFT_MAX_IMPORT_BYTES=1073741824` (1 ГиБ на job) и `LANGKRAFT_MAX_TOTAL_BYTES=10737418240` (10 ГиБ суммарно). Задайте переменные окружения и перезапустите backend. В резерв входят queued jobs; в фактический размер — raw/part/MP3, субтитры, PCM, логи и marker, а также legacy/unknown файлы. При нехватке бюджета admission вернёт 503 с Retry-After до создания задания. Превышение в процессе даст ERROR, остановит процессы и освободит резерв после попытки cleanup. Успешный импорт оставляет только MP3 и marker. Контроль периодический и допускает краткое превышение; строгая граница требует квоты файловой системы. [Формула учёта, defaults и ограничения](ADR_BACKEND_MEDIA_BUDGET.md).
 
 Retention backend включается явно, например `$env:LANGKRAFT_MEDIA_RETENTION_MS = '604800000'` для семи дней. Перезапустите backend после настройки. Уборка выполняется при старте ingestion service и затем каждый cleanup interval, только для новых UUID job-каталогов с протокольной меткой. Очередь, активный импорт и выдаваемый HTTP-поток защищены lease. Legacy без метки сохраняется; время отсчитывается от публикации, чтение его не продлевает. После TTL сетевой audioUrl возвращает 404: заранее скачайте offline-копию либо повторите импорт. Локальные клиентские копии не удаляются. Используйте один процесс backend на каталог downloads/БД. [Правила и ограничения](ADR_BACKEND_MEDIA_RETENTION.md).
 

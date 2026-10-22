@@ -1,3 +1,29 @@
+# REL-14 — 2026-10-22 — backend media budget
+
+```mermaid
+classDiagram
+    class MediaLimits
+    class BackendMediaStorage {
+        +beginImport(jobId) AutoCloseable
+        +checkImportBudget(jobId)
+        +retainAudio(jobId, audio)
+        +publish(jobId, commitReady)
+    }
+    class YouTubeIngestionService
+    class ProcessRunner {
+        <<interface>>
+        +executeIn(arguments, directory, checkBudget) String
+    }
+    class ExecutableProcessRunner
+    class WaveformExtractor
+    BackendMediaStorage --> MediaLimits
+    YouTubeIngestionService --> BackendMediaStorage : reservation and monitor
+    ProcessRunner <|.. ExecutableProcessRunner
+    WaveformExtractor --> ProcessRunner
+```
+
+Расширен существующий **lease**-протокол, новые GoF-иерархии не вводятся. BackendMediaStorage сериализует admission/бюджет/retention; MediaLimits — неизменяемая конфигурация. Сервис владеет coroutineScope обработки и монитора, runner вызывает checkBudget и reap известных потомков. PCM/logs принадлежат job-каталогу. Схема БД не менялась. [ADR](ADR_BACKEND_MEDIA_BUDGET.md).
+
 # REL-13 — 2026-10-22 — backend media lifecycle
 
 ```mermaid

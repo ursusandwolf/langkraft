@@ -121,6 +121,10 @@ fun Route.apiRoutes() {
 }
 
 fun StatusPagesConfig.configureBackendExceptions() {
+    exception<MediaCapacityException> { call, cause ->
+        call.response.headers.append("Retry-After", "5")
+        call.respondText(cause.message.orEmpty(), status = HttpStatusCode.ServiceUnavailable)
+    }
     exception<IngestionBusyException> { call, cause ->
         call.response.headers.append("Retry-After", "5")
         call.respondText(cause.message.orEmpty(), status = HttpStatusCode.ServiceUnavailable)

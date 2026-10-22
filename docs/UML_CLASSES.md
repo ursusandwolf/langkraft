@@ -278,6 +278,7 @@ classDiagram
     class ProcessRunner {
         <<interface>>
         +execute(arguments) String
+        +executeIn(arguments, directory, checkBudget) String
     }
     class ExecutableProcessRunner
     class WaveformExtractor
@@ -287,7 +288,10 @@ classDiagram
         +acquireMedia(segments) MediaLease
         +discardImport(jobId)
         +cleanup() CleanupResult
+        +checkImportBudget(jobId)
+        +retainAudio(jobId, audio)
     }
+    class MediaLimits
     class MediaLease {
         +file File
         +close()
@@ -327,6 +331,7 @@ classDiagram
     YouTubeIngestionService --> BackendMediaStorage : import lease and retention
     YtdlpClient --> BackendMediaStorage : discard owned import
     BackendMediaStorage --> MediaLease : reader lease
+    BackendMediaStorage --> MediaLimits : reservation and byte limits
     YouTubeIngestionService ..> SrtParser
     YtdlpClient --> ProcessRunner
     WaveformExtractor --> ProcessRunner
@@ -347,6 +352,8 @@ classDiagram
 ProcessRunner — порт внешнего процесса, ExecutableProcessRunner — **Adapter** к ProcessBuilder с timeout/cleanup. IngestionService использует Channel и workers (**Producer–Consumer**). Cache — **Decorator**, AI-провайдеры — **Strategy**. Client commonModule выбирает RemoteLinguisticAssistant (**Adapter** к JWT backend API), backendModule — обёрнутый кэшем Gemini/mock; это разные экземпляры/графы DI. DTO AI-запросов общие, ключ провайдера остаётся на backend. Exposed Database удерживается backend repositories, SQLDelight AppDatabase к серверной БД не применяется.
 
 BackendMediaStorage использует единый monitor для **lease** импортов/читателей и retention; MediaRoutes удерживает MediaLease при выдаче MP3, включая Range. Публикация вызывает commitReady до открытия читателей. `.langkraft-media-v1` подтверждает владение каталогом для повторяемой уборки; legacy/unknown сохраняются. Протокол рассчитан на один backend на downloads_dir, TTL выключен по умолчанию. Это lifecycle-координация без новой GoF-иерархии; [ADR](ADR_BACKEND_MEDIA_RETENTION.md).
+
+REL-14: MediaLimits задаёт per-import/total/duration/monitor параметры. BackendMediaStorage резервирует байты до persistence и проверяет actual bytes, YouTubeIngestionService владеет coroutineScope обработки/монитора, ProcessRunner.executeIn проверяет callback бюджета и размещает логи в каталоге job. WaveformExtractor размещает там же PCM и пробрасывает quota failure. retainAudio удаляет intermediates перед publish; резерв заменяется actual bytes. [ADR бюджета](ADR_BACKEND_MEDIA_BUDGET.md).
 
 Исходники: [backend](../backend/src/main/kotlin/com/langkraft/backend), [backend/ai](../backend/src/main/kotlin/com/langkraft/backend/ai), [backend/db](../backend/src/main/kotlin/com/langkraft/backend/db). Полный каталог паттернов, модулей и правил изменения — [DEVELOPER_GUIDE](DEVELOPER_GUIDE.md).
 

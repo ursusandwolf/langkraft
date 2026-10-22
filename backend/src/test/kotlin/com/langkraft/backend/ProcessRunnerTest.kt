@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.io.File
 import java.nio.file.Path
+import java.util.UUID
 import kotlin.test.*
 
 class ProcessRunnerTest {
@@ -58,5 +59,70 @@ class ProcessRunnerTest {
             awaitExit(parent.readText().toLong())
             awaitExit(child.readText().toLong())
         } finally { job.cancelAndJoin() }
+    }
+
+    @Test fun quotaViolationStopsRealProcessTreeAndLeavesNoLogs() = runBlocking {
+        val storage = BackendMediaStorage(directory.resolve("downloads").toString(), limits = MediaLimits(1024, 2048))
+        val id = UUID.randomUUID().toString()
+        val lease = storage.beginImport(id)
+        val jobDirectory = storage.importDirectory(id)
+        val parent = jobDirectory.resolve("parent.pid").toFile()
+        val child = jobDirectory.resolve("child.pid").toFile()
+        val partial = jobDirectory.resolve("source.part")
+        try {
+            withTimeout(15_000) {
+                assertFailsWith<MediaLimitException> {
+                    ExecutableProcessRunner(java, 30).executeIn(
+                        arguments("quota-tree") + listOf(partial.toString(), parent.path, child.path), jobDirectory
+                    ) { storage.checkImportBudget(id) }
+                }
+            }
+            assertTrue(parent.isFile && child.isFile)
+            awaitExit(parent.readText().toLong())
+            awaitExit(child.readText().toLong())
+            assertTrue(jobDirectory.toFile().listFiles().orEmpty().none { it.extension == "log" })
+            storage.discardImport(id)
+            assertFalse(jobDirectory.toFile().exists())
+        } finally {
+            lease.close()
+            // Avoid leaving helpers behind even if an assertion fails.
+            listOf(parent, child).filter { it.isFile }.forEach { marker ->
+                marker.readText().toLongOrNull()?.let { ProcessHandle.of(it).ifPresent { process -> process.destroyForcibly() } }
+            }
+        }
+    }
+
+    @Test fun trackedDescendantIsStoppedWhenParentExitsBeforeCleanup() = runBlocking {
+        val parent = directory.resolve("exited-parent.pid").toFile()
+        val child = directory.resolve("orphan-child.pid").toFile()
+        try {
+            ExecutableProcessRunner(java, temporaryDirectory = directory)
+                .execute(arguments("spawn-and-exit") + listOf(parent.path, child.path))
+            assertTrue(child.isFile)
+            awaitExit(parent.readText().toLong())
+            awaitExit(child.readText().toLong())
+        } finally {
+            listOf(parent, child).filter { it.isFile }.forEach { marker ->
+                marker.readText().toLongOrNull()?.let { ProcessHandle.of(it).ifPresent { process -> process.destroyForcibly() } }
+            }
+        }
+    }
+
+    @Test fun processOutputLimitIsEnforcedBeforeProcessExit() = runBlocking {
+        val marker = directory.resolve("log-overflow.pid").toFile()
+        try {
+            val failure = withTimeout(10_000) {
+                assertFailsWith<IngestionException> {
+                    ExecutableProcessRunner(java, 30, directory).execute(arguments("log-overflow") + marker.path)
+                }
+            }
+            assertContains(failure.message.orEmpty(), "output is too large")
+            awaitExit(marker.readText().toLong())
+            assertTrue(directory.toFile().listFiles().orEmpty().none { it.extension == "log" })
+        } finally {
+            marker.takeIf { it.isFile }?.readText()?.toLongOrNull()?.let {
+                ProcessHandle.of(it).ifPresent { process -> process.destroyForcibly() }
+            }
+        }
     }
 }
