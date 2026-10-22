@@ -1,3 +1,38 @@
+# REL-07 — 2026-10-22 — Web recovery: profile namespaces и компактный архив
+
+```text
++--------------------------+       calls       +----------------------------------+
+| recovery-page.js         |------------------>| recovery.js <<JS module>>        |
+| separate DOM entry       |                   | clone / export / import functions |
++--------------------------+                   +--------+-------------------------+
+                                                       | readonly snapshots
++--------------------------+                           |
+| Original IndexedDB       |---------------------------+
+| VFS v5 + audio v1        |                           | new UUID profile only
++--------------------------+                           v
+                                      +----------------------------------+
+                                      | database.worker.js               |
+                                      | repair SQL copy / quick_check    |
+                                      +---------------+------------------+
+                                                      | uses
+                                      +---------------v------------------+
+                                      | IDBBatchAtomicVFS <<Adapter>>     |
+                                      | isolated DB + short SQLite file  |
+                                      +---------------+------------------+
+                                                      | VACUUM INTO
+                                      +---------------v------------------+
+                                      | MemoryVFS <<Adapter>>            |
+                                      | compact live SQLite pages        |
+                                      +---------------+------------------+
+                                                      v
+                                      JSON archive <----> NEW profile
+
+profile.js -> DB names + SQLite file + download lock namespace
+default URL -> historical profile; ?profile=recovered-UUID -> isolated copy
+```
+
+Классы VFS принадлежат существующей wa-sqlite. Recovery/page/profile — JS-модули с функциями, без новой доменной иерархии или GoF-паттерна. Архив не содержит истории raw VFS; SQL/audio не образуют общего атомарного снимка. Исходник сохраняется, незавершённая копия не получает ссылку. [Ограничения и запуск](LEGACY_RECOVERY.md).
+
 # REL-06 — 2026-10-22 — legacy recovery в изолированный профиль
 
 ```text

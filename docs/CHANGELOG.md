@@ -1,3 +1,11 @@
+# REL-07 — 2026-10-22 — Web legacy: копия профиля и архив
+
+- Добавлена отдельная recovery.html с созданием копии, экспортом JSON и импортом в новый профиль. Исходник читается readonly-транзакциями IndexedDB без writable SQLite/startup; исходные legacy/partial/unlinked записи сохраняются. Снимки SQL/audio раздельные, доступность каждого связанного asset проверяется в копии.
+- Новый `?profile=recovered-<UUID>` разделяет SQLite/audio DB, SQLite filename и download locks. Имена основного профиля сохранены. Копия сохраняет SRS/cues/pending sync/cursors, сбрасывает DOWNLOADING и недоступные ссылки, очищает только свои auth/download-метки. Общие ссылки копируют один asset.
+- Экспорт VACUUM INTO MemoryVFS исключает старые VFS-версии и свободные страницы с удалённым токеном. Архив v1 содержит компактный SQLite + base64 audio; импорт проверяет схему/quick_check/чанки и никогда не перезаписывает существующий профиль. Лимит архива — 64 МиБ, VFS/audio snapshots — по 64 МиБ и до 50 000 записей на store. При отказе/квоте ссылка не выдаётся; частичная копия остаётся отдельно.
+- Исправлены два ограничения сборки: все JS-файлы локального npm storage-пакета включены в inputs установки, каталог включён в Webpack inputs. Короткий UUID filename совместим с 64-байтным VFS path bundled wa-sqlite 1.0. Версии БД и зависимости не менялись.
+- Chromium: семь прежних storage-сценариев и пять recovery-групп (активные SQL/audio writers, SRS/queue/shared audio, round-trip без token history, плохие архивы/будущая схема, коллизия/нет источника/квота). UI development/production проверяет кнопки copy/export/import и полное Compose-приложение на копии schema v3; 26 Kotlin/Chromium-тестов. JVM runtime не менялся; последние JVM/smoke результаты — REL-05/REL-06. Руководства, README, UML и план актуализированы; потоковые большие архивы и retention остаются backlog.
+
 # REL-06 — 2026-10-22 — legacy/no-lock: read-only аудит и изолированная копия
 
 - Зафиксирована политика: отсутствие метки/lock у старой операции не доказывает завершения владельца. Исходные legacy/no-lock данные автоматически не сбрасываются и не удаляются. Для Web сохраняется эта политика; отдельный export/copy recovery перенесён в backlog.

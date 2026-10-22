@@ -118,6 +118,8 @@ Desktop/TUI восстанавливают помеченный DOWNLOADING по
 
 ## Проверки
 
+Для восстановления старых Web-загрузок откройте `/recovery.html` на origin сохранённой библиотеки (локально `http://127.0.0.1:3000/recovery.html`). Страница создаёт отдельный профиль, экспортирует JSON-архив до 64 МиБ и импортирует его в новую копию. Исходный IndexedDB сохраняется; копия открывается по ссылке `/?profile=recovered-<UUID>` без входа в аккаунт. Требования, ограничения и порядок проверки: [LEGACY_RECOVERY](LEGACY_RECOVERY.md).
+
 ```powershell
 .\gradlew.bat :shared:desktopTest :backend:test
 .\gradlew.bat :webApp:jsBrowserDevelopmentWebpack

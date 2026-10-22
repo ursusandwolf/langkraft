@@ -190,10 +190,51 @@ try {
   assert.equal((await query('SELECT word FROM Vocabulary')).length,1);
   await page.screenshot({path:path.join(artifacts,'offline-player.png')});
   await page.setViewportSize({width:390,height:844});await page.waitForTimeout(400);await page.screenshot({path:path.join(artifacts,'mobile.png')});
+  // Exercise the separately bundled recovery UI against a real migrated library.
+  const recoveryPage=await context.newPage();
+  recoveryPage.on('pageerror',e=>errors.push(e.message));
+  await recoveryPage.goto(origin+'/recovery.html');
+  await recoveryPage.getByRole('button',{name:'Восстановить из архива'}).click();
+  await recoveryPage.waitForFunction(()=>document.getElementById('status').textContent.includes('Выберите архив'));
+  await recoveryPage.getByRole('button',{name:'Создать копию',exact:true}).click();
+  await recoveryPage.waitForFunction(()=>!document.getElementById('clone').disabled);
+  assert.match(await recoveryPage.locator('#status').textContent(),/^Копия готова/);
+  const copyLink=recoveryPage.getByRole('link',{name:'Открыть восстановленную копию'});
+  await copyLink.waitFor({state:'visible'});
+  const copyUrl=await copyLink.getAttribute('href');
+  assert.match(copyUrl,/profile=recovered-/);
+  const copyPage=await context.newPage();
+  copyPage.on('pageerror',e=>errors.push(e.message));
+  await copyPage.goto(copyUrl);
+  await copyPage.waitForFunction(()=>document.documentElement.dataset.appReady==='true',null,{timeout:60000});
+  await copyPage.addScriptTag({url:origin+'/storage-probe/harness.js'});
+  const copyData=await copyPage.evaluate(async()=>{
+    const client=window.storage.createDatabaseClient();
+    try {
+      const words=await client.request('exec','SELECT word FROM Vocabulary');
+      const auth=await client.request('exec',"SELECT value FROM SyncMetadata WHERE key='auth_token'");
+      const paths=await client.request('exec','SELECT localAudioPath FROM Content WHERE localAudioPath IS NOT NULL');
+      const blob=await window.storage.readAudioBlob(paths[0][0]);
+      return {words,auth,bytes:blob.size};
+    } finally {client.close();}
+  });
+  assert.equal(copyData.words.length,1);assert.deepEqual(copyData.auth,[]);assert.ok(copyData.bytes>0);
+  const downloadPromise=recoveryPage.waitForEvent('download');
+  await recoveryPage.getByRole('button',{name:'Экспортировать копию'}).click();
+  const download=await downloadPromise;
+  await recoveryPage.waitForFunction(()=>document.getElementById('status').textContent.startsWith('Копия готова'));
+  await recoveryPage.getByLabel('Архив восстановления (.json)').setInputFiles(await download.path());
+  await recoveryPage.getByRole('button',{name:'Восстановить из архива'}).click();
+  await recoveryPage.waitForFunction(()=>document.getElementById('status').textContent.startsWith('Копия готова'));
+  assert.notEqual(await copyLink.getAttribute('href'),copyUrl);
+  assert.deepEqual(await query('SELECT downloadStatus FROM Content WHERE id=?',['legacy-owner']),[['DOWNLOADING']]);
+  await recoveryPage.screenshot({path:path.join(artifacts,'recovery.png')});
+  await copyPage.close();await recoveryPage.close();
   assert.deepEqual(errors,[]);
   console.log('PASS: Web import error/retry, async job polling, playback, durable audio, vocabulary and offline reload');
   console.log('PASS: desktop and mobile rendering without runtime errors');
   console.log('PASS: app startup removes abandoned audio while preserving saved offline playback');
   console.log('PASS: SQL recovery restores stale downloads, preserves active/legacy owners and recovers a closed owner');
   console.log('PASS: published pending recovery removes orphans, preserves active/legacy/foreign references and confirms bound assets');
+  console.log('PASS: recovery page copies/exports/imports a real library; isolated Compose app opens linked audio and SRS without auth');
 } catch(error) {if(page) await page.screenshot({path:path.join(artifacts,'failure.png')}).catch(()=>{});console.error('Browser errors:',errors);throw error;} finally {releaseMedia?.();await browser.close();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}

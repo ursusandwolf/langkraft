@@ -4,6 +4,11 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// Kotlin's local npm dependency also contains the standalone recovery entry.
+tasks.withType<org.jetbrains.kotlin.gradle.targets.js.webpack.KotlinWebpack>().configureEach {
+    inputs.dir(project(":shared").layout.projectDirectory.dir("src/jsMain/storage"))
+}
+
 kotlin {
     js(IR) {
         browser()

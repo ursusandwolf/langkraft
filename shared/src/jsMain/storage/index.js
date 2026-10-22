@@ -1,10 +1,13 @@
-const DATABASE = "langkraft-audio";
+import { profileNames, selectedProfile } from "./profile.js";
+
+const DATABASE = profileNames(selectedProfile).audio;
 const PREFIX = "indexeddb-audio:";
 let audioDatabase;
 const ownerId = crypto.randomUUID();
 const activeDownloads = new Map();
 const contentDownloads = new Map();
-const lockName = id => `langkraft-audio-download:${id}`;
+const lockSuffix = selectedProfile ? `:${selectedProfile}` : "";
+const lockName = id => `langkraft-audio-download${lockSuffix}:${id}`;
 
 // Separate from the asset lock: SQL stays DOWNLOADING before the first chunk
 // and after asset publication, until the final SQL link/compensation completes.
@@ -13,7 +16,7 @@ export async function acquireContentDownload(contentId) {
   let granted;
   let rejected;
   const ready = new Promise((resolve, reject) => { granted = resolve; rejected = reject; });
-  const finished = navigator.locks.request(`langkraft-content-download:${contentId}`, { ifAvailable: true }, lock => {
+  const finished = navigator.locks.request(`langkraft-content-download${lockSuffix}:${contentId}`, { ifAvailable: true }, lock => {
     if (!lock) { granted(null); return; }
     return new Promise(release => {
       const lease = { coordinated: true, release: async () => {
@@ -89,13 +92,16 @@ class LocalAudioUnavailableError extends Error {
   constructor(message) { super(message); this.name = "LocalAudioUnavailableError"; }
 }
 
-export function createDatabaseWorker() {
-  return new Worker(new URL("./database.worker.js", import.meta.url), { type: "module" });
+export function createDatabaseWorker(profile = selectedProfile) {
+  profileNames(profile);
+  const worker = new Worker(new URL("./database.worker.js", import.meta.url), { type: "module" });
+  worker.postMessage({ action: "initialize", profile });
+  return worker;
 }
 
 // One message/error listener per worker; every request is removed on completion.
-export function createDatabaseClient() {
-  const worker = createDatabaseWorker();
+export function createDatabaseClient(profile = selectedProfile) {
+  const worker = createDatabaseWorker(profile);
   const pending = new Map();
   let sequence = 0;
   let closed = false;

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build:test": "webpack --config tests/webpack.config.cjs",
-    "test": "npm run build:test && node tests/browser.test.js",
+    "test": "npm run build:test && node tests/browser.test.js && node tests/recovery.test.js",
     "test:app": "npm run build:test && node tests/web-app.test.js",
     "test:youtube": "node tests/youtube-live.test.js"
   },

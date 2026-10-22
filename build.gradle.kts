@@ -17,7 +17,7 @@ plugins.withType<org.jetbrains.kotlin.gradle.targets.js.nodejs.NodeJsRootPlugin>
     }
     tasks.withType<org.jetbrains.kotlin.gradle.targets.js.npm.tasks.KotlinNpmInstallTask>().configureEach {
         inputs.files(fileTree("shared/src/jsMain/storage") {
-            include("index.js", "database.worker.js", "package.json")
+            include("*.js", "package.json")
         })
         // Yarn classic otherwise reuses a stale copy of file: dependencies.
         args.add("--force")
