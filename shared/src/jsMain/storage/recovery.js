@@ -58,11 +58,28 @@ async function snapshot(name, version, stores, optional = false) {
       const timer = setTimeout(() => { error = new Error("Snapshot timed out; retry when the source is quieter"); tx.abort(); }, 15000);
       const result = {};
       let error;
+      let retainedBytes = 0;
       for (const store of stores) {
-        const request = tx.objectStore(store).getAll(undefined, MAX_RECORDS + 1);
+        const rows = result[store] = [];
+        // Keep one consistent readonly transaction, but never materialize the
+        // entire store before checking its budget. At most the next record is
+        // decoded beyond the retained byte limit (IDB values are indivisible).
+        const request = tx.objectStore(store).openCursor();
         request.onsuccess = () => {
-          if (request.result.length > MAX_RECORDS) { error = new Error("Recovery record limit exceeded"); tx.abort(); }
-          else result[store] = request.result;
+          const cursor = request.result;
+          if (!cursor) return;
+          try {
+            if (rows.length >= MAX_RECORDS) throw new Error("Recovery record limit exceeded");
+            const row = cursor.value;
+            const bytes = store === "chunks" ? row.bytes : store === "blocks" ? row.data : undefined;
+            if (store === "chunks" && !(bytes instanceof Uint8Array)) throw new Error("Unsupported binary record");
+            if (bytes instanceof Uint8Array) {
+              if (bytes.byteLength > MAX_BYTES - retainedBytes) throw new Error("Recovery exceeds the 64 MiB in-memory limit");
+              retainedBytes += bytes.byteLength;
+            }
+            rows.push(row);
+            cursor.continue();
+          } catch (reason) { error = reason; tx.abort(); }
         };
       }
       tx.oncomplete = () => { clearTimeout(timer); resolve(result); };

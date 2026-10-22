@@ -1,3 +1,26 @@
+# REL-15 — 2026-10-22 — ограниченное чтение Web recovery
+
+Доменные классы и публичные контракты не менялись. Существующий инфраструктурный модуль `recovery.js` заменяет массовое чтение store последовательным курсором; отдельный GoF-паттерн не вводится.
+
+```mermaid
+sequenceDiagram
+    participant Recovery as recovery.js
+    participant IDB as IndexedDB readonly transaction
+    Recovery->>IDB: openCursor для каждого store
+    loop Пока запись укладывается в лимиты
+        IDB-->>Recovery: одна запись
+        Recovery->>Recovery: проверить count и retained bytes
+        Recovery->>IDB: cursor.continue()
+    end
+    alt Превышен лимит
+        Recovery->>IDB: abort()
+        Recovery-->>Recovery: отказ до создания копии
+    else Снимок завершён
+        IDB-->>Recovery: complete
+        Recovery->>Recovery: создать и проверить новый профиль
+    end
+```
+
 # REL-14 — 2026-10-22 — backend media budget
 
 ```mermaid
