@@ -4,6 +4,7 @@ import {readFile, mkdir} from 'node:fs/promises';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {chromium} from 'playwright';
+import {waitForAsyncCondition} from './async-wait.js';
 
 const root = fileURLToPath(new URL('../../../', import.meta.url));
 const bundle = process.env.WEB_APP_BUNDLE || path.join(root, 'webApp/build/kotlin-webpack/js/developmentExecutable');
@@ -192,7 +193,7 @@ try {
   assert.deepEqual((await page.evaluate(()=>window.storage.listPendingAudio())).map(entry=>entry.contentId),['active-owner']);
   await query('DELETE FROM Content WHERE id=?',['other-ref']);
   await owner.close();
-  await page.waitForFunction(async()=>!(await navigator.locks.query()).held.some(lock=>
+  await waitForAsyncCondition(page,async()=>!(await navigator.locks.query()).held.some(lock=>
     lock.name==='langkraft-content-download:active-owner'));
   await open();
   assert.deepEqual(await query('SELECT downloadStatus FROM Content WHERE id=?',['active-owner']),[['ERROR']]);
@@ -277,10 +278,19 @@ try {
   await recoveryPage.waitForFunction(()=>!document.getElementById('clone').disabled);
   assert.match(await recoveryPage.locator('#status').textContent(),/Profile is open/);
   await copyPage.close();
-  await page.waitForFunction(async profile=>!(await navigator.locks.query()).held.some(lock=>
+  await waitForAsyncCondition(page,async profile=>!(await navigator.locks.query()).held.some(lock=>
     lock.name===`langkraft-profile-lifetime:${profile}`),copyProfile);
-  recoveryPage.once('dialog',dialog=>dialog.accept());
-  await recoveryPage.getByRole('button',{name:`Удалить копию ${copyProfile}`,exact:true}).click();
+  const removalDeadline=Date.now()+10000;
+  while(true) {
+    recoveryPage.once('dialog',dialog=>dialog.accept());
+    await recoveryPage.getByRole('button',{name:`Удалить копию ${copyProfile}`,exact:true}).click();
+    await recoveryPage.waitForFunction(()=>!document.getElementById('clone').disabled);
+    const removalStatus=await recoveryPage.locator('#status').textContent();
+    if(/^Данные копии .* удалены/.test(removalStatus)) break;
+    assert.match(removalStatus,/Profile is open/);
+    assert.ok(Date.now()<removalDeadline,'Closed profile lease was not released');
+    await recoveryPage.waitForTimeout(50);
+  }
   await recoveryPage.waitForFunction(()=>document.querySelectorAll('#profiles li').length===2);
   assert.match(await recoveryPage.locator('#status').textContent(),/Данные копии .* удалены/);
   assert.deepEqual(await query('SELECT downloadStatus FROM Content WHERE id=?',['legacy-owner']),[['DOWNLOADING']]);

@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { chromium } from "playwright";
+import { waitForAsyncCondition } from "./async-wait.js";
 
 const directory = path.resolve(fileURLToPath(new URL("../build/tests/", import.meta.url)));
 const server = createServer(async (request, response) => {
@@ -145,7 +146,7 @@ try {
   }, abandoned);
   assert.deepEqual(await snapshot(abandoned), { exists: true, chunks: 2 });
   await writer.close();
-  await page.waitForFunction(async id => !(await navigator.locks.query()).held.some(lock =>
+  await waitForAsyncCondition(page, async id => !(await navigator.locks.query()).held.some(lock =>
     lock.name === `langkraft-audio-download:${id}`), abandoned);
   await triggerCleanup();
   assert.deepEqual(await snapshot(abandoned), { exists: false, chunks: 0 });

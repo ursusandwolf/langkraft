@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { chromium } from "playwright";
+import { waitForAsyncCondition } from "./async-wait.js";
 
 const directory = path.resolve(fileURLToPath(new URL("../build/tests/", import.meta.url)));
 const server = createServer(async (request, response) => {
@@ -241,13 +242,34 @@ try {
   }, report.profile);
   assert.equal(cloneRace.rejected, true, 'Recovery source holds a lease across both snapshots');
   await cloned.close();
-  await page.waitForFunction(async profile => !(await navigator.locks.query()).held.some(lock =>
+  await waitForAsyncCondition(page, async profile => !(await navigator.locks.query()).held.some(lock =>
     lock.name === `langkraft-profile-lifetime:${profile}`), imported.profile);
-  const removed = await page.evaluate(async profile => {
-    const deleteDatabase = indexedDB.deleteDatabase;
+  // A lock snapshot is not a hand-off barrier: a closing worker can still finish
+  // releasing its lease. Model that delayed cleanup and wait on the real operation.
+  await page.evaluate(async profile => {
+    await new Promise(ready => navigator.locks.request(`langkraft-profile-lifetime:${profile}`, {mode:'shared'}, () =>
+      new Promise(release => { ready(); setTimeout(release, 250); })));
+  }, imported.profile);
+  async function removeAfterOwnerExits(profile) {
+    await waitForAsyncCondition(page, async profile => {
+      try { await window.recovery.removeWebRecoveryProfile(profile); return true; }
+      catch (error) {
+        if (error.message.includes('Profile is open')) return false;
+        throw error;
+      }
+    }, profile);
+  }
+  await page.evaluate(() => {
+    window.originalDeleteDatabase = indexedDB.deleteDatabase;
     indexedDB.deleteDatabase = () => { throw new Error('Never queue deleteDatabase'); };
-    try { await window.recovery.removeWebRecoveryProfile(profile); await window.recovery.removeWebRecoveryProfile(profile); }
-    finally { indexedDB.deleteDatabase = deleteDatabase; }
+  });
+  try {
+    await removeAfterOwnerExits(imported.profile);
+    await removeAfterOwnerExits(imported.profile); // Idempotent retry after broker cleanup.
+  } finally {
+    await page.evaluate(() => { indexedDB.deleteDatabase=window.originalDeleteDatabase; delete window.originalDeleteDatabase; });
+  }
+  const removed = await page.evaluate(async profile => {
     const remaining = await window.recovery.listWebRecoveryProfiles();
     const client = window.storage.createDatabaseClient(profile);
     let staleRejected = false;
@@ -304,9 +326,9 @@ try {
     await window.terminatedClient.request('exec','SELECT * FROM Content');
     window.terminatedClient.close(); // Abrupt Worker.terminate, without a SQL close message.
   }, cloneRace.copy);
-  await page.waitForFunction(async profile => !(await navigator.locks.query()).held.some(lock =>
+  await waitForAsyncCondition(page, async profile => !(await navigator.locks.query()).held.some(lock =>
     lock.name === `langkraft-profile-lifetime:${profile}`), cloneRace.copy);
-  await page.evaluate(profile => window.recovery.removeWebRecoveryProfile(profile), cloneRace.copy);
+  await removeAfterOwnerExits(cloneRace.copy);
   const sourceAfterRemoval = await page.evaluate(async () => {
     const client=window.storage.createDatabaseClient();
     try {return {auth:await client.request('exec',"SELECT value FROM SyncMetadata WHERE key='auth_token'"),
