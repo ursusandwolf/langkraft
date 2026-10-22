@@ -1,0 +1,53 @@
+package com.langkraft.data.repository
+
+import com.langkraft.domain.model.*
+import com.langkraft.domain.repository.RemoteContentSource
+import io.ktor.client.HttpClient
+import io.ktor.client.call.body
+import io.ktor.client.request.get
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
+import io.ktor.http.ContentType
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.contentType
+import kotlinx.coroutines.delay
+
+import io.ktor.http.*
+
+class BackendRemoteSource(
+    private val httpClient: HttpClient,
+    private val baseUrl: io.ktor.http.Url
+) : RemoteContentSource {
+
+    override suspend fun fetchFromYouTube(url: String): ImmersionContent {
+        val request = IngestRequest(url)
+        val startResponse = httpClient.post(baseUrl) {
+            url { appendEncodedPathSegments("api", "ingest") }
+            contentType(ContentType.Application.Json)
+            setBody(request)
+        }
+        check(startResponse.status.isSuccess()) { "Import service returned HTTP ${startResponse.status.value}" }
+        val response = startResponse.body<IngestResponse>()
+
+        val jobId = response.jobId
+
+        while (true) {
+            delay(1000)
+            val jobResponse = httpClient.get(baseUrl) {
+                url { appendEncodedPathSegments("api", "ingest", jobId) }
+            }
+
+            if (jobResponse.status == HttpStatusCode.NotFound) {
+                throw Exception("Job not found")
+            }
+            check(jobResponse.status.isSuccess()) { "Import status returned HTTP ${jobResponse.status.value}" }
+
+            val job = jobResponse.body<IngestionJob>()
+            if (job.status == ContentProcessingStatus.READY && job.content != null) {
+                return job.content
+            } else if (job.status == ContentProcessingStatus.ERROR) {
+                throw Exception("Ingestion failed: ${job.error}")
+            }
+        }
+    }
+}

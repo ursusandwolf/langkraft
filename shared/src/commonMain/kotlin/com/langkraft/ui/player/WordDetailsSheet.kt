@@ -1,31 +1,41 @@
 package com.langkraft.ui.player
 
-import androidx.compose.foundation.layout.*
-import androidx.compose.material.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.Button
+import androidx.compose.material.CircularProgressIndicator
+import androidx.compose.material.IconButton
+import androidx.compose.material.MaterialTheme
+import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.langkraft.domain.ai.TranslationResult
 import com.langkraft.domain.model.VocabularyWord
 import com.langkraft.domain.model.SubtitleLine
-import kotlin.random.Random
+import com.langkraft.io.randomUUID
 
 @Composable
 fun WordDetailsSheet(
     word: String,
     contextLine: SubtitleLine?,
-    translation: String?,
+    result: TranslationResult?,
     isSaving: Boolean,
     onSave: (VocabularyWord) -> Unit,
     onDismiss: () -> Unit,
-    isTranslating: Boolean = translation == null,
+    isTranslating: Boolean = result == null,
     error: String? = null,
     onRetry: () -> Unit = {}
 ) {
-    val wordId = remember(word, contextLine?.id) {
-        Random.Default.nextBytes(16).joinToString("") { (it.toInt() and 0xff).toString(16).padStart(2, '0') }
-    }
+    val wordId = remember(word, contextLine?.id) { randomUUID() }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -36,58 +46,62 @@ fun WordDetailsSheet(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(text = word, style = MaterialTheme.typography.h4)
+            Column {
+                Text(text = word, style = MaterialTheme.typography.h4)
+                if (result != null) {
+                    Text(
+                        text = "${result.lemma} (${result.partOfSpeech})",
+                        style = MaterialTheme.typography.subtitle1,
+                        color = MaterialTheme.colors.primary
+                    )
+                }
+            }
             IconButton(onClick = onDismiss) {
-                Text("✕") // Simple close button
+                Text("✕")
             }
         }
         
         Spacer(modifier = Modifier.height(16.dp))
         
-        Text(
-            text = "Context:",
-            style = MaterialTheme.typography.overline
-        )
-        Text(
-            text = contextLine?.textDe ?: "",
-            style = MaterialTheme.typography.body1
-        )
+        Text(text = "Context:", style = MaterialTheme.typography.overline)
+        Text(text = contextLine?.originalText ?: "", style = MaterialTheme.typography.body1)
         
         Spacer(modifier = Modifier.height(16.dp))
         
-        Text(
-            text = "Translation:",
-            style = MaterialTheme.typography.overline
-        )
+        Text(text = "Translation:", style = MaterialTheme.typography.overline)
         if (isTranslating) {
             CircularProgressIndicator(modifier = Modifier.size(24.dp))
-        } else if (translation != null) {
-            Text(text = translation, style = MaterialTheme.typography.h6)
-        }
-        if (error != null) {
-            Text(text = error, color = MaterialTheme.colors.error)
-            if (translation == null) {
-                TextButton(onClick = onRetry) { Text("RETRY TRANSLATION") }
+        } else if (result != null) {
+            Text(text = result.translation, style = MaterialTheme.typography.h6)
+            if (result.explanation != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(text = result.explanation, style = MaterialTheme.typography.body2)
             }
         }
         
+        if (error != null) {
+            Text(error, color = MaterialTheme.colors.error)
+            if (result == null) {
+                androidx.compose.material.TextButton(onClick = onRetry) { Text("RETRY TRANSLATION") }
+            }
+        }
         Spacer(modifier = Modifier.height(24.dp))
         
         Button(
             onClick = {
-                if (translation != null && contextLine != null) {
+                if (result != null && contextLine != null) {
                     onSave(VocabularyWord(
                         id = wordId,
                         word = word,
-                        lemma = null, // Future: AI provides lemma
-                        translation = translation,
-                        contextSentence = contextLine.textDe,
+                        lemma = result.lemma,
+                        translation = result.translation,
+                        contextSentence = contextLine.originalText,
                         contentId = contextLine.contentId,
                         subtitleLineId = contextLine.id
                     ))
                 }
             },
-            enabled = translation != null && contextLine != null && !isSaving && !isTranslating,
+            enabled = result != null && contextLine != null && !isSaving && !isTranslating,
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("ADD TO DICTIONARY")

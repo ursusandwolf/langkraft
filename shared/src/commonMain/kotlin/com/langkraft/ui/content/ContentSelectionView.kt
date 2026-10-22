@@ -1,0 +1,115 @@
+package com.langkraft.ui.content
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+
+import androidx.compose.material.Button
+import androidx.compose.material.Card
+import androidx.compose.material.CircularProgressIndicator
+import androidx.compose.material.MaterialTheme
+import androidx.compose.material.OutlinedTextField
+import androidx.compose.material.Scaffold
+import androidx.compose.material.Text
+import androidx.compose.material.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.langkraft.domain.model.ImmersionContent
+
+@Composable
+fun ContentSelectionView(
+    viewModel: ContentSelectionViewModel,
+    onContentSelected: (ImmersionContent) -> Unit
+) {
+    val state by viewModel.state.collectAsState()
+    var urlInput by remember { mutableStateOf("") }
+
+    Scaffold(
+        topBar = { TopAppBar(title = { Text("Langkraft - Choose Content") }) }
+    ) { padding ->
+        Column(modifier = Modifier.padding(padding).padding(16.dp)) {
+            // Import Section
+            Card(elevation = 4.dp, modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Import from YouTube", style = MaterialTheme.typography.h6)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    NativeUrlInput(
+                        value = urlInput,
+                        onValueChange = { urlInput = it },
+                        enabled = !state.isImporting,
+                        modifier = Modifier.fillMaxWidth().height(56.dp)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = { viewModel.importContent(urlInput) },
+                        modifier = Modifier.align(Alignment.End),
+                        enabled = !state.isImporting && urlInput.isNotBlank()
+                    ) {
+                        if (state.isImporting) CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                        else Text("IMPORT")
+                    }
+
+                    state.error?.let {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = it,
+                            color = MaterialTheme.colors.error,
+                            style = MaterialTheme.typography.caption
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Library Section
+            Text("Your Library", style = MaterialTheme.typography.h5)
+            Spacer(modifier = Modifier.height(16.dp))
+
+            if (state.isLoading) {
+                CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+            } else {
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    items(state.library) { content ->
+                        LibraryItem(content, onClick = { onContentSelected(content) })
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun LibraryItem(content: ImmersionContent, onClick: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { onClick() },
+        elevation = 2.dp
+    ) {
+        Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = content.title, style = MaterialTheme.typography.subtitle1)
+                Text(
+                    text = "${content.durationSeconds / 60}m ${content.durationSeconds % 60}s",
+                    style = MaterialTheme.typography.caption
+                )
+            }
+            Text("➔", style = MaterialTheme.typography.h6)
+        }
+    }
+}

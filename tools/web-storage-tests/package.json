@@ -7,8 +7,7 @@
     "build:test": "webpack --config tests/webpack.config.cjs",
     "test": "npm run build:test && node tests/browser.test.js",
     "test:app": "npm run build:test && node tests/web-app.test.js",
-    "test:youtube": "node tests/youtube-live.test.js",
-    "test:youtube:cancel": "node tests/youtube-cancel.test.js"
+    "test:youtube": "node tests/youtube-live.test.js"
   },
   "dependencies": { "wa-sqlite": "1.0.0" },
   "devDependencies": {

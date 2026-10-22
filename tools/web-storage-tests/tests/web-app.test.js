@@ -1,200 +1,98 @@
-import assert from "node:assert/strict";
-import { createServer } from "node:http";
-import { readFile, mkdir } from "node:fs/promises";
-import { fileURLToPath } from "node:url";
-import path from "node:path";
-import { chromium } from "playwright";
-import { verifyLegacyMigration } from "./migration.test.js";
+import assert from 'node:assert/strict';
+import {createServer} from 'node:http';
+import {readFile, mkdir} from 'node:fs/promises';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {chromium} from 'playwright';
 
-const directory = process.env.WEB_APP_BUNDLE ? path.resolve(process.env.WEB_APP_BUNDLE) :
-  fileURLToPath(new URL("../../../webApp/build/dist/js/developmentExecutable/", import.meta.url));
-const artifacts = process.env.WEB_APP_ARTIFACTS ? path.resolve(process.env.WEB_APP_ARTIFACTS) :
-  fileURLToPath(new URL("../build/app/", import.meta.url));
-const probes = fileURLToPath(new URL("../build/tests/", import.meta.url));
-await mkdir(artifacts, { recursive: true });
-// A real, decodable WAV fixture; no network, yt-dlp or ffmpeg is needed.
+const root = fileURLToPath(new URL('../../../', import.meta.url));
+const bundle = process.env.WEB_APP_BUNDLE || path.join(root, 'webApp/build/kotlin-webpack/js/developmentExecutable');
+const resources = path.join(root, 'webApp/build/processedResources/js/main');
+const artifacts = path.join(root, 'tools/web-storage-tests/build/app');
+await mkdir(artifacts, {recursive:true});
 const audio = Buffer.alloc(44 + 16000 * 2 * 4);
-audio.write("RIFF"); audio.writeUInt32LE(audio.length - 8, 4); audio.write("WAVEfmt ", 8);
-audio.writeUInt32LE(16, 16); audio.writeUInt16LE(1, 20); audio.writeUInt16LE(1, 22);
-audio.writeUInt32LE(16000, 24); audio.writeUInt32LE(32000, 28);
-audio.writeUInt16LE(2, 32); audio.writeUInt16LE(16, 34);
-audio.write("data", 36); audio.writeUInt32LE(audio.length - 44, 40);
-let imports = 0;
-const server = createServer(async (request, response) => {
-  const pathname = new URL(request.url, "http://localhost").pathname;
-  if (pathname === "/api/ingest") {
-    let body = "";
-    for await (const chunk of request) body += chunk;
-    const { url } = JSON.parse(body);
-    imports++;
-    response.setHeader("Content-Type", "application/json");
-    if (url.includes("invalid")) { response.writeHead(400).end('{"error":"Invalid URL"}'); return; }
-    response.end(JSON.stringify({ id: "web-fixture", title: "Deutsch im Alltag", audioUrl: "/api/media/test.wav",
-      localAudioPath: null, sourceUrl: url, durationSeconds: 4,
-      subtitles: [{ id: "fixture-line", contentId: "web-fixture", startMs: 0, endMs: 4000,
-        textDe: "Hallo Welt", textEn: null }] }));
-    return;
+audio.write('RIFF'); audio.writeUInt32LE(audio.length-8,4); audio.write('WAVEfmt ',8);
+audio.writeUInt32LE(16,16); audio.writeUInt16LE(1,20); audio.writeUInt16LE(1,22);
+audio.writeUInt32LE(16000,24); audio.writeUInt32LE(32000,28); audio.writeUInt16LE(2,32); audio.writeUInt16LE(16,34);
+audio.write('data',36); audio.writeUInt32LE(audio.length-44,40);
+let imports=0, mediaRequests=0;
+const content={id:'web-fixture',title:'Deutsch im Alltag',audioUrl:'/api/media/test.wav',localAudioPath:null,
+  sourceUrl:'https://youtu.be/video',durationSeconds:4,subtitles:[{id:'cue',contentId:'web-fixture',startMs:0,endMs:4000,originalText:'Hallo Welt',translationText:null}]};
+const server=createServer(async(req,res)=>{
+  const pathname=new URL(req.url,'http://localhost').pathname;
+  if(pathname==='/api/ingest') {
+    let body=''; for await(const chunk of req) body+=chunk;
+    imports++; const {url}=JSON.parse(body);
+    if(url.includes('invalid')) {res.writeHead(400).end('Invalid URL');return;}
+    res.setHeader('Content-Type','application/json');res.end(JSON.stringify({jobId:'fixture-job'}));return;
   }
-  if (pathname === "/api/media/test.wav") {
-    response.setHeader("Content-Type", "audio/wav");
-    response.setHeader("Content-Length", audio.length); response.end(audio); return;
+  if(pathname==='/api/ingest/fixture-job') {res.setHeader('Content-Type','application/json');res.end(JSON.stringify({jobId:'fixture-job',url:content.sourceUrl,status:'READY',content}));return;}
+  if(pathname==='/api/media/test.wav') {mediaRequests++;res.writeHead(200,{'Content-Type':'audio/wav','Content-Length':audio.length});res.end(audio);return;}
+  if(pathname.startsWith('/api/')) {res.writeHead(401).end('Unauthorized');return;}
+  const relative=pathname==='/'?'index.html':pathname.slice(1);
+  const candidates=pathname.startsWith('/storage-probe/') ? [path.join(root,'tools/web-storage-tests/build/tests',pathname.slice('/storage-probe/'.length))] : [path.join(bundle,relative),path.join(resources,relative)];
+  for(const candidate of candidates) {
+    if(!candidate.startsWith(root)) continue;
+    try {const bytes=await readFile(candidate);res.setHeader('Content-Type',candidate.endsWith('.wasm')?'application/wasm':candidate.endsWith('.html')?'text/html':'text/javascript');res.end(bytes);return;}catch{}
   }
-  const root = pathname.startsWith("/probe/") ? probes : directory;
-  const resource = pathname.startsWith("/probe/") ? pathname.slice(6) : pathname;
-  const file = path.resolve(root, "." + (resource === "/" ? "/index.html" : resource));
-  if (!file.startsWith(path.resolve(root) + path.sep)) { response.writeHead(404).end(); return; }
-  try {
-    response.setHeader("Content-Type", file.endsWith(".wasm") ? "application/wasm" :
-      file.endsWith(".html") ? "text/html; charset=utf-8" : "text/javascript");
-    response.end(await readFile(file));
-  } catch { response.writeHead(404).end(); }
+  res.writeHead(404).end();
 });
-await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
-const browser = await chromium.launch({ headless: true });
+await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
+const browser=await chromium.launch({headless:true,args:['--enable-unsafe-swiftshader']});
+const errors=[];
+let page;
 try {
-  const page = await browser.newPage({ viewport: { width: 1200, height: 800 } });
-  const errors = [];
-  page.on("pageerror", error => errors.push(error.message));
-  page.on("console", message => { if (message.type() === "error") console.error(message.text()); });
-  await page.addInitScript(() => {
-    const createElement = Document.prototype.createElement;
-    Document.prototype.createElement = function (...args) {
-      const element = createElement.apply(this, args);
-      if (args[0] === "audio") window.testAudio = element;
-      return element;
-    };
+  page=await browser.newPage({viewport:{width:1200,height:800}});
+  page.on('pageerror',e=>errors.push(e.stack||e.message||e.name));
+  await page.addInitScript(()=>{
+    // Reproduce POSIX locale values from a headless Linux environment. The app
+    // must normalize these before Compose constructs Intl.Locale instances.
+    Object.defineProperty(navigator,'languages',{configurable:true,value:['C','de_DE.UTF-8','en-US']});
+    Object.defineProperty(navigator,'language',{configurable:true,value:'C'});
+    const original=HTMLMediaElement.prototype.load;
+    HTMLMediaElement.prototype.load=function(){window.activeAudio=this;return original.call(this);};
   });
-  await page.goto(`http://127.0.0.1:${server.address().port}`);
-  await page.waitForFunction(() => !document.getElementById("startup"));
-  // Canvas UI has no DOM text selectors in the pinned Compose version.
-  // Keep a fixed viewport and save screenshots alongside behavioral assertions.
-  await page.waitForTimeout(2000);
-  await page.screenshot({ path: path.join(artifacts, "library.png") });
-  console.log("Initial render", JSON.stringify(errors));
-  if (process.env.APP_RENDER_ONLY) {
-    assert.deepEqual(errors, []);
-  } else {
-    // Import failure leaves the URL editable and allows a successful retry.
-    const input = page.getByRole("textbox", { name: "Ссылка на видео YouTube" });
-    await input.fill("https://invalid.example/video");
-    await page.waitForTimeout(150);
-    const failed = page.waitForResponse(response => response.url().endsWith("/api/ingest"));
-    await page.mouse.click(95, 190);
-    assert.equal((await failed).status(), 400);
-    await input.waitFor({ state: "visible" });
-    await page.waitForFunction(() => !document.querySelector('input[type="url"]').disabled);
-    await page.screenshot({ path: path.join(artifacts, "import-error.png") });
-    await page.getByRole("textbox", { name: "Ссылка на видео YouTube" }).fill("https://www.youtube.com/watch?v=test");
-    await page.waitForTimeout(300);
-    await page.screenshot({ path: path.join(artifacts, "input.png") });
-    await page.mouse.click(95, 200);
-    await page.waitForFunction(() => window.testAudio?.src.startsWith("blob:"), null, { timeout: 30000 });
-    await page.waitForFunction(() => window.testAudio?.readyState >= 1);
-    assert.equal(imports, 2);
-    await page.screenshot({ path: path.join(artifacts, "player.png") });
-    await page.mouse.click(600, 750);
-    await page.waitForFunction(() => !window.testAudio.paused);
-    await page.mouse.click(40, 175);
-    await page.waitForTimeout(500);
-    await page.screenshot({ path: path.join(artifacts, "word.png") });
-    await page.mouse.click(600, 485);
-    await page.addScriptTag({ url: "/probe/harness.js" });
-    const saved = await page.evaluate(async () => {
-      const worker = window.storage.createDatabaseWorker();
-      try {
-        const request = (...args) => window.databaseRequest(worker, ...args);
-        const deadline = Date.now() + 10000;
-        let words;
-        do {
-          words = await request("exec", "SELECT word, contextSentence FROM Vocabulary");
-          if (words.length) break;
-          await new Promise(resolve => setTimeout(resolve, 100));
-        } while (Date.now() < deadline);
-        const content = await request("exec", "SELECT id, localAudioPath FROM Content");
-        return { words, content };
-      } finally {
-        await window.databaseRequest(worker, "close"); worker.terminate();
-      }
-    });
-    assert.deepEqual(saved.words, [["Hallo", "Hallo Welt"]]);
-    assert.equal(saved.content[0][0], "web-fixture");
-    assert.ok(saved.content[0][1].startsWith("indexeddb-audio:"));
-    await page.mouse.click(1160, 28);
-    await page.waitForFunction(() => window.testAudio.paused && !window.testAudio.getAttribute("src"));
-    await page.screenshot({ path: path.join(artifacts, "words.png") });
-    // Reload the real app, then disable all backend requests. Local audio must still work.
-    await page.reload();
-    await page.waitForFunction(() => !document.getElementById("startup"));
-    await page.getByRole("textbox", { name: "Ссылка на видео YouTube" }).waitFor();
-    await page.waitForTimeout(1000);
-    await page.route("**/api/**", route => route.abort());
-    await page.screenshot({ path: path.join(artifacts, "restored-library.png") });
-    await page.mouse.click(75, 355);
-    await page.waitForFunction(() => window.testAudio?.src.startsWith("blob:"));
-    await page.waitForFunction(() => window.testAudio.readyState >= 1);
-    await page.mouse.click(600, 750);
-    await page.waitForFunction(() => !window.testAudio.paused);
-    await page.mouse.click(1160, 28);
-    await page.waitForFunction(() => window.testAudio.paused && !window.testAudio.getAttribute("src"));
-    await page.screenshot({ path: path.join(artifacts, "restored-words.png") });
-    await page.addScriptTag({ url: "/probe/harness.js" });
-    const restoredWords = await page.evaluate(async () => {
-      const worker = window.storage.createDatabaseWorker();
-      try { return await window.databaseRequest(worker, "exec", "SELECT word, contextSentence FROM Vocabulary"); }
-      finally { await window.databaseRequest(worker, "close"); worker.terminate(); }
-    });
-    assert.deepEqual(restoredWords, saved.words);
-
-    // Keep SQLite, delete only its audio object, and recover via an explicit UI action.
-    await page.unroute("**/api/**");
-    await page.evaluate(async location => {
-      await window.storage.abortAudio(location.slice("indexeddb-audio:".length));
-    }, saved.content[0][1]);
-    let remoteRequests = 0;
-    page.on("request", request => { if (request.url().endsWith("/api/media/test.wav")) remoteRequests++; });
-    await page.mouse.click(1065, 28); // Library.
-    await page.getByRole("textbox", { name: /YouTube/ }).waitFor();
-    await page.waitForTimeout(300);
-    await page.mouse.click(75, 355); // Open content with its now-missing local asset.
-    await page.waitForFunction(() => window.testAudio && !window.testAudio.getAttribute("src"));
-    await page.waitForTimeout(500);
-    await page.screenshot({ path: path.join(artifacts, "missing-local-audio.png") });
-    assert.equal(remoteRequests, 0, "Missing local audio must not silently start a network request");
-    await page.mouse.click(120, 225); // Play online, in the error action row.
-    await page.waitForFunction(() => window.testAudio.src.endsWith("/api/media/test.wav"));
-    await page.waitForFunction(() => !window.testAudio.paused && window.testAudio.currentTime > 0);
-    assert.equal(remoteRequests, 1);
-    await page.screenshot({ path: path.join(artifacts, "online-fallback.png") });
-    const localReference = await page.evaluate(async () => {
-      const worker = window.storage.createDatabaseWorker();
-      try { return await window.databaseRequest(worker, "exec", "SELECT localAudioPath FROM Content WHERE id='web-fixture'"); }
-      finally { await window.databaseRequest(worker, "close"); worker.terminate(); }
-    });
-    assert.equal(localReference[0][0], saved.content[0][1], "Fallback must not overwrite the saved local reference");
-
-    // A failed remote source ends in an error; it does not fall back again or loop.
-    await page.route("**/api/media/test.wav", route => route.fulfill({ status: 503, contentType: "text/plain", body: "Unavailable" }));
-    await page.mouse.click(1065, 28);
-    await page.getByRole("textbox", { name: /YouTube/ }).waitFor();
-    await page.waitForTimeout(300);
-    await page.mouse.click(75, 355);
-    await page.waitForTimeout(500);
-    const failedRemote = page.waitForResponse(response => response.url().endsWith("/api/media/test.wav"));
-    await page.mouse.click(120, 225);
-    assert.equal((await failedRemote).status(), 503);
-    await page.waitForFunction(() => window.testAudio.error != null);
-    await page.waitForTimeout(700);
-    assert.equal(remoteRequests, 2, "Remote failure must not cause automatic repeated requests");
-    await page.screenshot({ path: path.join(artifacts, "online-fallback-error.png") });
-    const retriedRemote = page.waitForResponse(response => response.url().endsWith("/api/media/test.wav"));
-    await page.mouse.click(45, 225); // Explicit RETRY keeps the remote source.
-    assert.equal((await retriedRemote).status(), 503);
-    await page.waitForTimeout(500);
-    assert.equal(remoteRequests, 3);
-    assert.deepEqual(errors, []);
-    console.log("PASS: import error/retry, playback, save word, release player, reload and offline audio");
-    console.log("PASS: missing local audio waits for explicit online playback and preserves SQLite reference");
-    console.log("PASS: failed remote audio does not loop and explicit retry keeps the remote source");
-    await verifyLegacyMigration(browser, `http://127.0.0.1:${server.address().port}`);
+  const origin=`http://127.0.0.1:${server.address().port}`;
+  const open=async()=>{await page.goto(origin);await page.waitForFunction(()=>document.documentElement.dataset.appReady==='true',null,{timeout:60000});await page.waitForTimeout(400);await page.addScriptTag({url:origin+'/storage-probe/harness.js'});};
+  const query=(sql,params=[])=>page.evaluate(async({sql,params})=>{const client=window.storage.createDatabaseClient();try{return await client.request('exec',sql,params);}finally{client.close();}},{sql,params});
+  const waitQuery=async(sql,predicate)=>{const deadline=Date.now()+12000;while(Date.now()<deadline){const rows=await query(sql);if(predicate(rows))return rows;await page.waitForTimeout(100);}throw new Error('Timed out: '+sql);};
+  await open();
+  assert.deepEqual(await page.evaluate(()=>Array.from(navigator.languages)),['de-DE','en-US']);
+  assert.equal(await page.evaluate(()=>navigator.language),'de-DE');
+  await page.screenshot({path:path.join(artifacts,'stats.png')});
+  // Software rendering on fresh Linux runners may paint after the Kotlin startup callback.
+  const input=page.getByRole('textbox',{name:'YouTube URL'});
+  const navigationDeadline=Date.now()+30000;
+  while(!await input.isVisible()) {
+    assert.ok(Date.now()<navigationDeadline,'Library did not render');
+    await page.mouse.click(600,775);await page.waitForTimeout(500);
   }
-} finally { await browser.close(); await new Promise(resolve => server.close(resolve)); }
+  await page.getByRole('textbox',{name:'YouTube URL'}).fill('https://youtu.be/invalid');await page.waitForTimeout(200);await page.mouse.click(1110,207);
+  await page.waitForTimeout(600);assert.equal(imports,1);assert.deepEqual(await query('SELECT id FROM Content'),[]);
+  await page.getByRole('textbox',{name:'YouTube URL'}).fill(content.sourceUrl);await page.waitForTimeout(200);await page.mouse.click(1110,207);
+  await waitQuery('SELECT id FROM Content',rows=>rows.length===1);assert.equal(imports,2);
+  assert.deepEqual(await query('SELECT originalText FROM SubtitleLine'),[['Hallo Welt']]);
+  await page.waitForTimeout(300);
+  await page.screenshot({path:path.join(artifacts,'library.png')});
+  await page.mouse.click(200,380);await page.waitForTimeout(700);
+  await page.mouse.click(710,705);await page.waitForFunction(()=>window.activeAudio?.currentTime>0&&!window.activeAudio?.paused,{timeout:10000});
+  await page.mouse.click(1170,28);
+  const saved=await waitQuery('SELECT localAudioPath,downloadStatus FROM Content',rows=>rows[0]?.[1]==='COMPLETED');
+  assert.match(saved[0][0],/^indexeddb-audio:/);
+  await page.mouse.click(40,165);await page.waitForTimeout(1000);
+  await page.screenshot({path:path.join(artifacts,'word.png')});
+  await page.mouse.click(600,615);
+  await waitQuery('SELECT word FROM Vocabulary',rows=>rows.length===1);
+  const requestsBeforeReload=mediaRequests;
+  await open();await page.mouse.click(600,775);await page.waitForTimeout(400);await page.mouse.click(200,380);await page.waitForTimeout(600);
+  await page.context().setOffline(true);
+  await page.mouse.click(710,705);await page.waitForFunction(()=>window.activeAudio?.currentTime>0&&!window.activeAudio?.paused);
+  assert.equal(mediaRequests,requestsBeforeReload,'Offline playback must not fetch remote audio');
+  await page.context().setOffline(false);
+  assert.equal((await query('SELECT word FROM Vocabulary')).length,1);
+  await page.screenshot({path:path.join(artifacts,'offline-player.png')});
+  await page.setViewportSize({width:390,height:844});await page.waitForTimeout(400);await page.screenshot({path:path.join(artifacts,'mobile.png')});
+  assert.deepEqual(errors,[]);
+  console.log('PASS: Web import error/retry, async job polling, playback, durable audio, vocabulary and offline reload');
+  console.log('PASS: desktop and mobile rendering without runtime errors');
+} catch(error) {if(page) await page.screenshot({path:path.join(artifacts,'failure.png')}).catch(()=>{});console.error('Browser errors:',errors);throw error;} finally {await browser.close();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}

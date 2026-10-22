@@ -1,5 +1,9 @@
 # Changelog
 
+Current integration history: [docs/CHANGELOG.md](docs/CHANGELOG.md); pattern/class diagrams: [docs/CHANGELOG_UML.md](docs/CHANGELOG_UML.md). The entries below describe the historical main implementation before reconciliation.
+
+# Changelog
+
 Изменения записываются по мере выполнения. Новые записи до коммита относятся к `Unreleased`; номер версии не присваивается автоматически. Каждая запись содержит ID, поведение, проверку и ссылку на [UML-ченджлог](docs/CHANGELOG_UML.md) с тем же ID. В UML отражаются реальные классы и используемые паттерны; для изменений документации отмечается, что классы не менялись. Планируемая работа остаётся в [спринтах](docs/todo.md), а не в списке исправленного.
 
 ## Unreleased

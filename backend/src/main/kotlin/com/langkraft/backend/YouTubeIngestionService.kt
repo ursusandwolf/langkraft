@@ -1,109 +1,113 @@
 package com.langkraft.backend
 
-import com.langkraft.domain.model.ImmersionContent
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.withContext
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.doubleOrNull
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import java.io.File
-import java.io.IOException
-import java.net.URI
+import com.langkraft.domain.model.*
+import io.ktor.server.config.ApplicationConfig
+import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
+import org.slf4j.LoggerFactory
 import java.util.UUID
-import kotlin.coroutines.coroutineContext
+import java.util.concurrent.Semaphore
 
-class InvalidSourceUrlException : IllegalArgumentException("Enter an HTTPS YouTube video URL")
-class IngestionException(message: String, cause: Throwable? = null) : IOException(message, cause)
-class IngestionBusyException : Exception("Import capacity reached; try again later")
-
+/** Bounded admission with persistent job status; accepted POSTs outlive the request. */
 class YouTubeIngestionService(
-    downloadsDir: String = "downloads",
-    private val mediaBaseUrl: String = "http://localhost:8080",
-    private val runner: YtDlpRunner = ProcessYtDlpRunner(),
-    maxConcurrentImports: Int = 2
-) {
-    private val importSlots = Semaphore(maxConcurrentImports)
-    private val directory = File(downloadsDir).absoluteFile.apply {
-        check(isDirectory || mkdirs()) { "Cannot create downloads directory" }
-    }
+    private val ytdlpClient: YtdlpClient,
+    private val jobRepository: IngestionJobRepository,
+    config: ApplicationConfig,
+    externalScope: CoroutineScope? = null,
+    private val waveformExtractor: WaveformExtractor = WaveformExtractor()
+) : AutoCloseable {
+    private val logger = LoggerFactory.getLogger(YouTubeIngestionService::class.java)
+    private val lifetime = SupervisorJob(externalScope?.coroutineContext?.get(Job))
+    private val scope = CoroutineScope((externalScope?.coroutineContext ?: Dispatchers.IO) + lifetime)
+    private val cleanupIntervalMs = config.property("ingestion.cleanup_interval_ms").getString().toLong().also { require(it > 0) }
+    private val jobExpiryMs = config.property("ingestion.job_expiry_ms").getString().toLong().also { require(it > 0) }
+    private val workerCount = config.property("ingestion.worker_count").getString().toInt().also { require(it in 1..64) }
+    private val queueCapacity = (config.propertyOrNull("ingestion.queue_capacity")?.getString()?.toInt() ?: 8).also { require(it in 0..1024) }
+    private val slots = Semaphore(workerCount + queueCapacity)
+    private val ingestionChannel = Channel<Pair<String, String>>(workerCount + queueCapacity)
+    private var closed = false
 
-    suspend fun ingest(url: String): ImmersionContent {
-        validateSourceUrl(url)
-        if (!importSlots.tryAcquire()) throw IngestionBusyException()
-        try {
-            return withContext(Dispatchers.IO) { ingestContent(url) }
-        } finally {
-            importSlots.release()
-        }
-    }
-
-    private suspend fun ingestContent(url: String): ImmersionContent {
-        val videoId = UUID.randomUUID().toString()
-        return try {
-            runner.execute(listOf(
-                "--ignore-config", "--no-playlist",
-                "--js-runtimes", "node",
-                "--write-subs", "--write-auto-subs", "--sub-langs", "de",
-                "--sub-format", "srt/best", "--convert-subs", "srt",
-                "--extract-audio", "--audio-format", "opus", "--write-info-json",
-                "--output", File(directory, "$videoId.%(ext)s").path,
-                "--", url
-            ))
-            coroutineContext.ensureActive()
-            val audio = File(directory, "$videoId.opus")
-            val srt = File(directory, "$videoId.de.srt")
-            val info = File(directory, "$videoId.info.json")
-            if (!audio.isFile || !srt.isFile || !info.isFile) {
-                throw IngestionException("Audio, German subtitles or metadata are missing")
+    init {
+        jobRepository.recoverInterrupted()
+        scope.launch {
+            while (isActive) {
+                delay(cleanupIntervalMs)
+                try { jobRepository.cleanup(jobExpiryMs) }
+                catch (exception: CancellationException) { throw exception }
+                catch (exception: Exception) { logger.error("Job cleanup failed", exception) }
             }
-            val subtitles = SrtParser.parse(videoId, srt.readText())
-            val metadata = Json.parseToJsonElement(info.readText()).jsonObject
-            ImmersionContent(
-                id = videoId,
-                title = metadata["title"]?.jsonPrimitive?.content ?: "YouTube video",
-                audioUrl = "${mediaBaseUrl.trimEnd('/')}/api/media/$videoId.opus",
-                localAudioPath = null,
-                sourceUrl = url,
-                durationSeconds = metadata["duration"]?.jsonPrimitive?.doubleOrNull?.toLong() ?: 0,
-                subtitles = subtitles
-            )
-        } catch (exception: CancellationException) {
-            deleteFiles(videoId)
-            throw exception
+        }
+        repeat(workerCount) {
+            scope.launch {
+                for ((jobId, url) in ingestionChannel) {
+                    try {
+                        processIngestion(jobId, url)
+                    } catch (exception: CancellationException) {
+                        failJob(jobId, "Import interrupted")
+                        throw exception
+                    } catch (exception: Exception) {
+                        logger.error("Ingestion failed for $jobId", exception)
+                        failJob(jobId, "Import failed")
+                    } finally { slots.release() }
+                }
+            }
+        }
+    }
+
+    @Synchronized
+    fun startIngestion(url: String): String {
+        SourceUrlValidator.validate(url)
+        if (closed || !lifetime.isActive || !slots.tryAcquire()) throw IngestionBusyException()
+        val jobId = UUID.randomUUID().toString()
+        try {
+            val now = System.currentTimeMillis()
+            jobRepository.save(IngestionJob(jobId, ContentProcessingStatus.IDLE, url, createdAt = now, lastUpdatedAt = now))
+            check(ingestionChannel.trySend(jobId to url).isSuccess) { "Import queue is closed" }
+            return jobId
         } catch (exception: Exception) {
-            deleteFiles(videoId)
-            if (exception is IngestionException) throw exception
-            if (exception is SubtitleParseException) throw IngestionException("Invalid German subtitles: ${exception.message}", exception)
-            throw IngestionException("Unable to import YouTube content", exception)
+            slots.release()
+            failJob(jobId, "Import was not queued")
+            throw exception
         }
     }
 
-    fun mediaFile(fileName: String): File? {
-        if (!Regex("[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}\\.opus").matches(fileName)) return null
-        return File(directory, fileName).takeIf { it.isFile }
+    fun getJobStatus(jobId: String): IngestionJob? = jobRepository.get(jobId)
+
+    private suspend fun processIngestion(jobId: String, url: String) {
+        jobRepository.update(jobId) { it.copy(status = ContentProcessingStatus.FETCHING_METADATA) }
+        val info = ytdlpClient.getVideoInfo(url)
+        val videoId = info.id?.takeIf { Regex("[A-Za-z0-9_-]+").matches(it) }
+            ?: throw IngestionException("Invalid video ID")
+        val duration = info.duration?.takeIf { it.isFinite() && it > 0 && it <= 14_400 }
+            ?: throw IngestionException("Video duration must be between 0 and 4 hours")
+        jobRepository.update(jobId) { it.copy(status = ContentProcessingStatus.DOWNLOADING_AUDIO) }
+        val (audio, subtitlesFile) = ytdlpClient.downloadContent(url, videoId, jobId)
+        jobRepository.update(jobId) { it.copy(status = ContentProcessingStatus.PARSING_SUBTITLES) }
+        val subtitles = withContext(Dispatchers.Default) { SrtParser.parse(videoId, subtitlesFile.readText()) }
+        jobRepository.update(jobId) { it.copy(status = ContentProcessingStatus.GENERATING_WAVEFORM) }
+        val waveform = waveformExtractor.extract(audio, duration)
+        currentCoroutineContext().ensureActive()
+        val content = ImmersionContent(videoId, info.title ?: "Extracted Content",
+            "/api/media/$jobId/$videoId.mp3", audio.absolutePath, url, duration.toLong(), subtitles, waveform)
+        jobRepository.update(jobId) { it.copy(status = ContentProcessingStatus.READY, content = content) }
     }
 
-    private fun deleteFiles(id: String) {
-        directory.listFiles()?.filter { it.name.startsWith("$id.") }?.forEach { it.delete() }
+    private fun failJob(jobId: String, message: String) {
+        runCatching { ytdlpClient.discardJobFiles(jobId) }.onFailure { logger.error("Cannot clean import $jobId", it) }
+        runCatching { jobRepository.update(jobId) { it.copy(status = ContentProcessingStatus.ERROR, error = message) } }
+            .onFailure { logger.error("Cannot update import $jobId", it) }
     }
 
-    private fun validateSourceUrl(url: String) {
-        val uri = try { URI(url) } catch (_: Exception) { throw InvalidSourceUrlException() }
-        if (uri.scheme != "https" || uri.userInfo != null ||
-            uri.host?.lowercase() !in setOf("youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be") ||
-            uri.port !in listOf(-1, 443)
-        ) throw InvalidSourceUrlException()
-        val path = uri.path.orEmpty().trim('/')
-        val isVideo = if (uri.host.lowercase() == "youtu.be") {
-            path.isNotBlank() && '/' !in path
-        } else {
-            (path == "watch" && Regex("(^|&)v=[^&]+").containsMatchIn(uri.rawQuery.orEmpty())) ||
-                Regex("(shorts|live|embed)/[^/]+").matches(path)
+    @Synchronized
+    override fun close() {
+        if (closed) return
+        closed = true
+        ingestionChannel.close()
+        lifetime.cancel()
+        while (true) {
+            val pending = ingestionChannel.tryReceive().getOrNull() ?: break
+            failJob(pending.first, "Import interrupted")
+            slots.release()
         }
-        if (!isVideo) throw InvalidSourceUrlException()
     }
 }

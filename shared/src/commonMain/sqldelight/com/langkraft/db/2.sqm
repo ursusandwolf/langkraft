@@ -1,0 +1,1 @@
+ALTER TABLE Content ADD COLUMN waveform TEXT NOT NULL DEFAULT '[]';

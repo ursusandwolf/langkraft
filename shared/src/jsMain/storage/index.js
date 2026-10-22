@@ -167,7 +167,7 @@ export async function readAudioBlob(location) {
           if (size !== entry.size || chunks.length !== entry.count) {
             return fail(new LocalAudioUnavailableError("Saved audio is incomplete"));
           }
-          done(new Blob(chunks, { type: "audio/ogg" }));
+          done(new Blob(chunks, { type: "audio/mpeg" }));
         }
       };
     };

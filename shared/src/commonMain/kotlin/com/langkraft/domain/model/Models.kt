@@ -10,8 +10,34 @@ data class ImmersionContent(
     val localAudioPath: String?,
     val sourceUrl: String,
     val durationSeconds: Long,
-    val subtitles: List<SubtitleLine> = emptyList()
-)
+    val subtitles: List<SubtitleLine> = emptyList(),
+    val waveform: List<Float> = emptyList(), // Normalized amplitudes [0.0 - 1.0]
+    val downloadStatus: DownloadStatus = DownloadStatus.IDLE,
+    val contentLanguage: Language = Language.DE,
+    val translationLanguage: Language = Language.EN
+) {
+    fun getPlaybackUrl(baseUrl: io.ktor.http.Url): String {
+        return if (downloadStatus == DownloadStatus.COMPLETED && localAudioPath != null) {
+            localAudioPath
+        } else {
+            if (audioUrl.startsWith("http")) {
+                audioUrl
+            } else {
+                io.ktor.http.URLBuilder(baseUrl).apply {
+                    pathSegments = audioUrl.split("/").filter { it.isNotEmpty() }
+                }.buildString()
+            }
+        }
+    }
+}
+
+@Serializable
+enum class Language { DE, EN, ES, RU, FR }
+
+@Serializable
+enum class DownloadStatus {
+    IDLE, DOWNLOADING, COMPLETED, ERROR
+}
 
 @Serializable
 data class SubtitleLine(
@@ -19,23 +45,66 @@ data class SubtitleLine(
     val contentId: String,
     val startMs: Long,
     val endMs: Long,
-    val textDe: String,
-    val textEn: String?
+    val originalText: String,
+    val translationText: String?
 )
 
 @Serializable
 data class VocabularyWord(
     val id: String,
     val word: String,
-    val lemma: String?,
-    val translation: String?,
+    val lemma: String? = null,
+    val translation: String? = null,
     val contextSentence: String,
-    val contentId: String?,
-    val subtitleLineId: String?,
-    val status: WordStatus = WordStatus.NEW
+    val contentId: String? = null,
+    val subtitleLineId: String? = null,
+    val addedAt: Long = 0,
+    val status: WordStatus = WordStatus.NEW,
+    val nextReviewMs: Long = 0,
+    val intervalDays: Int = 0,
+    val easeFactor: Double = 2.5,
+    val lapseCount: Int = 0,
+    val tags: List<String> = emptyList(),
+    val lastUpdated: Long = 0
 )
 
 @Serializable
 enum class WordStatus {
     NEW, LEARNING, MASTERED
+}
+
+@Serializable
+enum class ContentProcessingStatus {
+    IDLE,
+    FETCHING_METADATA,
+    DOWNLOADING_AUDIO,
+    PARSING_SUBTITLES,
+    GENERATING_WAVEFORM,
+    READY,
+    ERROR
+}
+
+@Serializable
+data class IngestionJob(
+    val jobId: String,
+    val status: ContentProcessingStatus,
+    val url: String,
+    val content: ImmersionContent? = null,
+    val error: String? = null,
+    val createdAt: Long = 0,
+    val lastUpdatedAt: Long = 0
+)
+
+@Serializable
+data class IngestRequest(val url: String)
+
+@Serializable
+data class IngestResponse(val jobId: String)
+
+@Serializable
+enum class ReviewQuality(val sm2Value: Int) {
+    AGAIN(0),
+    HARD(3),
+    GOOD(4),
+    EASY(5)
 }

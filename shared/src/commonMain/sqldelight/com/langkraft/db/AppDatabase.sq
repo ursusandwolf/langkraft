@@ -6,7 +6,9 @@ CREATE TABLE Content (
     localAudioPath TEXT,            -- Local path for offline mode
     sourceUrl TEXT NOT NULL,        -- Original YouTube URL
     durationSeconds INTEGER NOT NULL DEFAULT 0,
-    createdAt INTEGER NOT NULL      -- Timestamp
+    createdAt INTEGER NOT NULL,     -- Timestamp
+    downloadStatus TEXT NOT NULL DEFAULT 'IDLE',
+    waveform TEXT NOT NULL DEFAULT '[]'
 );
 
 -- Table for subtitle lines/cues
@@ -15,8 +17,8 @@ CREATE TABLE SubtitleLine (
     contentId TEXT NOT NULL,
     startMs INTEGER NOT NULL,
     endMs INTEGER NOT NULL,
-    textDe TEXT NOT NULL,           -- Original German text
-    textEn TEXT,                    -- Optional English translation
+    originalText TEXT NOT NULL,     -- Original text in content language
+    translationText TEXT,           -- Optional translation text
     ordinal INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (contentId) REFERENCES Content(id) ON DELETE CASCADE
 );
@@ -37,6 +39,9 @@ CREATE TABLE Vocabulary (
     intervalDays INTEGER NOT NULL DEFAULT 0,
     easeFactor REAL NOT NULL DEFAULT 2.5,
     status TEXT NOT NULL DEFAULT 'NEW', -- NEW, LEARNING, MASTERED
+    lapseCount INTEGER NOT NULL DEFAULT 0,
+    tags TEXT NOT NULL DEFAULT '',
+    lastUpdated INTEGER NOT NULL DEFAULT 0,
     
     FOREIGN KEY (contentId) REFERENCES Content(id) ON DELETE SET NULL,
     FOREIGN KEY (subtitleLineId) REFERENCES SubtitleLine(id) ON DELETE SET NULL
@@ -49,49 +54,132 @@ SELECT * FROM Content ORDER BY createdAt DESC;
 selectContentById:
 SELECT * FROM Content WHERE id = ?;
 
-selectLibrary:
-SELECT Content.*, SubtitleLine.id AS subtitleId, SubtitleLine.startMs,
-       SubtitleLine.endMs, SubtitleLine.textDe, SubtitleLine.textEn
-FROM Content LEFT JOIN SubtitleLine ON Content.id = SubtitleLine.contentId
-ORDER BY Content.createdAt DESC, Content.id, SubtitleLine.startMs, SubtitleLine.ordinal, SubtitleLine.id;
-
 insertContent {
-    UPDATE Content SET title = :title, audioUrl = :audioUrl,
-        localAudioPath = :localAudioPath, sourceUrl = :sourceUrl,
-        durationSeconds = :durationSeconds WHERE id = :id;
-    INSERT OR IGNORE INTO Content(id, title, audioUrl, localAudioPath, sourceUrl, durationSeconds, createdAt)
-    VALUES (:id, :title, :audioUrl, :localAudioPath, :sourceUrl, :durationSeconds, :createdAt);
+UPDATE Content SET title=:title, audioUrl=:audioUrl, localAudioPath=:localAudioPath,
+    sourceUrl=:sourceUrl, durationSeconds=:durationSeconds, downloadStatus=:downloadStatus, waveform=:waveform WHERE id=:id;
+INSERT OR IGNORE INTO Content(id, title, audioUrl, localAudioPath, sourceUrl, durationSeconds, createdAt, downloadStatus, waveform)
+VALUES (:id, :title, :audioUrl, :localAudioPath, :sourceUrl, :durationSeconds, :createdAt, :downloadStatus, :waveform);
 }
+
+deleteContent:
+DELETE FROM Content WHERE id = ?;
 
 selectSubtitlesForContent:
 SELECT * FROM SubtitleLine WHERE contentId = ? ORDER BY startMs ASC, ordinal ASC, id ASC;
 
+insertSubtitleLine {
+UPDATE SubtitleLine SET startMs=:startMs, endMs=:endMs, originalText=:originalText,
+    translationText=:translationText, ordinal=:ordinal WHERE id=:id AND contentId=:contentId;
+INSERT OR IGNORE INTO SubtitleLine(id, contentId, startMs, endMs, originalText, translationText, ordinal)
+VALUES (:id, :contentId, :startMs, :endMs, :originalText, :translationText, :ordinal);
+}
+
 selectConflictingSubtitles:
 SELECT id FROM SubtitleLine WHERE id IN :ids AND contentId != :contentId;
 
-deleteObsoleteSubtitles:
-DELETE FROM SubtitleLine WHERE contentId = :contentId AND id NOT IN :ids;
+selectSubtitleById:
+SELECT * FROM SubtitleLine WHERE id=?;
 
-deleteSubtitlesForContent:
+deleteObsoleteSubtitles:
+DELETE FROM SubtitleLine WHERE contentId=:contentId AND id NOT IN :ids;
+
+deleteSubtitlesByContentId:
 DELETE FROM SubtitleLine WHERE contentId = ?;
 
-insertSubtitleLine {
-    UPDATE SubtitleLine SET contentId = :contentId, startMs = :startMs,
-        endMs = :endMs, textDe = :textDe, textEn = :textEn, ordinal = :ordinal WHERE id = :id;
-    INSERT OR IGNORE INTO SubtitleLine(id, contentId, startMs, endMs, textDe, textEn, ordinal)
-    VALUES (:id, :contentId, :startMs, :endMs, :textDe, :textEn, :ordinal);
+upsertWord {
+UPDATE Vocabulary SET word=:word, lemma=:lemma, translation=:translation, contextSentence=:contextSentence,
+    contentId=:contentId, subtitleLineId=:subtitleLineId, nextReviewAt=:nextReviewAt, intervalDays=:intervalDays,
+    easeFactor=:easeFactor, status=:status, lapseCount=:lapseCount, tags=:tags, lastUpdated=:lastUpdated WHERE id=:id;
+INSERT OR IGNORE INTO Vocabulary(id, word, lemma, translation, contextSentence, contentId, subtitleLineId, addedAt, nextReviewAt, intervalDays, easeFactor, status, lapseCount, tags, lastUpdated)
+VALUES (:id, :word, :lemma, :translation, :contextSentence, :contentId, :subtitleLineId, :addedAt, :nextReviewAt, :intervalDays, :easeFactor, :status, :lapseCount, :tags, :lastUpdated);
 }
 
-upsertWord {
-    UPDATE Vocabulary SET word = :word, lemma = :lemma, translation = :translation,
-        contextSentence = :contextSentence, contentId = :contentId,
-        subtitleLineId = :subtitleLineId, status = :status WHERE id = :id;
-    INSERT OR IGNORE INTO Vocabulary(id, word, lemma, translation, contextSentence, contentId, subtitleLineId, addedAt, status)
-    VALUES (:id, :word, :lemma, :translation, :contextSentence, :contentId, :subtitleLineId, :addedAt, :status);
-}
+deleteWord:
+DELETE FROM Vocabulary WHERE id = ?;
+
+selectMissingSourceReferences:
+SELECT Vocabulary.id, Vocabulary.contentId, Vocabulary.subtitleLineId FROM Vocabulary
+LEFT JOIN Content ON Content.id=Vocabulary.contentId
+LEFT JOIN SubtitleLine ON SubtitleLine.id=Vocabulary.subtitleLineId
+WHERE (Vocabulary.contentId IS NOT NULL AND Content.id IS NULL)
+   OR (Vocabulary.subtitleLineId IS NOT NULL AND (SubtitleLine.id IS NULL OR SubtitleLine.contentId != Vocabulary.contentId));
+
+updateWordReferences:
+UPDATE Vocabulary SET contentId=:contentId, subtitleLineId=:subtitleLineId WHERE id=:id;
+
+selectWordById:
+SELECT * FROM Vocabulary WHERE id = ?;
+
+selectWordsByIds:
+SELECT * FROM Vocabulary WHERE id IN ?;
+
+selectWordsUpdatedAfter:
+SELECT * FROM Vocabulary WHERE lastUpdated > ?;
 
 selectVocabularyToReview:
 SELECT * FROM Vocabulary WHERE nextReviewAt <= ? OR nextReviewAt IS NULL ORDER BY nextReviewAt ASC;
 
-deleteWord:
-DELETE FROM Vocabulary WHERE id = ?;
+countVocabularyToReview:
+SELECT COUNT(*) FROM Vocabulary WHERE nextReviewAt <= ? OR nextReviewAt IS NULL;
+
+countWordsByStatus:
+SELECT status, COUNT(*) AS count FROM Vocabulary GROUP BY status;
+
+getImmersionStats:
+SELECT COUNT(*) AS totalContent, SUM(durationSeconds) AS totalDurationSeconds FROM Content;
+
+getWordsAddedRecently:
+SELECT COUNT(*) FROM Vocabulary WHERE addedAt >= ?;
+
+updateDownloadStatus:
+UPDATE Content SET downloadStatus = ?, localAudioPath = ? WHERE id = ?;
+
+-- Indexes for performance
+CREATE INDEX IF NOT EXISTS idx_subtitle_content_id ON SubtitleLine(contentId);
+CREATE INDEX IF NOT EXISTS idx_vocabulary_review ON Vocabulary(nextReviewAt);
+CREATE INDEX IF NOT EXISTS idx_content_created_at ON Content(createdAt);
+
+-- Table for tracking offline changes
+CREATE TABLE PendingSyncChange (
+    wordId TEXT NOT NULL PRIMARY KEY,
+    changeType TEXT NOT NULL, -- 'UPSERT', 'DELETE'
+    timestamp INTEGER NOT NULL
+);
+
+-- Sync Queries
+insertPendingChange:
+INSERT OR REPLACE INTO PendingSyncChange(wordId, changeType, timestamp)
+VALUES (?, ?, ?);
+
+getAllPendingChanges:
+SELECT * FROM PendingSyncChange ORDER BY timestamp ASC;
+
+selectPendingChange:
+SELECT * FROM PendingSyncChange WHERE wordId=?;
+
+deletePendingChanges:
+DELETE FROM PendingSyncChange WHERE wordId IN ?;
+
+deleteAcknowledgedChange:
+DELETE FROM PendingSyncChange WHERE wordId=:wordId AND timestamp=:timestamp AND changeType=:changeType;
+
+clearAllPendingChanges:
+DELETE FROM PendingSyncChange;
+
+-- Table for storing sync metadata (e.g., last successful sync time)
+CREATE TABLE SyncMetadata (
+    key TEXT NOT NULL PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
+getSyncMetadata:
+SELECT value FROM SyncMetadata WHERE key = ?;
+
+setSyncMetadata:
+INSERT OR REPLACE INTO SyncMetadata(key, value) VALUES (?, ?);
+
+deleteSyncMetadata:
+DELETE FROM SyncMetadata WHERE key=?;
+
+selectSourceReferenceMetadata:
+SELECT key, value FROM SyncMetadata WHERE key LIKE 'source_refs:%';

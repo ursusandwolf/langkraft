@@ -1,70 +1,64 @@
 package com.langkraft.ui.player
 
-import com.langkraft.audio.AudioPlayer
-import com.langkraft.audio.AudioErrorReason
-import com.langkraft.domain.ai.LinguisticAssistant
-import com.langkraft.domain.model.SubtitleLine
-import com.langkraft.domain.model.ImmersionContent
-import com.langkraft.domain.model.VocabularyWord
-import com.langkraft.domain.repository.ContentRepository
-import com.langkraft.domain.repository.VocabularyRepository
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.ensureActive
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import com.langkraft.domain.repository.LocalContentRepository
+import com.langkraft.domain.repository.AudioDownloader
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
-import kotlin.coroutines.coroutineContext
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ensureActive
+import kotlin.coroutines.CoroutineContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+
+import com.langkraft.ui.BaseViewModel
+import com.langkraft.ui.StateViewModel
+
+import com.langkraft.domain.repository.VocabularyRepository
+import com.langkraft.domain.ai.LinguisticAssistant
+import com.langkraft.domain.model.DownloadStatus
+import com.langkraft.domain.model.VocabularyWord
+import com.langkraft.domain.model.SubtitleLine
+import com.langkraft.io.FileSystem
+import com.langkraft.audio.AudioPlayer
+import com.langkraft.di.AppConfig
+import kotlinx.datetime.Clock
 
 class PlayerViewModel(
-    private val contentRepository: ContentRepository,
+    private val contentRepository: LocalContentRepository,
+    private val audioDownloader: AudioDownloader,
     private val vocabularyRepository: VocabularyRepository,
-    private val linguisticAssistant: LinguisticAssistant,
-    viewModelScope: CoroutineScope,
-    private val audioPlayer: AudioPlayer
-) {
-    private val scope = CoroutineScope(
-        viewModelScope.coroutineContext + SupervisorJob(viewModelScope.coroutineContext[Job])
-    )
-    private val _state = MutableStateFlow(PlayerState())
-    val state: StateFlow<PlayerState> = _state.asStateFlow()
+    linguisticAssistant: LinguisticAssistant,
+    private val audioPlayer: AudioPlayer,
+    private val fileSystem: FileSystem,
+    private val appConfig: AppConfig,
+    baseContext: CoroutineContext = Dispatchers.Main
+) : StateViewModel<PlayerState>(PlayerState(), baseContext) {
+
     private var loadJob: Job? = null
-    private var translationJob: Job? = null
-    private var wordRequest = 0L
-    private var lastContentId: String? = null
+    private var loadGeneration = 0L
     private var audioRequest = 0L
-    private var activeAudioRequest: Long? = null
+    private var saveInFlight = false
+
+    private val linguisticDelegate = PlayerLinguisticDelegate(linguisticAssistant, scope, ::updateState, { currentState })
+    private val offlineDelegate = OfflineDownloadDelegate(audioDownloader, contentRepository, scope, ::updateState, { currentState })
 
     init {
         scope.launch {
-            audioPlayer.error.collect { error ->
-                if (error != null && error.requestId == activeAudioRequest) {
-                    _state.update {
-                        val missingLocal = error.reason == AudioErrorReason.LOCAL_ASSET_UNAVAILABLE &&
-                            !it.isUsingRemoteAudio && it.content?.localAudioPath != null
-                        val canPlayOnline = missingLocal && !it.content?.audioUrl.isNullOrBlank()
-                        it.copy(error = when {
-                            canPlayOnline -> "Сохранённое аудио недоступно. Можно воспроизвести по сети."
-                            missingLocal -> "Сохранённое аудио недоступно."
-                            else -> error.message
-                        }, canPlayOnline = canPlayOnline)
-                    }
-                }
+            audioPlayer.error.collect { failure ->
+                if (failure != null && failure.requestId == audioRequest) updateState { it.copy(error = failure.message,
+                    canPlayOnline = failure.reason == com.langkraft.audio.AudioErrorReason.LOCAL_ASSET_UNAVAILABLE && !it.isUsingRemoteAudio) }
+            }
+        }
+        // Observe player state
+        scope.launch {
+            audioPlayer.currentTimeMs.collect { timeMs ->
+                handleTimeUpdate(timeMs)
             }
         }
         scope.launch {
-            audioPlayer.currentTimeMs.collect { time ->
-                _state.update { it.copy(currentTimeMs = time) }
-            }
-        }
-        scope.launch {
-            audioPlayer.isPlaying.collect { playing ->
-                _state.update { it.copy(isPlaying = playing) }
+            audioPlayer.isPlaying.collect { isPlaying ->
+                updateState { it.copy(isPlaying = isPlaying) }
             }
         }
     }
@@ -72,143 +66,179 @@ class PlayerViewModel(
     fun onEvent(event: PlayerEvent) {
         when (event) {
             is PlayerEvent.LoadContent -> loadContent(event.contentId)
-            PlayerEvent.PlayPause -> controlAudio {
+            is PlayerEvent.PlayPause -> {
                 if (audioPlayer.isPlaying.value) audioPlayer.pause() else audioPlayer.play()
             }
-            PlayerEvent.PlayOnline -> playOnline()
-            is PlayerEvent.SeekTo -> controlAudio { audioPlayer.seekTo(event.timeMs.coerceAtLeast(0)) }
-            is PlayerEvent.WordClicked -> handleWordClicked(event.word, event.line)
-            PlayerEvent.DismissWordDetails -> dismissWordDetails()
+            is PlayerEvent.ToggleLoop -> {
+                updateState { it.copy(isLooping = !it.isLooping) }
+            }
+            is PlayerEvent.ToggleOffline -> {
+                offlineDelegate.handleToggleOffline()
+            }
+            is PlayerEvent.SetPlaybackSpeed -> {
+                updateState { it.copy(playbackSpeed = event.speed) }
+                audioPlayer.setPlaybackSpeed(event.speed.toDouble())
+            }
+            is PlayerEvent.StepBack -> {
+                val subtitles = currentState.content?.subtitles ?: return
+                val currentIndex = currentState.currentSubtitleIndex
+                val currentTime = currentState.currentTimeMs
+                
+                val targetTime = if (currentIndex != -1) {
+                    val currentLine = subtitles[currentIndex]
+                    // If we are more than 1 second into the current line, jump to its start
+                    if (currentTime - currentLine.startMs > 1000) {
+                        currentLine.startMs
+                    } else if (currentIndex > 0) {
+                        // Otherwise jump to the previous line
+                        subtitles[currentIndex - 1].startMs
+                    } else {
+                        0L
+                    }
+                } else {
+                    // Not in a subtitle, find the closest one before current time
+                    val prevLine = subtitles.findLast { it.endMs < currentTime }
+                    prevLine?.startMs ?: 0L
+                }
+                
+                audioPlayer.seekTo(targetTime)
+                updateState { it.copy(currentTimeMs = targetTime, isUserScrolling = false) }
+            }
+            is PlayerEvent.SeekTo -> {
+                audioPlayer.seekTo(event.timeMs)
+                updateState { it.copy(currentTimeMs = event.timeMs, isUserScrolling = false) }
+            }
+            is PlayerEvent.UserScrollStarted -> {
+                updateState { it.copy(isUserScrolling = true, lastUserInteractionTime = Clock.System.now().toEpochMilliseconds()) }
+            }
+            is PlayerEvent.WordClicked -> {
+                linguisticDelegate.handleWordClicked(event.word, event.line)
+            }
+            is PlayerEvent.DeepAnalysisClicked -> {
+                linguisticDelegate.handleDeepAnalysis(event.line)
+            }
+            is PlayerEvent.MemorizationClicked -> {
+                updateState { it.copy(memorizationText = event.text) }
+            }
+            is PlayerEvent.ToggleTranslation -> {
+                linguisticDelegate.handleToggleTranslation(event.line)
+            }
+            is PlayerEvent.ToggleLemmatization -> {
+                linguisticDelegate.handleToggleLemmatization(event.line)
+            }
+            is PlayerEvent.DismissWordDetails -> {
+                linguisticDelegate.dismissWord()
+            }
+            is PlayerEvent.DismissDeepAnalysis -> {
+                updateState { it.copy(deepAnalysis = null) }
+            }
+            is PlayerEvent.PlayOnline -> {
+                currentState.content?.let { content ->
+                    audioPlayer.load(content.copy(localAudioPath=null, downloadStatus=DownloadStatus.IDLE).getPlaybackUrl(appConfig.backendUrl), ++audioRequest)
+                    updateState { it.copy(error=null, canPlayOnline=false, isUsingRemoteAudio=true) }
+                    audioPlayer.play()
+                }
+            }
+            is PlayerEvent.DismissError -> updateState { it.copy(error=null) }
+            is PlayerEvent.DismissMemorization -> {
+                updateState { it.copy(memorizationText = null) }
+            }
         }
-    }
-
-    fun retryLoad() {
-        lastContentId?.let { loadContent(it, state.value.isUsingRemoteAudio) }
     }
 
     fun retryTranslation() {
-        val current = state.value
-        val word = current.selectedWord ?: return
-        val line = current.selectedWordContext ?: return
-        handleWordClicked(word, line)
-    }
-
-    private fun controlAudio(action: () -> Unit) {
-        if (state.value.content == null || state.value.isLoading || state.value.error != null) return
-        try {
-            action()
-        } catch (exception: Exception) {
-            _state.update { it.copy(error = exception.message ?: "Unable to control audio") }
-        }
-    }
-
-    private fun handleWordClicked(word: String, line: SubtitleLine) {
-        translationJob?.cancel()
-        val request = ++wordRequest
-        _state.update {
-            it.copy(selectedWord = word, selectedWordContext = line, translation = null,
-                isTranslating = true, wordError = null)
-        }
-        translationJob = scope.launch {
-            try {
-                val translation = linguisticAssistant.translateWithContext(word, line.textDe)
-                coroutineContext.ensureActive()
-                if (request == wordRequest) {
-                    _state.update { it.copy(translation = translation, isTranslating = false) }
-                }
-            } catch (exception: CancellationException) {
-                throw exception
-            } catch (exception: Exception) {
-                if (request == wordRequest) {
-                    _state.update {
-                        it.copy(isTranslating = false, wordError = exception.message ?: "Translation failed")
-                    }
-                }
-            }
-        }
-    }
-
-    private fun dismissWordDetails() {
-        translationJob?.cancel()
-        ++wordRequest
-        _state.update {
-            it.copy(selectedWord = null, selectedWordContext = null, translation = null,
-                isTranslating = false, wordError = null)
-        }
+        val word = currentState.selectedWord ?: return
+        val line = currentState.selectedWordContext ?: return
+        linguisticDelegate.handleWordClicked(word, line)
     }
 
     fun saveWord(word: VocabularyWord) {
-        if (state.value.isSaving) return
-        val request = wordRequest
-        _state.update { it.copy(isSaving = true, wordError = null) }
+        if (saveInFlight) return
+        saveInFlight = true
+        val selection = linguisticDelegate.selectionGeneration
+        updateState { it.copy(isSavingWord = true, wordError = null) }
         scope.launch {
             try {
                 vocabularyRepository.saveWord(word)
-                coroutineContext.ensureActive()
-                if (request == wordRequest) dismissWordDetails()
+                if (selection == linguisticDelegate.selectionGeneration) linguisticDelegate.dismissWord()
             } catch (exception: CancellationException) {
                 throw exception
             } catch (exception: Exception) {
-                if (request == wordRequest) {
-                    _state.update { it.copy(wordError = exception.message ?: "Unable to save word") }
-                }
+                if (selection == linguisticDelegate.selectionGeneration) updateState { it.copy(wordError = exception.message ?: "Cannot save word") }
             } finally {
-                _state.update { it.copy(isSaving = false) }
+                saveInFlight = false
+                updateState { it.copy(isSavingWord = false) }
             }
         }
     }
 
-    private fun startAudio(content: ImmersionContent, useRemote: Boolean) {
-        val request = ++audioRequest
-        activeAudioRequest = request
-        _state.update {
-            it.copy(content = content, isLoading = false, error = null, canPlayOnline = false,
-                isUsingRemoteAudio = useRemote)
-        }
-        audioPlayer.load(if (useRemote) content.audioUrl else requireNotNull(content.localAudioPath), request)
-    }
-
-    private fun playOnline() {
-        val current = state.value
-        val content = current.content ?: return
-        if (!current.canPlayOnline || current.isUsingRemoteAudio) return
-        try {
-            // Keep loading/play synchronous with the user's click for browser autoplay policies.
-            startAudio(content, useRemote = true)
-            audioPlayer.play()
-        } catch (exception: Exception) {
-            _state.update { it.copy(error = exception.message ?: "Unable to play audio", canPlayOnline = false) }
-        }
-    }
-
-    private fun loadContent(id: String, useRemote: Boolean = false) {
-        lastContentId = id
+    private fun loadContent(id: String) {
+        val generation = ++loadGeneration
+        ++audioRequest
         loadJob?.cancel()
-        activeAudioRequest = null
-        dismissWordDetails()
-        _state.update { it.copy(isLoading = true, content = null, currentTimeMs = 0, error = null,
-            canPlayOnline = false, isUsingRemoteAudio = useRemote) }
+        linguisticDelegate.reset()
+        audioPlayer.pause()
+        updateState { PlayerState(isLoading = true) }
         loadJob = scope.launch {
             try {
-                audioPlayer.pause()
                 val content = contentRepository.getContentById(id)
-                    ?: error("Content not found")
-                coroutineContext.ensureActive()
-                startAudio(content, useRemote || content.localAudioPath == null)
+                ensureActive()
+                if (generation != loadGeneration) return@launch
+                if (content == null) {
+                    updateState { it.copy(isLoading = false, error = "Content not found") }
+                    return@launch
+                }
+                updateState { it.copy(isLoading = false, content = content) }
+                audioPlayer.load(content.getPlaybackUrl(appConfig.backendUrl), audioRequest)
             } catch (exception: CancellationException) {
                 throw exception
             } catch (exception: Exception) {
-                coroutineContext.ensureActive()
-                _state.update {
-                    it.copy(isLoading = false, error = exception.message ?: "Unable to load content")
-                }
+                if (generation == loadGeneration) updateState { it.copy(isLoading = false, error = exception.message ?: "Cannot load content") }
             }
         }
     }
 
-    /** Call when the owning screen/controller is disposed; the caller's scope is left intact. */
-    fun release() {
-        scope.cancel()
+    override fun onCleared() {
         audioPlayer.release()
+        super.onCleared()
+    }
+    
+    private fun handleTimeUpdate(timeMs: Long) {
+        val state = currentState
+        
+        // Handle User Scroll timeout (3 seconds)
+        val shouldResetScroll = state.isUserScrolling && 
+            (Clock.System.now().toEpochMilliseconds() - state.lastUserInteractionTime > 3000)
+
+        val subtitles = state.content?.subtitles ?: emptyList()
+        val newIndex = subtitles.indexOfFirst { timeMs >= it.startMs && timeMs < it.endMs }
+
+        if (state.isLooping && state.content != null) {
+            val currentLine = if (newIndex != -1) subtitles[newIndex] else null
+            
+            if (currentLine != null) {
+                if (timeMs >= currentLine.endMs - 300) {
+                    audioPlayer.seekTo(currentLine.startMs)
+                    updateState { it.copy(currentTimeMs = currentLine.startMs, currentSubtitleIndex = newIndex) }
+                    return
+                }
+            } else {
+                val lastLine = subtitles.findLast { it.endMs < timeMs && timeMs < it.endMs + 300 }
+                if (lastLine != null) {
+                    audioPlayer.seekTo(lastLine.startMs)
+                    val lastLineIndex = subtitles.indexOf(lastLine)
+                    updateState { it.copy(currentTimeMs = lastLine.startMs, currentSubtitleIndex = lastLineIndex) }
+                    return
+                }
+            }
+        }
+
+        updateState { 
+            it.copy(
+                currentTimeMs = timeMs,
+                currentSubtitleIndex = newIndex,
+                isUserScrolling = if (shouldResetScroll) false else it.isUserScrolling
+            ) 
+        }
     }
 }

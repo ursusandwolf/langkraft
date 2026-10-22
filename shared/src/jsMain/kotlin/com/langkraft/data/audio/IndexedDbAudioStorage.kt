@@ -13,6 +13,10 @@ import kotlinx.coroutines.withContext
 import kotlin.coroutines.coroutineContext
 
 class IndexedDbAudioStorage : AudioStorage {
+    override suspend fun delete(location: String) {
+        require(location.startsWith("indexeddb-audio:"))
+        abortAudio(location.removePrefix("indexeddb-audio:")).await()
+    }
     override suspend fun store(
         contentId: String,
         source: ByteReadChannel,

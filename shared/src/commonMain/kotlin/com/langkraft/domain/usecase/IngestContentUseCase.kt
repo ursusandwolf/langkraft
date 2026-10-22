@@ -1,7 +1,8 @@
 package com.langkraft.domain.usecase
 
 import com.langkraft.domain.model.ImmersionContent
-import com.langkraft.domain.repository.ContentRepository
+import com.langkraft.domain.repository.LocalContentRepository
+import com.langkraft.domain.repository.RemoteContentSource
 import kotlinx.coroutines.CancellationException
 
 /**
@@ -9,23 +10,19 @@ import kotlinx.coroutines.CancellationException
  * fetching audio/subs from backend, and saving to local DB.
  */
 class IngestContentUseCase(
-    private val contentRepository: ContentRepository
+    private val remoteSource: RemoteContentSource,
+    private val localRepository: LocalContentRepository
 ) {
     suspend operator fun invoke(youtubeUrl: String): Result<ImmersionContent> = try {
         // 1. Fetch metadata and links from Backend
-        val remoteContent = contentRepository.fetchFromYouTube(youtubeUrl)
+        val remoteContent = remoteSource.fetchFromYouTube(youtubeUrl)
         
-        // 2. Save initial structure to Local DB
-        contentRepository.saveContent(remoteContent)
+        // 2. Save initial structure to Local DB (Status: IDLE)
+        localRepository.saveContent(remoteContent)
         
-        // 3. Start background download of audio for offline access
-        val localPath = contentRepository.downloadAudio(remoteContent)
-        
-        // 4. Update content with local path
-        val updatedContent = remoteContent.copy(localAudioPath = localPath)
-        contentRepository.saveContent(updatedContent)
-        
-        Result.success(updatedContent)
+        // 3. We return here. The UI (ViewModel) will decide when to trigger downloadAudio.
+        // This prevents blocking the whole ingestion flow on a large file download.
+        Result.success(remoteContent)
     } catch (exception: CancellationException) {
         throw exception
     } catch (exception: Exception) {

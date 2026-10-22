@@ -1,0 +1,216 @@
+# UML Diagrams
+
+## Backend Architecture (Refactored)
+
+```mermaid
+classDiagram
+    class Application {
+        +module()
+    }
+    class Routing {
+        +apiRoutes(Route)
+    }
+    class SyncService {
+        +performSync(userEmail, request) SyncResponse
+    }
+    class YouTubeIngestionService {
+        +startIngestion(url: String) String
+        -processIngestion(jobId, url)
+    }
+    class IngestionJobRepository {
+        +save(job)
+        +update(id, modifier)
+        +cleanup(expiry)
+    }
+    class YtdlpClient {
+        +getVideoInfo(url: String) YtdlpInfo
+        +downloadContent(url, videoId) List~File~
+    }
+    class SrtParser {
+        +parse(contentId, content) List~SubtitleLine~
+    }
+
+    Application --> Routing
+    Routing --> SyncService
+    Routing --> YouTubeIngestionService
+    SyncService --> VocabularySyncRepository
+    YouTubeIngestionService --> IngestionJobRepository
+    YouTubeIngestionService --> YtdlpClient
+    YouTubeIngestionService --> SrtParser
+```
+
+## Repository Architecture (ISP)
+
+```mermaid
+classDiagram
+    class BaseSqlDelightRepository {
+        <<abstract>>
+        #asFlowList()
+        #asFlowOne()
+    }
+    class LocalContentRepository {
+        <<interface>>
+        +getAllContent() Flow
+    }
+    class SqlDelightContentRepository {
+        +db: AppDatabase
+    }
+    class VocabularyRepository {
+        <<interface>>
+        +sync()
+    }
+    class SqlDelightVocabularyRepository {
+        +db: AppDatabase
+    }
+
+    SqlDelightContentRepository --|> BaseSqlDelightRepository
+    SqlDelightContentRepository ..|> LocalContentRepository
+    SqlDelightVocabularyRepository --|> BaseSqlDelightRepository
+    SqlDelightVocabularyRepository ..|> VocabularyRepository
+```
+
+## UI Architecture (MVI-ish)
+
+```mermaid
+classDiagram
+    class BaseViewModel {
+        <<abstract>>
+        #scope: CoroutineScope
+    }
+    class StateViewModel~S~ {
+        <<abstract>>
+        +state: StateFlow~S~
+        #updateState()
+    }
+    class DashboardViewModel {
+    }
+    class PlayerViewModel {
+    }
+
+    StateViewModel --|> BaseViewModel
+    DashboardViewModel --|> StateViewModel
+    PlayerViewModel --|> StateViewModel
+```
+
+## Synchronization Flow (Sequence)
+
+```mermaid
+sequenceDiagram
+    participant UI as DashboardViewModel
+    participant SM as SyncManager
+    participant VR as VocabularyRepository
+    participant API as Backend (Ktor)
+    
+    UI->>SM: sync()
+    SM->>SM: Check Throttle (1 min)
+    SM->>SM: Mutex.lock()
+    SM->>VR: getSyncMetadata("last_sync")
+    VR-->>SM: timestamp
+    SM->>SM: withContext(Dispatchers.IO)
+    SM->>VR: sync(timestamp)
+    VR->>VR: Collect SyncEntry (UPSERT/DELETE)
+    VR->>API: POST /api/sync (SyncRequest)
+    API->>API: Process SyncEntry (Atomic)
+    API-->>VR: SyncResponse (Server SyncEntries)
+    VR->>VR: Apply Server Changes (Transaction)
+    VR-->>SM: New Timestamp
+    SM->>VR: setSyncMetadata("last_sync", newTimestamp)
+    SM->>SM: Mutex.unlock()
+    SM-->>UI: Sync Completed
+```
+
+## AI Decorator with LRU Cache
+
+```mermaid
+classDiagram
+    class LinguisticAssistant {
+        <<interface>>
+        +translateWord()
+        +analyzeSentence()
+    }
+    class GeminiLinguisticAssistant {
+        +apiKey: String
+    }
+    class CachingLinguisticAssistant {
+        -delegate: LinguisticAssistant
+        -wordCache: LRU_Cache
+        -analysisCache: LRU_Cache
+    }
+
+    CachingLinguisticAssistant ..|> LinguisticAssistant
+    GeminiLinguisticAssistant ..|> LinguisticAssistant
+    CachingLinguisticAssistant --> LinguisticAssistant : delegate
+```
+
+## Spaced Repetition (SRS) Logic
+
+```mermaid
+classDiagram
+    class SpacedRepetitionAlgorithm {
+        <<interface>>
+        +calculateNextReview(word, quality)
+    }
+    class Sm2Algorithm {
+        +calculateNextReview()
+        -roundToInt()
+    }
+    class SrsEvent {
+        <<sealed>>
+        LoadQueue
+        ShowAnswer
+        SubmitResult(quality)
+        Restart
+    }
+    class SrsTrainingViewModel {
+        -srsAlgorithm: SpacedRepetitionAlgorithm
+        -queue: List~VocabularyWord~
+        +onEvent(SrsEvent)
+        -handleSubmitResult(quality)
+    }
+
+    Sm2Algorithm ..|> SpacedRepetitionAlgorithm
+    SrsTrainingViewModel --> SpacedRepetitionAlgorithm
+    SrsTrainingViewModel ..> SrsEvent : processes
+```
+
+## Domain Model Relationships
+
+```mermaid
+classDiagram
+    class ImmersionContent {
+        +String id
+        +String title
+        +String audioUrl
+        +String localAudioPath
+        +DownloadStatus downloadStatus
+        +getPlaybackUrl() String
+    }
+    class DownloadStatus {
+        <<enumeration>>
+        IDLE
+        DOWNLOADING
+        COMPLETED
+        ERROR
+    }
+    class SubtitleLine {
+        +String id
+        +Long startMs
+        +Long endMs
+        +String originalText
+        +String translationText
+    }
+    class VocabularyWord {
+        +String id
+        +String word
+        +List~String~ tags
+        +Int lapseCount
+        +Long nextReviewMs
+        +Double easeFactor
+        +WordStatus status
+    }
+
+    ImmersionContent "1" *-- "many" SubtitleLine
+    ImmersionContent --> DownloadStatus
+    VocabularyWord ..> SubtitleLine : context
+    VocabularyWord ..> ImmersionContent : source
+```

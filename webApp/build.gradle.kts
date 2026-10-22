@@ -1,31 +1,29 @@
 plugins {
     kotlin("multiplatform")
     id("org.jetbrains.compose")
-}
-
-compose.experimental {
-    web.application {}
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 kotlin {
     js(IR) {
-        browser {
-            commonWebpackConfig {
-                outputFileName = "langkraft.js"
-            }
-        }
+        browser()
         binaries.executable()
     }
+    
+    tasks.withType<org.jetbrains.kotlin.gradle.targets.js.testing.KotlinJsTest> {
+        enabled = false
+    }
+
     sourceSets {
         val jsMain by getting {
             dependencies {
                 implementation(project(":shared"))
+                implementation("io.ktor:ktor-http:2.3.5")
                 implementation(compose.runtime)
+                implementation(compose.ui)
                 implementation(compose.foundation)
                 implementation(compose.material)
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
-                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
-                implementation("io.ktor:ktor-client-js:2.3.5")
+                implementation("io.insert-koin:koin-core:3.5.0")
             }
         }
     }

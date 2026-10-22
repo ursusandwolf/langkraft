@@ -18,12 +18,12 @@ import org.w3c.dom.HTMLAudioElement
 import org.w3c.dom.events.Event
 import org.w3c.dom.url.URL
 
-class AudioPlayerImpl : AudioPlayer {
+actual class AudioPlayerImpl : AudioPlayer {
     private var audio = window.document.createElement("audio") as HTMLAudioElement
     private val _currentTimeMs = MutableStateFlow(0L)
-    override val currentTimeMs: StateFlow<Long> = _currentTimeMs
+    actual override val currentTimeMs: StateFlow<Long> = _currentTimeMs
     private val _isPlaying = MutableStateFlow(false)
-    override val isPlaying: StateFlow<Boolean> = _isPlaying
+    actual override val isPlaying: StateFlow<Boolean> = _isPlaying
     private val _error = MutableStateFlow<AudioPlayerError?>(null)
     override val error: StateFlow<AudioPlayerError?> = _error
     private val scope = CoroutineScope(Dispatchers.Main)
@@ -85,7 +85,7 @@ class AudioPlayerImpl : AudioPlayer {
         }
     }
 
-    override fun load(url: String, requestId: Long) {
+    actual override fun load(url: String, requestId: Long) {
         check(!released) { "Audio player is released" }
         val sourceGeneration = ++generation
         this.requestId = requestId
@@ -128,7 +128,7 @@ class AudioPlayerImpl : AudioPlayer {
         if (playWhenReady) playNow()
     }
 
-    override fun play() {
+    actual override fun play() {
         check(!released) { "Audio player is released" }
         playWhenReady = true
         if (loadJob?.isActive != true) playNow()
@@ -148,12 +148,16 @@ class AudioPlayerImpl : AudioPlayer {
         }
     }
 
-    override fun pause() {
+    actual override fun pause() {
         playWhenReady = false
         audio.pause()
     }
 
-    override fun seekTo(timeMs: Long) {
+    actual override fun setPlaybackSpeed(speed: Double) {
+        audio.playbackRate = speed
+    }
+
+    actual override fun seekTo(timeMs: Long) {
         pendingSeek = timeMs.coerceAtLeast(0)
         applyPendingSeek()
     }
@@ -172,7 +176,7 @@ class AudioPlayerImpl : AudioPlayer {
         ownedUrl = null
     }
 
-    override fun release() {
+    actual override fun release() {
         released = true
         scope.cancel()
         discardSource()

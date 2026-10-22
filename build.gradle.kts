@@ -1,26 +1,16 @@
-buildscript {
-    if (providers.gradleProperty("enableAndroid").orNull == "true") {
-        repositories { google(); mavenCentral() }
-        dependencies { classpath("com.android.tools.build:gradle:8.2.2") }
-    }
-}
-
 plugins {
-    kotlin("multiplatform") version "1.9.20" apply false
-    kotlin("jvm") version "1.9.20" apply false
-    kotlin("plugin.serialization") version "1.9.20" apply false
-    id("org.jetbrains.compose") version "1.5.10" apply false
-    id("app.cash.sqldelight") version "2.0.0" apply false
+    kotlin("multiplatform") version "2.0.21" apply false
+    kotlin("jvm") version "2.0.21" apply false
+    kotlin("plugin.serialization") version "2.0.21" apply false
+    id("org.jetbrains.compose") version "1.7.0" apply false
+    id("org.jetbrains.kotlin.plugin.compose") version "2.0.21" apply false
+    id("app.cash.sqldelight") version "2.0.2" apply false
+    id("com.android.library") version "8.4.0" apply false
 }
 
-allprojects {
-    repositories {
-        google()
-        mavenCentral()
-    }
-}
+// Repositories are now managed in settings.gradle.kts
 
-// Use the installed Node.js for Web checks; Android tooling stays opt-in.
+// Installed Node and explicit local package inputs prevent stale browser storage code.
 plugins.withType<org.jetbrains.kotlin.gradle.targets.js.nodejs.NodeJsRootPlugin> {
     extensions.configure<org.jetbrains.kotlin.gradle.targets.js.nodejs.NodeJsRootExtension> {
         download = false

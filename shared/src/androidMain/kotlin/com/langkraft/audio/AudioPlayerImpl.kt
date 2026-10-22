@@ -97,6 +97,10 @@ class AudioPlayerImpl(context: Context) : AudioPlayer {
         _currentTimeMs.value = exoPlayer.currentPosition
     }
 
+    override fun setPlaybackSpeed(speed: Double) {
+        exoPlayer.playbackParameters = androidx.media3.common.PlaybackParameters(speed.toFloat())
+    }
+
     override fun release() {
         generation++
         errorListener?.let(exoPlayer::removeListener)

@@ -1,0 +1,295 @@
+package com.langkraft
+
+import com.googlecode.lanterna.TerminalSize
+import com.googlecode.lanterna.gui2.*
+import com.googlecode.lanterna.gui2.dialogs.MessageDialog
+import com.googlecode.lanterna.screen.Screen
+import com.googlecode.lanterna.terminal.DefaultTerminalFactory
+import com.langkraft.di.createDesktopModule
+import com.langkraft.di.initKoin
+import com.langkraft.ui.dashboard.DashboardViewModel
+import com.langkraft.ui.content.ContentSelectionViewModel
+import com.langkraft.ui.player.PlayerViewModel
+import com.langkraft.ui.player.PlayerEvent
+import com.langkraft.ui.srs.SrsTrainingViewModel
+import com.langkraft.ui.srs.SrsEvent
+import com.langkraft.ui.writing.WritingViewModel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import org.koin.core.component.KoinComponent
+import org.koin.core.component.inject
+import org.koin.core.component.get
+import kotlin.system.exitProcess
+
+class TuiApp : KoinComponent {
+    private val terminalFactory = DefaultTerminalFactory()
+    private val screen: Screen = terminalFactory.createScreen()
+    private val gui = MultiWindowTextGUI(screen, DefaultWindowManager(), EmptySpace())
+    
+    private val scope = CoroutineScope(Dispatchers.Default + Job())
+
+    fun start() {
+        screen.startScreen()
+
+        val mainWindow = BasicWindow("Langkraft Console")
+        val mainPanel = Panel()
+        mainPanel.layoutManager = LinearLayout(Direction.VERTICAL)
+
+        mainPanel.addComponent(Label("Welcome to Langkraft TUI!"))
+        mainPanel.addComponent(EmptySpace(TerminalSize(0, 1)))
+
+        mainPanel.addComponent(Button("1. Dashboard", Runnable {
+            showDashboard(mainWindow)
+        }))
+        mainPanel.addComponent(Button("2. Content List", Runnable {
+            showContentList(mainWindow)
+        }))
+        mainPanel.addComponent(Button("3. SRS Review", Runnable {
+             showSrsTraining(mainWindow)
+        }))
+        mainPanel.addComponent(Button("4. Writing Diary", Runnable {
+            showWriting(mainWindow)
+       }))
+        mainPanel.addComponent(EmptySpace(TerminalSize(0, 1)))
+        mainPanel.addComponent(Button("Exit", Runnable {
+            mainWindow.close()
+        }))
+
+        mainWindow.component = mainPanel
+        gui.addWindowAndWait(mainWindow)
+        screen.stopScreen()
+        exitProcess(0)
+    }
+
+    private fun showWriting(parent: Window) {
+        val writingViewModel: WritingViewModel = get()
+        val window = BasicWindow("Writing Diary")
+        val panel = Panel(LinearLayout(Direction.VERTICAL))
+        
+        val textBox = TextBox(TerminalSize(40, 5))
+        textBox.setTextChangeListener { text, _ -> writingViewModel.onTextChanged(text) }
+        
+        val correctionLabel = Label("")
+        
+        panel.addComponent(Label("Write in German:"))
+        panel.addComponent(textBox)
+        panel.addComponent(Button("Check Correction", Runnable {
+            writingViewModel.submitForCorrection()
+        }))
+        panel.addComponent(correctionLabel)
+        panel.addComponent(Button("Close", Runnable { window.close() }))
+        
+        window.component = panel
+        
+        val job = scope.launch {
+            writingViewModel.state.collect { state ->
+                gui.guiThread.invokeLater {
+                    correctionLabel.text = state.correction?.correctedText ?: (state.error ?: "")
+                }
+            }
+        }
+
+        gui.addWindowAndWait(window)
+        job.cancel()
+    }
+
+    private fun showSrsTraining(parent: Window) {
+        val srsTrainingViewModel: SrsTrainingViewModel = get()
+        val window = BasicWindow("SRS Training")
+        val panel = Panel(LinearLayout(Direction.VERTICAL))
+        
+        val wordLabel = Label("Loading...")
+        val answerLabel = Label("")
+        
+        panel.addComponent(wordLabel)
+        panel.addComponent(answerLabel)
+        
+        val buttonPanel = Panel(LinearLayout(Direction.HORIZONTAL))
+        buttonPanel.addComponent(Button("Show Answer", Runnable {
+            srsTrainingViewModel.onEvent(SrsEvent.ShowAnswer)
+        }))
+        buttonPanel.addComponent(Button("Easy", Runnable {
+            srsTrainingViewModel.onEvent(SrsEvent.SubmitResult(com.langkraft.domain.model.ReviewQuality.EASY))
+        }))
+        buttonPanel.addComponent(Button("Hard", Runnable {
+            srsTrainingViewModel.onEvent(SrsEvent.SubmitResult(com.langkraft.domain.model.ReviewQuality.HARD))
+        }))
+        buttonPanel.addComponent(Button("Close", Runnable { window.close() }))
+        
+        panel.addComponent(buttonPanel)
+        window.component = panel
+        
+        val job = scope.launch {
+            srsTrainingViewModel.state.collect { state ->
+                gui.guiThread.invokeLater {
+                    wordLabel.text = "Word: ${state.currentWord?.word ?: "No more words"}"
+                    answerLabel.text = if (state.isAnswerVisible) "Translation: ${state.currentWord?.translation ?: ""}" else ""
+                }
+            }
+        }
+
+        gui.addWindowAndWait(window)
+        job.cancel()
+        srsTrainingViewModel.onCleared()
+    }
+
+    private fun showContentList(parent: Window) {
+        val contentSelectionViewModel: ContentSelectionViewModel = get()
+        val window = BasicWindow("Content Library")
+        val panel = Panel(LinearLayout(Direction.VERTICAL))
+        
+        val list = ActionListBox()
+        list.setLayoutData(LinearLayout.createLayoutData(LinearLayout.Alignment.Fill))
+        
+        panel.addComponent(list)
+        panel.addComponent(Button("Back", Runnable { window.close() }))
+        
+        window.component = panel
+        
+        val job = scope.launch {
+            contentSelectionViewModel.state.collect { state ->
+                gui.guiThread.invokeLater {
+                    list.clearItems()
+                    state.library.forEach { item ->
+                        list.addItem("${item.title} (${item.durationSeconds}s)") {
+                            showPlayer(item.id)
+                        }
+                    }
+                }
+            }
+        }
+
+        gui.addWindowAndWait(window)
+        job.cancel()
+        contentSelectionViewModel.onCleared()
+    }
+
+    private fun showPlayer(contentId: String) {
+        val playerViewModel: PlayerViewModel = get()
+        playerViewModel.onEvent(com.langkraft.ui.player.PlayerEvent.LoadContent(contentId))
+        
+        val window = BasicWindow("Immersion Player")
+        val panel = Panel(LinearLayout(Direction.VERTICAL))
+        
+        val statusLabel = Label("Loading...")
+        val timeLabel = Label("0:00 / 0:00")
+        val subtitleList = ActionListBox()
+        subtitleList.setLayoutData(LinearLayout.createLayoutData(LinearLayout.Alignment.Fill))
+        
+        panel.addComponent(statusLabel)
+        panel.addComponent(timeLabel)
+        panel.addComponent(subtitleList)
+        
+        val controls = Panel(LinearLayout(Direction.HORIZONTAL))
+        controls.addComponent(Button("Play/Pause", Runnable { playerViewModel.onEvent(PlayerEvent.PlayPause) }))
+        controls.addComponent(Button("Step Back", Runnable { playerViewModel.onEvent(PlayerEvent.StepBack) }))
+        controls.addComponent(Button("Loop", Runnable { playerViewModel.onEvent(PlayerEvent.ToggleLoop) }))
+        controls.addComponent(Button("Close", Runnable { window.close() }))
+        panel.addComponent(controls)
+        
+        window.component = panel
+        
+        val job = scope.launch {
+            playerViewModel.state.collect { state ->
+                gui.guiThread.invokeLater {
+                    renderPlayerState(state, statusLabel, timeLabel, subtitleList)
+                }
+            }
+        }
+
+        gui.addWindowAndWait(window)
+        job.cancel()
+        playerViewModel.onCleared()
+    }
+
+    private fun renderPlayerState(
+        state: com.langkraft.ui.player.PlayerState,
+        statusLabel: Label,
+        timeLabel: Label,
+        subtitleList: ActionListBox
+    ) {
+        statusLabel.text = "${if (state.isPlaying) "Playing" else "Paused"} (Loop: ${state.isLooping}) - ${state.content?.title ?: ""}"
+        timeLabel.text = "${state.currentTimeMs / 1000}s"
+        
+        val subtitles = state.content?.subtitles ?: return
+        
+        if (subtitleList.itemCount == 0) {
+            subtitles.forEach { subtitleList.addItem("  ${it.originalText}", {}) }
+        }
+
+        subtitles.forEachIndexed { index, line ->
+            val isActive = state.currentTimeMs in line.startMs..line.endMs
+            val marker = if (isActive) "> " else "  "
+            val expectedText = "$marker${line.originalText}"
+            
+            if (subtitleList.getItemAt(index).toString() != expectedText) {
+                subtitleList.clearItems()
+                subtitles.forEachIndexed { i, l ->
+                    val m = if (state.currentTimeMs in l.startMs..l.endMs) "> " else "  "
+                    subtitleList.addItem("$m${l.originalText}", {})
+                }
+                subtitleList.selectedIndex = index
+                return
+            }
+        }
+    }
+
+    private fun showDashboard(parent: Window) {
+        val dashboardViewModel: DashboardViewModel = get()
+        val window = BasicWindow("Dashboard")
+        val panel = Panel(LinearLayout(Direction.VERTICAL))
+        
+        val statsLabel = Label("Loading stats...\n\n\n\n")
+        panel.addComponent(statsLabel)
+        
+        panel.addComponent(EmptySpace(TerminalSize(0, 1)))
+        panel.addComponent(Button("Back", Runnable { window.close() }))
+        
+        window.component = panel
+        
+        // Listen to state
+        val job = scope.launch {
+            dashboardViewModel.state.collect { state ->
+                gui.guiThread.invokeLater {
+                    statsLabel.text = """
+                        Stats:
+                        Words Mastered: ${state.wordsMastered}
+                        Words Learning: ${state.wordsLearning}
+                        To Review Today: ${state.wordsToReviewToday}
+                        Words Added (Week): ${state.wordsAddedThisWeek}
+                        Sync Error: ${state.syncError ?: "None"}
+                    """.trimIndent()
+                }
+            }
+        }
+
+        gui.addWindowAndWait(window)
+        job.cancel()
+        dashboardViewModel.onCleared()
+    }
+}
+
+fun main(args: Array<String>) {
+    initKoin {
+        modules(createDesktopModule(isTui = true))
+    }
+    val koin = org.koin.mp.KoinPlatform.getKoin()
+    kotlinx.coroutines.runBlocking { koin.get<com.langkraft.data.sync.UserSession>().restore() }
+    if ("--smoke" in args) {
+        val terminal = com.googlecode.lanterna.terminal.virtual.DefaultVirtualTerminal()
+        val screen = com.googlecode.lanterna.screen.TerminalScreen(terminal)
+        screen.startScreen()
+        screen.newTextGraphics().putString(0, 0, "Langkraft TUI")
+        screen.refresh()
+        screen.stopScreen()
+        terminal.close()
+        koin.get<com.langkraft.audio.AudioPlayer>().release()
+        koin.get<com.langkraft.data.database.DatabaseHandle>().close()
+        org.koin.core.context.stopKoin()
+        println("TUI terminal and wiring smoke OK")
+        return
+    }
+    TuiApp().start()
+}
