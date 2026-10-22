@@ -54,6 +54,8 @@ ContentSelectionViewModel → IngestContentUseCase → RemoteContentSource/Backe
 
 Импорт не скачивает автоматически offline-аудио в клиент. На backend медиа лежит отдельно для каждого job. Закрытие POST/отмена клиентского polling не отменяет принятый сервером job. Остановка сервиса отменяет workers и дерево процессов; после перезапуска незавершённые jobs отмечаются ERROR.
 
+BackendMediaStorage (REL-13) координирует import/read leases и opt-in retention. Lease создаётся до помещения job в очередь; публикация ready и callback записи READY в БД сериализованы с открытием HTTP-читателей. MediaRoutes выдаёт MP3 с GET/HEAD/Range и удерживает read lease до конца ответа/отключения клиента. Очистка при старте и по cleanup interval удаляет только истёкшие UUID-каталоги с меткой `.langkraft-media-v1`, без активных leases. Legacy/unknown/symlink сохраняются; ошибки удаления логируются, метка остаётся для повтора. TTL по умолчанию выключен. Один backend владеет одним downloads_dir; квота с резервированием остаётся следующим этапом. [ADR](ADR_BACKEND_MEDIA_RETENTION.md).
+
 ### Offline-аудио и LK-02
 
 Web recovery (REL-S2/LK-03): storage/index.js удерживает Web Lock на каждый новый незавершённый asset. WebDatabaseFactory и beginAudio вызывают recoverIncompleteAudio: свободный lock → повторная проверка incomplete → атомарное удаление manifest/chunks. Активный владелец, complete, legacy и записи без lock сохраняются. Без Web Locks скачивание работает, уборка пропускается.
@@ -150,4 +152,4 @@ SqlDelightVocabularyRepository отправляет pending UPSERT/DELETE, пр�
 
 [DATA_LAYER](DATA_LAYER.md) — схема/владение; [WEB_APP](WEB_APP.md) — Web; [SUBTITLES](SUBTITLES.md) — парсер; [CODE_REVIEW_FIX_PLAN](CODE_REVIEW_FIX_PLAN.md) — находки и оставшаяся работа; [todo](todo.md) — текущий план. В `docs/archive` лежат исторические реализации и отчёты; они не описывают текущие API и не компилируются.
 
-Открыто: общая media-квота/retention, дальнейшая multi-tab coordination, профили аккаунтов, Android, проверка платного Gemini и физического Desktop/TUI звука. Существующий DownloadCleanup не означает, что общая политика TTL уже подключена. Перед публичным размещением отдельно проектируются аутентификация/rate limit публичного импорта, лимиты диска и эксплуатация.
+Открыто: общая media-квота с резервированием, retention клиентских копий, дальнейшая multi-tab coordination, профили аккаунтов, Android, проверка платного Gemini и физического Desktop/TUI звука. Backend retention новых managed job-каталогов подключён opt-in в REL-13; прежний неиспользуемый DownloadCleanup удалён. Перед публичным размещением отдельно проектируются аутентификация/rate limit публичного импорта, лимиты диска и эксплуатация.

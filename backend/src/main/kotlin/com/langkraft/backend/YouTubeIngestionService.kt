@@ -24,22 +24,25 @@ class YouTubeIngestionService(
     private val workerCount = config.property("ingestion.worker_count").getString().toInt().also { require(it in 1..64) }
     private val queueCapacity = (config.propertyOrNull("ingestion.queue_capacity")?.getString()?.toInt() ?: 8).also { require(it in 0..1024) }
     private val slots = Semaphore(workerCount + queueCapacity)
-    private val ingestionChannel = Channel<Pair<String, String>>(workerCount + queueCapacity)
+    private data class QueuedImport(val jobId: String, val url: String, val lease: AutoCloseable)
+    private val ingestionChannel = Channel<QueuedImport>(workerCount + queueCapacity)
     private var closed = false
 
     init {
         jobRepository.recoverInterrupted()
+        try { ytdlpClient.mediaStorage.cleanup() }
+        catch (exception: Exception) { logger.error("Startup media cleanup failed", exception) }
         scope.launch {
             while (isActive) {
                 delay(cleanupIntervalMs)
-                try { jobRepository.cleanup(jobExpiryMs) }
+                try { ytdlpClient.mediaStorage.cleanup(); jobRepository.cleanup(jobExpiryMs) }
                 catch (exception: CancellationException) { throw exception }
-                catch (exception: Exception) { logger.error("Job cleanup failed", exception) }
+                catch (exception: Exception) { logger.error("Import cleanup failed", exception) }
             }
         }
         repeat(workerCount) {
             scope.launch {
-                for ((jobId, url) in ingestionChannel) {
+                for ((jobId, url, lease) in ingestionChannel) {
                     try {
                         processIngestion(jobId, url)
                     } catch (exception: CancellationException) {
@@ -48,7 +51,7 @@ class YouTubeIngestionService(
                     } catch (exception: Exception) {
                         logger.error("Ingestion failed for $jobId", exception)
                         failJob(jobId, "Import failed")
-                    } finally { slots.release() }
+                    } finally { lease.close(); slots.release() }
                 }
             }
         }
@@ -59,14 +62,19 @@ class YouTubeIngestionService(
         SourceUrlValidator.validate(url)
         if (closed || !lifetime.isActive || !slots.tryAcquire()) throw IngestionBusyException()
         val jobId = UUID.randomUUID().toString()
+        var lease: AutoCloseable? = null
         try {
+            lease = ytdlpClient.mediaStorage.beginImport(jobId)
             val now = System.currentTimeMillis()
             jobRepository.save(IngestionJob(jobId, ContentProcessingStatus.IDLE, url, createdAt = now, lastUpdatedAt = now))
-            check(ingestionChannel.trySend(jobId to url).isSuccess) { "Import queue is closed" }
+            check(ingestionChannel.trySend(QueuedImport(jobId, url, lease)).isSuccess) { "Import queue is closed" }
             return jobId
         } catch (exception: Exception) {
             slots.release()
-            failJob(jobId, "Import was not queued")
+            if (lease != null) {
+                failJob(jobId, "Import was not queued")
+                lease.close()
+            }
             throw exception
         }
     }
@@ -89,7 +97,9 @@ class YouTubeIngestionService(
         currentCoroutineContext().ensureActive()
         val content = ImmersionContent(videoId, info.title ?: "Extracted Content",
             "/api/media/$jobId/$videoId.mp3", audio.absolutePath, url, duration.toLong(), subtitles, waveform)
-        jobRepository.update(jobId) { it.copy(status = ContentProcessingStatus.READY, content = content) }
+        ytdlpClient.mediaStorage.publish(jobId) {
+            jobRepository.update(jobId) { it.copy(status = ContentProcessingStatus.READY, content = content) }
+        }
     }
 
     private fun failJob(jobId: String, message: String) {
@@ -106,7 +116,8 @@ class YouTubeIngestionService(
         lifetime.cancel()
         while (true) {
             val pending = ingestionChannel.tryReceive().getOrNull() ?: break
-            failJob(pending.first, "Import interrupted")
+            failJob(pending.jobId, "Import interrupted")
+            pending.lease.close()
             slots.release()
         }
     }

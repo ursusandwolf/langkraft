@@ -9,6 +9,7 @@ import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.lessEq
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.inList
 import org.jetbrains.exposed.sql.transactions.transaction
 
 /**
@@ -84,7 +85,10 @@ class IngestionJobRepository(private val db: Database) {
     fun cleanup(expiryMillis: Long) {
         transaction(db) {
             val expiryTime = System.currentTimeMillis() - expiryMillis
-            IngestionJobs.deleteWhere { IngestionJobs.lastUpdatedAt lessEq expiryTime }
+            IngestionJobs.deleteWhere {
+                (IngestionJobs.lastUpdatedAt lessEq expiryTime) and
+                    (IngestionJobs.status inList listOf("READY", "ERROR"))
+            }
         }
     }
 }

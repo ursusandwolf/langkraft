@@ -16,7 +16,8 @@ data class YtdlpInfo(
 /** Adapter to yt-dlp. Shell parsing and user configuration are disabled. */
 class YtdlpClient(
     private val downloadsDir: String,
-    private val runner: ProcessRunner = ExecutableProcessRunner()
+    private val runner: ProcessRunner = ExecutableProcessRunner(),
+    val mediaStorage: BackendMediaStorage = BackendMediaStorage(downloadsDir)
 ) {
     private val json = Json { ignoreUnknownKeys = true }
     private val options = listOf("--ignore-config", "--no-playlist", "--quiet", "--no-warnings", "--no-progress", "--js-runtimes", "node")
@@ -48,7 +49,6 @@ class YtdlpClient(
     }
 
     fun discardJobFiles(jobId: String) {
-        require(Regex("[A-Za-z0-9_-]+").matches(jobId))
-        File(downloadsDir, jobId).deleteRecursively()
+        mediaStorage.discardImport(jobId)
     }
 }
