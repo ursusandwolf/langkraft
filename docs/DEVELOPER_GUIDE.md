@@ -92,7 +92,7 @@ SqlDelightVocabularyRepository отправляет pending UPSERT/DELETE, пр�
 
 ### AI
 
-В commonModule выбран MockLinguisticAssistant: он используется клиентскими ViewModel. BackendModule выбирает GeminiLinguisticAssistant или mock и оборачивает его CachingLinguisticAssistant. Backend AI-маршруты требуют JWT. Реализация удалённого LinguisticAssistant для UI сейчас отсутствует; ключ backend не меняет commonModule.
+В commonModule выбран RemoteLinguisticAssistant: клиентские ViewModel используют общий HttpClient с актуальным JWT и AppConfig.backendUrl. Четыре POST-маршрута `/api/ai/translate-word`, `translate-sentence`, `analyze-sentence`, `correct-text` используют общие сериализуемые DTO; перевод реплики возвращается как SentenceTranslationResult. BackendModule выбирает GeminiLinguisticAssistant или mock и оборачивает его CachingLinguisticAssistant. Все AI-маршруты требуют JWT; 401 предлагает войти через Account. HTTP-ошибки проверяются до декодирования, отмена и ошибки сети пробрасываются без локального mock-fallback. Ключ Gemini остаётся на backend. WritingViewModel отменяет коррекцию при редактировании/повторе и игнорирует устаревшие результаты.
 
 ## Используемые паттерны и механизмы
 
@@ -125,7 +125,7 @@ SqlDelightVocabularyRepository отправляет pending UPSERT/DELETE, пр�
 | Изменение sync | DTO/repositories/SyncManager/backend SyncService | SyncRaceTest + AuthAndTwoClientSyncTest |
 | Process/YouTube | ProcessRunner, YtdlpClient, YouTubeIngestionService | Таймаут/отмена реального child process + admission tests |
 | Browser worker/package | storage/index.js, database.worker.js, BrowserSqlDriver | npm storage test, worker rollback/FK, page reload |
-| Реальный AI в UI | Новая реализация LinguisticAssistant, commonModule | Mock HTTP/JWT ошибки, cancellation, VM late-result tests |
+| Удалённый AI в UI | RemoteLinguisticAssistant, commonModule, AI routes/DTO | RemoteLinguisticAssistantTest, AuthAndTwoClientSyncTest, WritingViewModelTest, PlayerRaceTest, Web UI fixture |
 
 ## Рабочий цикл
 
@@ -150,4 +150,4 @@ SqlDelightVocabularyRepository отправляет pending UPSERT/DELETE, пр�
 
 [DATA_LAYER](DATA_LAYER.md) — схема/владение; [WEB_APP](WEB_APP.md) — Web; [SUBTITLES](SUBTITLES.md) — парсер; [CODE_REVIEW_FIX_PLAN](CODE_REVIEW_FIX_PLAN.md) — находки и оставшаяся работа; [todo](todo.md) — текущий план. В `docs/archive` лежат исторические реализации и отчёты; они не описывают текущие API и не компилируются.
 
-Открыто: общая media-квота/retention, crash recovery audio, multi-tab coordination, профили аккаунтов, удалённый AI в UI, Android и проверка физического Desktop/TUI звука. Существующий DownloadCleanup не означает, что общая политика TTL уже подключена. Перед публичным размещением отдельно проектируются аутентификация/rate limit публичного импорта, лимиты диска и эксплуатация.
+Открыто: общая media-квота/retention, дальнейшая multi-tab coordination, профили аккаунтов, Android, проверка платного Gemini и физического Desktop/TUI звука. Существующий DownloadCleanup не означает, что общая политика TTL уже подключена. Перед публичным размещением отдельно проектируются аутентификация/rate limit публичного импорта, лимиты диска и эксплуатация.

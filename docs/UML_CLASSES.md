@@ -307,6 +307,7 @@ classDiagram
         +correctText(text) CorrectionResult
     }
     class MockLinguisticAssistant
+    class RemoteLinguisticAssistant
     class GeminiLinguisticAssistant
     class CachingLinguisticAssistant
     YouTubeIngestionService --> YtdlpClient
@@ -322,12 +323,14 @@ classDiagram
     SyncService --> VocabularySyncRepository
     VocabularySyncRepository <|.. BackendVocabularyRepository
     LinguisticAssistant <|.. MockLinguisticAssistant
+    LinguisticAssistant <|.. RemoteLinguisticAssistant
+    RemoteLinguisticAssistant --> HttpClient : JWT backend API
     LinguisticAssistant <|.. GeminiLinguisticAssistant
     LinguisticAssistant <|.. CachingLinguisticAssistant
     CachingLinguisticAssistant --> LinguisticAssistant : delegate
 ```
 
-ProcessRunner — порт внешнего процесса, ExecutableProcessRunner — **Adapter** к ProcessBuilder с timeout/cleanup. IngestionService использует Channel и workers (**Producer–Consumer**). Cache — **Decorator**, AI-провайдеры — **Strategy**. Client commonModule выбирает mock, backendModule — обёрнутый кэшем Gemini/mock; это разные экземпляры/графы DI. Exposed Database удерживается backend repositories, SQLDelight AppDatabase к серверной БД не применяется.
+ProcessRunner — порт внешнего процесса, ExecutableProcessRunner — **Adapter** к ProcessBuilder с timeout/cleanup. IngestionService использует Channel и workers (**Producer–Consumer**). Cache — **Decorator**, AI-провайдеры — **Strategy**. Client commonModule выбирает RemoteLinguisticAssistant (**Adapter** к JWT backend API), backendModule — обёрнутый кэшем Gemini/mock; это разные экземпляры/графы DI. DTO AI-запросов общие, ключ провайдера остаётся на backend. Exposed Database удерживается backend repositories, SQLDelight AppDatabase к серверной БД не применяется.
 
 Исходники: [backend](../backend/src/main/kotlin/com/langkraft/backend), [backend/ai](../backend/src/main/kotlin/com/langkraft/backend/ai), [backend/db](../backend/src/main/kotlin/com/langkraft/backend/db). Полный каталог паттернов, модулей и правил изменения — [DEVELOPER_GUIDE](DEVELOPER_GUIDE.md).
 

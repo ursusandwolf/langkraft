@@ -1,6 +1,8 @@
 package com.langkraft.backend
 
 import com.langkraft.domain.model.*
+import com.langkraft.domain.ai.*
+import com.langkraft.data.ai.RemoteLinguisticAssistant
 import com.langkraft.data.database.createJvmDatabase
 import com.langkraft.data.repository.SqlDelightVocabularyRepository
 import com.langkraft.data.repository.SqlDelightContentRepository
@@ -29,7 +31,8 @@ class AuthAndTwoClientSyncTest {
             "jwt.secret" to "test-secret-with-at-least-thirty-two-characters",
             "jwt.issuer" to "langkraft-tests", "jwt.audience" to "langkraft-tests", "jwt.realm" to "test", "jwt.validity_ms" to "86400000",
             "storage.data_dir" to directory.resolve("backend").toString(), "storage.downloads_dir" to directory.resolve("downloads").toString(),
-            "ingestion.cleanup_interval_ms" to "3600000", "ingestion.job_expiry_ms" to "86400000", "ingestion.worker_count" to "1"
+            "ingestion.cleanup_interval_ms" to "3600000", "ingestion.job_expiry_ms" to "86400000", "ingestion.worker_count" to "1",
+            "gemini.api_key" to "mock_key"
         ) }
         application { module() }
         val auth = createClient { install(ContentNegotiation) { json() } }
@@ -52,6 +55,19 @@ class AuthAndTwoClientSyncTest {
         }.status)
         val firstClient = createClient { install(ContentNegotiation) { json() }; defaultRequest { bearerAuth(token) } }
         val secondClient = createClient { install(ContentNegotiation) { json() }; defaultRequest { bearerAuth(token) } }
+        // Exercise the production adapter against real JWT-protected Ktor routes.
+        for (operation in listOf("translate-word", "translate-sentence", "analyze-sentence", "correct-text")) {
+            assertEquals(HttpStatusCode.Unauthorized, auth.post("/api/ai/$operation") {
+                contentType(ContentType.Application.Json)
+                if (operation == "translate-word") setBody(TranslateRequest("Haus", "Das Haus"))
+                else setBody(TextRequest("Das Haus"))
+            }.status)
+        }
+        val ai = RemoteLinguisticAssistant(firstClient, Url("http://localhost"))
+        assertEquals(TranslationResult("Translation of 'Haus'", "Haus", "Noun"), ai.translateWord("Haus", "Das Haus"))
+        assertEquals("Translated: Das Haus", ai.translateSentence("Das Haus"))
+        assertEquals(DeepAnalysisResult(emptyList(), "This is a mock analysis."), ai.analyzeSentence("Das Haus"))
+        assertEquals(CorrectionResult("Das Haus", "Das Haus", emptyList()), ai.correctText("Das Haus"))
         val first = createJvmDatabase(directory.resolve("first.db").toFile())
         val second = createJvmDatabase(directory.resolve("second.db").toFile())
         try {

@@ -12,7 +12,7 @@ A separate content lock spans the full SQL/HTTP/storage operation. At startup, A
 
 New assets created under the full content lease carry a durable pending marker. After SQL link, confirmLinked clears it. At startup PendingAudioRecovery acquires the free content lease and checks all Content references under DatabaseAccess: referenced assets are confirmed, unreferenced pending assets are deleted atomically with their chunks. Unknown SQL results never allow deletion. Active, legacy/no-lock and already confirmed assets are preserved; this is crash recovery, not general media retention.
 
-index.html loads browser-locale.js before Skiko/Compose to normalize POSIX locale tags rejected by Intl.Locale. Client linguistic features currently use MockLinguisticAssistant from commonModule. GEMINI_API_KEY enables the backend provider, not a remote AI implementation in the browser.
+index.html loads browser-locale.js before Skiko/Compose to normalize POSIX locale tags rejected by Intl.Locale. Client linguistic features use RemoteLinguisticAssistant from commonModule and the shared HTTP client's current JWT. Sign in through Account before translation, analysis or correction. GEMINI_API_KEY selects the backend provider for these UI requests; without a key the backend uses mock. Provider credentials stay on the server.
 
 Complete environment/run instructions: [RUNNING.md](RUNNING.md). Module boundaries, DI and extension points: [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md); current UML: [UML_CLASSES.md](UML_CLASSES.md).
 
