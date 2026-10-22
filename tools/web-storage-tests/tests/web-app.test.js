@@ -74,11 +74,45 @@ try {
     assert.ok(Date.now()<navigationDeadline,'Library did not render');
     await page.mouse.click(600,775);await page.waitForTimeout(500);
   }
+  // Observe the actual repository's library SELECT in another Compose application.
+  // No storage probe or manual query runs there: a new result proves Flow refreshed.
+  const libraryPeer=await context.newPage();
+  libraryPeer.on('pageerror',error=>errors.push(error.stack||error.message));
+  await libraryPeer.addInitScript(()=>{
+    window.libraryPageId=crypto.randomUUID();
+    const NativeWorker=window.Worker;
+    window.Worker=class extends NativeWorker {
+      constructor(...args) {
+        super(...args);this.libraryReads=new Set();
+        this.addEventListener('message',event=>{
+          if(this.libraryReads.delete(event.data.id)&&event.data.results) window.libraryRows=event.data.results.values;
+        });
+      }
+      postMessage(message,...args) {
+        if(message.action==='exec'&&/FROM Content ORDER BY createdAt DESC/.test(message.sql||'')) this.libraryReads.add(message.id);
+        return super.postMessage(message,...args);
+      }
+    };
+  });
+  await libraryPeer.goto(origin);
+  await libraryPeer.waitForFunction(()=>document.documentElement.dataset.appReady==='true',null,{timeout:60000});
+  const peerDeadline=Date.now()+30000;
+  while(!await libraryPeer.getByRole('textbox',{name:'YouTube URL'}).isVisible()) {
+    assert.ok(Date.now()<peerDeadline,'Peer library did not render');
+    await libraryPeer.mouse.click(600,775);await libraryPeer.waitForTimeout(500);
+  }
+  await libraryPeer.waitForFunction(()=>Array.isArray(window.libraryRows));
+  assert.deepEqual(await libraryPeer.evaluate(()=>window.libraryRows),[]);
+  const peerPageId=await libraryPeer.evaluate(()=>window.libraryPageId);
   await page.getByRole('textbox',{name:'YouTube URL'}).fill('https://youtu.be/invalid');await page.waitForTimeout(200);await page.mouse.click(1110,207);
   await page.waitForTimeout(600);assert.equal(imports,1);assert.deepEqual(await query('SELECT id FROM Content'),[]);
   await page.getByRole('textbox',{name:'YouTube URL'}).fill(content.sourceUrl);await page.waitForTimeout(200);await page.mouse.click(1110,207);
   await waitQuery('SELECT id FROM Content',rows=>rows.length===1);assert.equal(imports,2);
   assert.deepEqual(await query('SELECT originalText FROM SubtitleLine'),[['Hallo Welt']]);
+  await libraryPeer.waitForFunction(id=>window.libraryRows?.some(row=>row[0]===id),content.id);
+  assert.equal(await libraryPeer.evaluate(()=>window.libraryPageId),peerPageId);
+  await libraryPeer.screenshot({path:path.join(artifacts,'library-peer.png')});
+  await libraryPeer.close();
   await page.waitForTimeout(300);
   await page.screenshot({path:path.join(artifacts,'library.png')});
   await page.mouse.click(200,380);await page.waitForTimeout(700);

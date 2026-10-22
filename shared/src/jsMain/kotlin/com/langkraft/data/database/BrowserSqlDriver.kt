@@ -21,6 +21,23 @@ import org.khronos.webgl.Uint8Array
 internal class BrowserSqlDriver(private val client: DatabaseClient) : SqlDriver {
     private val listeners = mutableMapOf<String, MutableSet<Query.Listener>>()
     private var activeTransaction: Transacter.Transaction? = null
+    private var externalChangePending = false
+    private var publicationPending = false
+    private var closed = false
+
+    init {
+        client.setChangeListener {
+            if (!closed) {
+                if (activeTransaction != null) externalChangePending = true
+                else invalidateQueries()
+            }
+        }
+    }
+
+    // Notify only: repository Flow reads still acquire the shared DatabaseAccess mutex.
+    private fun invalidateQueries() {
+        listeners.values.flatMap { it }.toSet().forEach { it.queryResultsChanged() }
+    }
 
     override fun <R> executeQuery(
         identifier: Int?, sql: String, mapper: (SqlCursor) -> QueryResult<R>,
@@ -69,10 +86,12 @@ internal class BrowserSqlDriver(private val client: DatabaseClient) : SqlDriver 
     ) : Transacter.Transaction() {
         override fun endTransaction(successful: Boolean): QueryResult<Unit> = QueryResult.AsyncValue {
             withContext(NonCancellable) {
+                var committed = false
                 try {
                     if (enclosingTransaction == null) {
                         client.request(if (successful) "end_transaction" else "rollback_transaction",
                             null, emptyArray()).await()
+                        committed = successful
                     }
                 } catch (error: Throwable) {
                     if (successful && enclosingTransaction == null) {
@@ -82,6 +101,14 @@ internal class BrowserSqlDriver(private val client: DatabaseClient) : SqlDriver 
                     throw error
                 } finally {
                     activeTransaction = enclosingTransaction
+                    if (enclosingTransaction == null) {
+                        if (committed && publicationPending) client.publishChanges()
+                        publicationPending = false
+                        if (externalChangePending) {
+                            externalChangePending = false
+                            invalidateQueries()
+                        }
+                    }
                 }
             }
         }
@@ -96,10 +123,19 @@ internal class BrowserSqlDriver(private val client: DatabaseClient) : SqlDriver 
     }
 
     override fun notifyListeners(vararg queryKeys: String) {
+        if (closed) return
         queryKeys.flatMap { listeners[it].orEmpty() }.toSet().forEach { it.queryResultsChanged() }
+        if (activeTransaction == null) client.publishChanges()
+        else publicationPending = true
     }
 
-    override fun close() { listeners.clear(); client.close() }
+    override fun close() {
+        if (closed) return
+        closed = true
+        client.setChangeListener(null)
+        listeners.clear()
+        client.close()
+    }
 
     private fun bind(count: Int, binder: (SqlPreparedStatement.() -> Unit)?): Array<Any?> {
         val values = arrayOfNulls<Any>(count)
