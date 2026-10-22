@@ -152,6 +152,20 @@ classDiagram
         +downloadAudio(content) String
     }
     class AudioDownloaderImpl
+    class AudioDownloadCoordinator {
+        <<interface>>
+        +tryAcquire(contentId) AudioDownloadLease
+    }
+    class AudioDownloadLease {
+        <<interface>>
+        +String recoveryProtocol
+        +release()
+    }
+    class WebAudioDownloadCoordinator
+    class UncoordinatedAudioDownloads
+    class AudioDownloadRecovery {
+        +recover() Int
+    }
     class AudioStorage {
         <<interface>>
         +store(contentId, source, expectedBytes) String
@@ -190,6 +204,12 @@ classDiagram
     AudioDownloader <|.. AudioDownloaderImpl
     AudioDownloaderImpl --> AudioStorage
     AudioDownloaderImpl --> DatabaseAccess
+    AudioDownloaderImpl --> AudioDownloadCoordinator
+    AudioDownloadCoordinator ..> AudioDownloadLease
+    AudioDownloadCoordinator <|.. WebAudioDownloadCoordinator
+    AudioDownloadCoordinator <|.. UncoordinatedAudioDownloads
+    AudioDownloadRecovery --> AudioDownloadCoordinator
+    AudioDownloadRecovery --> DatabaseAccess
     AudioStorage <|.. FileAudioStorage
     AudioStorage <|.. IndexedDbAudioStorage
     AudioPlayer <|.. AudioPlayerImpl
@@ -199,7 +219,7 @@ classDiagram
 
 StateViewModel в коде generic `StateViewModel<S>`; Player использует PlayerState. AudioPlayerImpl — expect/actual с реализациями Web HTMLAudioElement и Desktop VLC; FfmpegAudioPlayer — JVM реализация на ffplay. Koin выбирает движок, исходники Android сохранены вне активной сборки. AudioPlayer/AudioStorage — платформенные порты и адаптеры. UI — **Presentation Model/MVVM**, делегаты разделяют операции, StateFlow — **Observer**.
 
-Для LK-02 важны три владельца: storage до возврата location → downloader до SQL link → БД после link. Компенсация удаляет только новый объект без SQL-ссылок. В Web JS-модуль storage удерживает Web Lock на незавершённую загрузку; recoverIncompleteAudio удаляет manifest/chunks нового формата только при свободном lock. Запуск — WebDatabaseFactory и beginAudio. Готовые, legacy и no-lock объекты сохраняются; SQL recovery после аварии остаётся отдельной задачей. Связи с браузерными API показаны в [UML-ченджлоге REL-01](CHANGELOG_UML.md).
+Для LK-02 важны три владельца: storage до возврата location → downloader до SQL link → БД после link. Компенсация удаляет только новый объект без SQL-ссылок. В Web отдельные asset lock и content lease защищают запись чанков и полный цикл скачивания. recoverIncompleteAudio удаляет incomplete manifest/chunks, AudioDownloadRecovery восстанавливает SQL DOWNLOADING только при свободном content lock и известной метке. Готовые, legacy и no-lock объекты сохраняются. Связи с браузерными API показаны в [UML-ченджлоге](CHANGELOG_UML.md); ограничения — в [ADR](ADR_AUDIO_DOWNLOAD_RECOVERY.md).
 
 Исходники: [ui/player](../shared/src/commonMain/kotlin/com/langkraft/ui/player), [AudioPlayer.kt](../shared/src/commonMain/kotlin/com/langkraft/audio/AudioPlayer.kt), [AudioStorage.kt](../shared/src/commonMain/kotlin/com/langkraft/data/audio/AudioStorage.kt), [AudioDownloaderImpl.kt](../shared/src/commonMain/kotlin/com/langkraft/data/repository/AudioDownloaderImpl.kt).
 

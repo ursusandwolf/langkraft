@@ -1,6 +1,9 @@
 package com.langkraft.data.repository
 
 import com.langkraft.data.audio.AudioStorage
+import com.langkraft.data.audio.AudioDownloadCoordinator
+import com.langkraft.data.audio.UncoordinatedAudioDownloads
+import com.langkraft.data.audio.audioDownloadMetadataKey
 import com.langkraft.data.database.DatabaseAccess
 import com.langkraft.domain.model.DownloadStatus
 import com.langkraft.domain.model.ImmersionContent
@@ -19,10 +22,18 @@ class AudioDownloaderImpl(
     private val httpClient: HttpClient,
     private val storage: AudioStorage,
     private val access: DatabaseAccess,
-    private val baseUrl: Url
+    private val baseUrl: Url,
+    private val coordinator: AudioDownloadCoordinator = UncoordinatedAudioDownloads
 ) : AudioDownloader {
     override suspend fun downloadAudio(content: ImmersionContent): String {
         require(Regex("[A-Za-z0-9_-]+").matches(content.id)) { "Invalid content ID" }
+        val lease = withContext(NonCancellable) { coordinator.tryAcquire(content.id) }
+            ?: throw AudioDownloadException("Audio download is already running")
+        try { return downloadWithLease(content, lease.recoveryProtocol) }
+        finally { withContext(NonCancellable) { lease.release() } }
+    }
+
+    private suspend fun downloadWithLease(content: ImmersionContent, recoveryProtocol: String?): String {
         var location: String? = null
         var previous: com.langkraft.db.Content? = null
         var linked = false
@@ -37,7 +48,12 @@ class AudioDownloaderImpl(
                         throw AudioDownloadException("Audio download is already running")
                     }
                     previous = row
-                    appDatabaseQueries.updateDownloadStatus(DownloadStatus.DOWNLOADING.name, row.localAudioPath, content.id)
+                    transaction {
+                        appDatabaseQueries.updateDownloadStatus(DownloadStatus.DOWNLOADING.name, row.localAudioPath, content.id)
+                        val key = audioDownloadMetadataKey(content.id)
+                        if (recoveryProtocol != null) appDatabaseQueries.setSyncMetadata(key, recoveryProtocol)
+                        else appDatabaseQueries.deleteSyncMetadata(key)
+                    }
                 }
             }
             currentCoroutineContext().ensureActive()
@@ -59,7 +75,10 @@ class AudioDownloaderImpl(
                     if (row.localAudioPath != previous?.localAudioPath || row.downloadStatus != DownloadStatus.DOWNLOADING.name) {
                         throw AudioDownloadException("Offline audio changed during download")
                     }
-                    appDatabaseQueries.updateDownloadStatus(DownloadStatus.COMPLETED.name, location, content.id)
+                    transaction {
+                        appDatabaseQueries.updateDownloadStatus(DownloadStatus.COMPLETED.name, location, content.id)
+                        appDatabaseQueries.deleteSyncMetadata(audioDownloadMetadataKey(content.id))
+                    }
                     linked = true
                 }
             }
@@ -83,7 +102,10 @@ class AudioDownloaderImpl(
                             row.localAudioPath == original.localAudioPath) {
                             val restoredStatus = if (original.localAudioPath != null) original.downloadStatus
                                 else if (exception is CancellationException) DownloadStatus.IDLE.name else DownloadStatus.ERROR.name
-                            appDatabaseQueries.updateDownloadStatus(restoredStatus, original.localAudioPath, content.id)
+                            transaction {
+                                appDatabaseQueries.updateDownloadStatus(restoredStatus, original.localAudioPath, content.id)
+                                appDatabaseQueries.deleteSyncMetadata(audioDownloadMetadataKey(content.id))
+                            }
                         }
                     }
                 } catch (cleanup: Throwable) { exception.addSuppressed(cleanup) }

@@ -1,3 +1,33 @@
+# REL-02 — 2026-10-22 — согласование SQL-статуса и владельца
+
+```text
++-------------------------+      uses      +--------------------------------+
+| AudioDownloaderImpl     |--------------->| AudioDownloadCoordinator       |
+| <<Application Service>> |                | <<Platform Port>>              |
++------------+------------+                | tryAcquire(contentId) -> lease |
+             |                            +---------------+----------------+
+             | SQL + marker                               ^ implements
+             v                            +---------------+----------------+
++-------------------------+               | WebAudioDownloadCoordinator    |
+| DatabaseAccess          |<----------+    | <<Adapter>>                    |
+| AppDatabase transaction |           |    | content Web Lock              |
+| Content + SyncMetadata  |           |    +--------------------------------+
++-------------------------+           |          ^ uses
+                                      |          |
+                           +----------+----------+-------------+
+                           | AudioDownloadRecovery              |
+                           | <<Application Service>>            |
+                           | free lease + known marker          |
+                           | recheck SQL -> restore status      |
+                           +------------------------------------+
+
+lease held: DOWNLOADING + marker -> HTTP -> asset -> SQL link + remove marker
+crash: free lease + marker -> ERROR (no old path) / COMPLETED (old path kept)
+active lease / unknown marker / no coordination -> preserve
+```
+
+Ports/Adapters отделяют браузерную синхронизацию от общего downloader. UncoordinatedAudioDownloads сохраняет поведение платформ без реализации lease. Изменение статуса и метки образует одну SQLite-транзакцию; отдельная asset-блокировка REL-01 защищает manifest/chunks. [Решение и ограничения](ADR_AUDIO_DOWNLOAD_RECOVERY.md).
+
 # REL-01 — 2026-10-22 — LK-03: lifetime lock и уборка
 
 ```text

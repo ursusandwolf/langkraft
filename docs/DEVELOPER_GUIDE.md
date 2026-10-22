@@ -56,7 +56,9 @@ ContentSelectionViewModel → IngestContentUseCase → RemoteContentSource/Backe
 
 ### Offline-аудио и LK-02
 
-Web recovery (REL-S2/LK-03): storage/index.js удерживает Web Lock на каждый новый незавершённый asset. WebDatabaseFactory и beginAudio вызывают recoverIncompleteAudio: свободный lock → повторная проверка incomplete → атомарное удаление manifest/chunks. Активный владелец, complete, legacy и записи без lock сохраняются. Без Web Locks скачивание работает, уборка пропускается. Таймаут не считается доказательством закрытия вкладки; SQL-статусы и готовые непривязанные объекты требуют отдельной сверки.
+Web recovery (REL-S2/LK-03): storage/index.js удерживает Web Lock на каждый новый незавершённый asset. WebDatabaseFactory и beginAudio вызывают recoverIncompleteAudio: свободный lock → повторная проверка incomplete → атомарное удаление manifest/chunks. Активный владелец, complete, legacy и записи без lock сохраняются. Без Web Locks скачивание работает, уборка пропускается.
+
+AudioDownloadCoordinator — отдельный порт владения Content на весь download. WebAudioDownloadCoordinator использует content lock; UncoordinatedAudioDownloads сохраняет прежнее поведение Desktop/TUI. Downloader транзакционно записывает DOWNLOADING вместе с известной меткой в SyncMetadata и удаляет её при завершении/компенсации. При старте Web AudioDownloadRecovery восстанавливает только помеченные операции со свободным lock: ERROR без прежнего пути либо COMPLETED с прежней ссылкой. Legacy/no-lock и готовые непривязанные объекты требуют отдельной политики; таймаут не доказывает смерть владельца. [Архитектурное решение](ADR_AUDIO_DOWNLOAD_RECOVERY.md).
 
 OfflineDownloadDelegate → AudioDownloaderImpl → HTTP stream → AudioStorage → узкая SQL-привязка. Storage возвращает location только после полной записи и проверки длины. FileAudioStorage владеет временным и опубликованным файлом до успешного возврата location; отмена на границе dispatcher очищает ещё не переданный файл. На Web используется manifest/chunks и `indexeddb-audio:` location.
 

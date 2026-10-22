@@ -5,6 +5,21 @@ const ownerId = crypto.randomUUID();
 const activeDownloads = new Map();
 const lockName = id => `langkraft-audio-download:${id}`;
 
+// Separate from the asset lock: SQL stays DOWNLOADING before the first chunk
+// and after asset publication, until the final SQL link/compensation completes.
+export async function acquireContentDownload(contentId) {
+  if (!navigator.locks?.request) return { coordinated: false, release: async () => {} };
+  let granted;
+  let rejected;
+  const ready = new Promise((resolve, reject) => { granted = resolve; rejected = reject; });
+  const finished = navigator.locks.request(`langkraft-content-download:${contentId}`, { ifAvailable: true }, lock => {
+    if (!lock) { granted(null); return; }
+    return new Promise(release => granted({ coordinated: true, release: async () => { release(); await finished; } }));
+  });
+  finished.catch(rejected);
+  return ready;
+}
+
 async function holdDownload(id) {
   if (!navigator.locks?.request) return { coordinated: false, release() {}, finished: Promise.resolve() };
   let release;
