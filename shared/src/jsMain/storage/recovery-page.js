@@ -1,4 +1,4 @@
-import { cloneWebProfile, exportWebProfile, importWebProfile } from "./recovery.js";
+import { cloneWebProfile, exportWebProfile, importWebProfile, listWebRecoveryProfiles } from "./recovery.js";
 import { selectedProfile } from "./profile.js";
 
 const buttons = [...document.querySelectorAll("button")];
@@ -23,8 +23,47 @@ async function run(operation) {
     status.textContent = "Копия готова. Проверьте библиотеку и аудио до входа в аккаунт.";
   } catch (error) {
     status.textContent = `Не удалось восстановить: ${error.message}`;
-  } finally { buttons.forEach(button => { button.disabled = false; }); }
+  } finally {
+    await refreshProfiles();
+    buttons.forEach(button => { button.disabled = false; });
+  }
 }
+
+let inventoryGeneration = 0;
+async function refreshProfiles() {
+  const generation = ++inventoryGeneration;
+  const list = document.getElementById("profiles");
+  const message = document.getElementById("profiles-status");
+  list.replaceChildren();
+  try {
+    const profiles = await listWebRecoveryProfiles();
+    if (generation !== inventoryGeneration) return;
+    message.textContent = `Найдено копий: ${profiles.length}. Наличие двух хранилищ не гарантирует исправность данных.`;
+    for (const entry of profiles) {
+      const item = document.createElement("li");
+      const label = document.createElement("span");
+      label.textContent = `${entry.profile}: SQLite ${entry.sqlite ? "есть" : "нет"}, аудио ${entry.audio ? "есть" : "нет"}. `;
+      item.append(label);
+      // Partial/failed targets are visible, but opening them may create missing stores.
+      if (entry.sqlite && entry.audio) {
+        for (const [path, text] of [["./", "Открыть профиль"], ["./recovery.html", "Восстановить из этой копии"]]) {
+          const link = document.createElement("a");
+          const url = new URL(path, location.href);
+          url.searchParams.set("profile", entry.profile);
+          link.href = url.href;
+          link.textContent = text;
+          item.append(link, document.createTextNode(" "));
+        }
+      }
+      list.append(item);
+    }
+  } catch (error) {
+    if (generation === inventoryGeneration) message.textContent = `Список недоступен: ${error.message}`;
+  }
+}
+
+document.getElementById("refresh-profiles").onclick = refreshProfiles;
+refreshProfiles();
 
 document.getElementById("clone").onclick = () => run(() => cloneWebProfile(selectedProfile));
 document.getElementById("export").onclick = () => run(async () => {

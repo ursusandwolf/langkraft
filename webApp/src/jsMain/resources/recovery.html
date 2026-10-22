@@ -12,6 +12,8 @@
     :focus-visible { outline: 3px solid #176b52; outline-offset: 3px; }
     pre { overflow: auto; padding: 1rem; background: white; color: #17251f; }
     #status { min-height: 3rem; }
+    #profiles { overflow-wrap: anywhere; padding-left: 1.2rem; }
+    #profiles li { margin-bottom: 1rem; }
   </style>
 </head>
 <body>
@@ -27,6 +29,13 @@
     <p id="status" role="status" aria-live="polite">Готово к восстановлению.</p>
     <p id="result" hidden><a id="open-copy">Открыть восстановленную копию</a></p>
     <pre id="report" aria-label="Отчёт восстановления"></pre>
+    <section aria-labelledby="profiles-heading">
+      <h2 id="profiles-heading">Сохранённые копии</h2>
+      <p>Список относится к этому браузеру и адресу сайта. Неполные копии тоже занимают место. Удаление пока не поддерживается: другие вкладки могут продолжать работать с профилем.</p>
+      <button id="refresh-profiles" type="button">Обновить список копий</button>
+      <p id="profiles-status" role="status" aria-live="polite"></p>
+      <ul id="profiles"></ul>
+    </section>
   </main>
   <script src="webApp-recovery.js"></script>
 </body>

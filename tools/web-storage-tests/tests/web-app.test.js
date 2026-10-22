@@ -227,6 +227,12 @@ try {
   await recoveryPage.getByRole('button',{name:'Восстановить из архива'}).click();
   await recoveryPage.waitForFunction(()=>document.getElementById('status').textContent.startsWith('Копия готова'));
   assert.notEqual(await copyLink.getAttribute('href'),copyUrl);
+  await recoveryPage.getByRole('button',{name:'Обновить список копий'}).click();
+  await recoveryPage.waitForFunction(()=>document.querySelectorAll('#profiles li').length===3);
+  assert.equal(await recoveryPage.locator('#profiles a').count(),6);
+  const inventoryLink=recoveryPage.locator('#profiles a').filter({hasText:'Восстановить из этой копии'}).first();
+  assert.match(await inventoryLink.getAttribute('href'),/recovery\.html\?profile=recovered-/);
+  assert.match(await recoveryPage.locator('#profiles-status').textContent(),/Найдено копий: 3/);
   assert.deepEqual(await query('SELECT downloadStatus FROM Content WHERE id=?',['legacy-owner']),[['DOWNLOADING']]);
   await recoveryPage.screenshot({path:path.join(artifacts,'recovery.png')});
   await copyPage.close();await recoveryPage.close();

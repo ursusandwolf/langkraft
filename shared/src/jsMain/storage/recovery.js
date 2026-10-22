@@ -5,6 +5,24 @@ const MAX_BYTES = 64 * 1024 * 1024;
 const MAX_RECORDS = 50000;
 const FORMAT = "langkraft-web-recovery-v1";
 
+// Inventory only: never open/upgrade a database or interpret presence as validity.
+export async function listWebRecoveryProfiles() {
+  if (typeof indexedDB.databases !== "function") {
+    throw new Error("This browser cannot list IndexedDB profiles");
+  }
+  const profiles = new Map();
+  for (const { name } of await indexedDB.databases()) {
+    const match = /^langkraft-(sqlite|audio)-(recovered-.+)$/.exec(name || "");
+    if (!match) continue;
+    const [, kind, profile] = match;
+    try { profileNames(profile); } catch { continue; }
+    const entry = profiles.get(profile) || { profile, sqlite: false, audio: false };
+    entry[kind] = true;
+    profiles.set(profile, entry);
+  }
+  return [...profiles.values()].sort((a, b) => a.profile.localeCompare(b.profile));
+}
+
 // Never upgrade or create the source, and never open it through a writable SQL VFS.
 async function existingDatabase(name, version, optional = false) {
   return new Promise((resolve, reject) => {

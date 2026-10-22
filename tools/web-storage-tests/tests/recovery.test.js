@@ -195,6 +195,28 @@ try {
     return { rejected, created: (await indexedDB.databases()).some(db => db.name.includes(profile)) };
   });
   assert.deepEqual(missingResult, { rejected: true, created: false });
+  const inventory = await page.evaluate(async () => {
+    const before = (await indexedDB.databases()).map(db => db.name).sort();
+    const open = indexedDB.open;
+    indexedDB.open = () => { throw new Error('Inventory must not open databases'); };
+    let profiles;
+    try { profiles = await window.recovery.listWebRecoveryProfiles(); }
+    finally { indexedDB.open = open; }
+    const after = (await indexedDB.databases()).map(db => db.name).sort();
+    const databases = indexedDB.databases;
+    indexedDB.databases = undefined;
+    let unsupported = false;
+    try { await window.recovery.listWebRecoveryProfiles(); }
+    catch (error) { unsupported = error.message.includes('cannot list'); }
+    finally { indexedDB.databases = databases; }
+    return { before, after, profiles, unsupported };
+  });
+  assert.deepEqual(inventory.after, inventory.before);
+  assert.equal(inventory.unsupported, true);
+  assert.ok(inventory.profiles.some(entry => entry.profile === report.profile && entry.sqlite && entry.audio));
+  assert.ok(inventory.profiles.some(entry => entry.sqlite && !entry.audio), 'Failed quota/schema copies stay discoverable');
+  assert.ok(inventory.profiles.every(entry => entry.profile.startsWith('recovered-')));
+  console.log('PASS: recovery inventory discovers complete and partial copies without opening or changing any database');
   console.log("PASS: existing destination/missing source/quota failure preserve original data and publish no failed copy");
   const legacyContext = await browser.newContext();
   const legacy = await legacyContext.newPage();
