@@ -2,6 +2,8 @@
 
 Актуальная карта основных классов; вспомогательные UI-компоненты и все поля DTO опущены. Пунктир — использование, сплошная стрелка — удерживаемая зависимость, треугольник — наследование/реализация. `MainApp`, Koin DSL и Routing — функции, поэтому они описаны в [руководстве](DEVELOPER_GUIDE.md), а не выданы за классы. Mermaid отображается на GitHub; исходники диаграмм находятся в этом Markdown.
 
+Web lifecycle recovery-v2 реализован функциями [profile-lifecycle.js](../shared/src/jsMain/storage/profile-lifecycle.js), без новых Kotlin-классов. SQL worker, audio-страница и recovery держат shared lease; ручная очистка требует exclusive lease и проходит состояния active → deleting → deleted в отдельном реестре. Операция повторяется после частичного отказа, tombstone блокирует старые ссылки. Псевдографика модулей и существующие паттерны — REL-09 в [UML-ченджлоге](CHANGELOG_UML.md), ограничения — [LEGACY_RECOVERY](LEGACY_RECOVERY.md).
+
 ## Модели и SRS
 
 ```mermaid
@@ -152,13 +154,43 @@ classDiagram
         +downloadAudio(content) String
     }
     class AudioDownloaderImpl
+    class AudioDownloadCoordinator {
+        <<interface>>
+        +tryAcquire(contentId) AudioDownloadLease
+    }
+    class AudioDownloadLease {
+        <<interface>>
+        +String recoveryProtocol
+        +release()
+    }
+    class WebAudioDownloadCoordinator
+    class FileAudioDownloadCoordinator
+    class UncoordinatedAudioDownloads
+    class AudioDownloadRecovery {
+        +recover() Int
+    }
     class AudioStorage {
         <<interface>>
         +store(contentId, source, expectedBytes) String
         +delete(location)
+        +confirmLinked(location)
     }
     class FileAudioStorage
+    class JournaledFileAudioStorage
     class IndexedDbAudioStorage
+    class PendingAudioStorage {
+        <<interface>>
+        +listPending() List
+        +resolvePending(location, referenced) Boolean
+    }
+    class PendingAudioAsset {
+        +String location
+        +String contentId
+        +String recoveryProtocol
+    }
+    class PendingAudioRecovery {
+        +recover() Int
+    }
     class AudioPlayer {
         <<interface>>
         +StateFlow currentTimeMs
@@ -190,8 +222,23 @@ classDiagram
     AudioDownloader <|.. AudioDownloaderImpl
     AudioDownloaderImpl --> AudioStorage
     AudioDownloaderImpl --> DatabaseAccess
+    AudioDownloaderImpl --> AudioDownloadCoordinator
+    AudioDownloadCoordinator ..> AudioDownloadLease
+    AudioDownloadCoordinator <|.. WebAudioDownloadCoordinator
+    AudioDownloadCoordinator <|.. FileAudioDownloadCoordinator
+    AudioDownloadCoordinator <|.. UncoordinatedAudioDownloads
+    AudioDownloadRecovery --> AudioDownloadCoordinator
+    AudioDownloadRecovery --> DatabaseAccess
     AudioStorage <|.. FileAudioStorage
+    AudioStorage <|.. JournaledFileAudioStorage
+    JournaledFileAudioStorage ..> FileAudioStorage : delegates
     AudioStorage <|.. IndexedDbAudioStorage
+    PendingAudioStorage <|.. IndexedDbAudioStorage
+    PendingAudioStorage <|.. JournaledFileAudioStorage
+    PendingAudioStorage ..> PendingAudioAsset
+    PendingAudioRecovery --> PendingAudioStorage
+    PendingAudioRecovery --> AudioDownloadCoordinator
+    PendingAudioRecovery --> DatabaseAccess
     AudioPlayer <|.. AudioPlayerImpl
     AudioPlayer <|.. FfmpegAudioPlayer
     AudioPlayer ..> AudioPlayerError
@@ -199,7 +246,9 @@ classDiagram
 
 StateViewModel в коде generic `StateViewModel<S>`; Player использует PlayerState. AudioPlayerImpl — expect/actual с реализациями Web HTMLAudioElement и Desktop VLC; FfmpegAudioPlayer — JVM реализация на ffplay. Koin выбирает движок, исходники Android сохранены вне активной сборки. AudioPlayer/AudioStorage — платформенные порты и адаптеры. UI — **Presentation Model/MVVM**, делегаты разделяют операции, StateFlow — **Observer**.
 
-Для LK-02 важны три владельца: storage до возврата location → downloader до SQL link → БД после link. Компенсация удаляет только новый объект без SQL-ссылок. Аварийная recovery после завершения процесса остаётся отдельной задачей.
+AudioDownloadCoordinator имеет Web и Desktop/TUI адаптеры. FileAudioDownloadCoordinator удерживает native FileLock/канал и использует реестр JVM; createJvmDatabase вызывает общие AudioDownloadRecovery и PendingAudioRecovery. JournaledFileAudioStorage — **Decorator** над FileAudioStorage и файловый адаптер PendingAudioStorage. beforeWrite сохраняет sidecar до `.part`, confirmLinked удаляет журнал после SQL link; уборка файлов повторяема с удалением журнала последним. IndexedDbAudioStorage реализует тот же recovery-порт через транзакцию IndexedDB.
+
+Для LK-02 важны три владельца: storage до возврата location → downloader до SQL link → БД после link. Компенсация удаляет только новый объект без SQL-ссылок. В Web отдельные asset lock и content lease защищают запись чанков и полный цикл скачивания. recoverIncompleteAudio убирает incomplete, AudioDownloadRecovery восстанавливает SQL DOWNLOADING, PendingAudioRecovery сверяет готовые pending-объекты. ConfirmLinked снимает pending после SQL link. Активные, legacy/no-lock и подтверждённые объекты сохраняются. Связи с браузерными API показаны в [UML-ченджлоге](CHANGELOG_UML.md); ограничения — в [ADR](ADR_AUDIO_DOWNLOAD_RECOVERY.md).
 
 Исходники: [ui/player](../shared/src/commonMain/kotlin/com/langkraft/ui/player), [AudioPlayer.kt](../shared/src/commonMain/kotlin/com/langkraft/audio/AudioPlayer.kt), [AudioStorage.kt](../shared/src/commonMain/kotlin/com/langkraft/data/audio/AudioStorage.kt), [AudioDownloaderImpl.kt](../shared/src/commonMain/kotlin/com/langkraft/data/repository/AudioDownloaderImpl.kt).
 
@@ -279,3 +328,5 @@ classDiagram
 ProcessRunner — порт внешнего процесса, ExecutableProcessRunner — **Adapter** к ProcessBuilder с timeout/cleanup. IngestionService использует Channel и workers (**Producer–Consumer**). Cache — **Decorator**, AI-провайдеры — **Strategy**. Client commonModule выбирает mock, backendModule — обёрнутый кэшем Gemini/mock; это разные экземпляры/графы DI. Exposed Database удерживается backend repositories, SQLDelight AppDatabase к серверной БД не применяется.
 
 Исходники: [backend](../backend/src/main/kotlin/com/langkraft/backend), [backend/ai](../backend/src/main/kotlin/com/langkraft/backend/ai), [backend/db](../backend/src/main/kotlin/com/langkraft/backend/db). Полный каталог паттернов, модулей и правил изменения — [DEVELOPER_GUIDE](DEVELOPER_GUIDE.md).
+
+Операционная утилита [recover_legacy_profile.py](../tools/recovery/recover_legacy_profile.py) находится вне Kotlin DI-графа. Это Python-модуль с функциями audit_profile/clone_profile и исключениями RecoveryError ← UnavailableAudio; отдельный GoF-паттерн здесь не вводится. Web [recovery.js](../shared/src/jsMain/storage/recovery.js) — модуль с функциями cloneWebProfile/exportWebProfile/importWebProfile, вызываемый отдельным DOM entry recovery-page.js. Он использует существующий worker и IDBBatchAtomicVFS/MemoryVFS (инфраструктурные Adapter), а profile.js разделяет имена БД/файла/locks. Это не дополнительные Kotlin-классы. Потоки восстановления показаны в REL-06/REL-07 [UML-ченджлога](CHANGELOG_UML.md), ограничения — в [инструкции восстановления](LEGACY_RECOVERY.md).

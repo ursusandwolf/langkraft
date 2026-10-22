@@ -3,6 +3,8 @@ package com.langkraft.di
 import com.langkraft.domain.ai.LinguisticAssistant
 import com.langkraft.domain.ai.MockLinguisticAssistant
 import com.langkraft.data.repository.*
+import com.langkraft.data.audio.AudioDownloadCoordinator
+import com.langkraft.data.audio.UncoordinatedAudioDownloads
 import com.langkraft.domain.repository.LocalContentRepository
 import com.langkraft.domain.repository.RemoteContentSource
 import com.langkraft.domain.repository.AudioDownloader
@@ -67,7 +69,8 @@ val commonModule = module {
     single { SqlDelightContentRepository(get()) }
     single<LocalContentRepository> { get<SqlDelightContentRepository>() }
     single<RemoteContentSource> { BackendRemoteSource(get(), get<AppConfig>().backendUrl) }
-    single<AudioDownloader> { AudioDownloaderImpl(get(), get(), get(), get<AppConfig>().backendUrl) }
+    single<AudioDownloader> { AudioDownloaderImpl(get(), get(), get(), get<AppConfig>().backendUrl,
+        getOrNull<AudioDownloadCoordinator>() ?: UncoordinatedAudioDownloads) }
     single<VocabularyRepository> { SqlDelightVocabularyRepository(get(), get(), get<AppConfig>().backendUrl) }
     // Sync
     single<ISyncManager> { SyncManager(get()) }

@@ -6,8 +6,13 @@ import com.langkraft.data.repository.AudioDownloaderImpl
 import com.langkraft.db.AppDatabase
 import com.langkraft.domain.model.ImmersionContent
 import com.langkraft.data.audio.AudioStorage
+import com.langkraft.data.audio.AudioDownloadCoordinator
+import com.langkraft.data.audio.AudioDownloadLease
+import com.langkraft.data.audio.AudioDownloadRecovery
+import com.langkraft.data.audio.UncoordinatedAudioDownloads
 import com.langkraft.data.database.DatabaseAccess
 import app.cash.sqldelight.async.coroutines.awaitAsOne
+import app.cash.sqldelight.async.coroutines.awaitAsOneOrNull
 import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.readRemaining
 import io.ktor.utils.io.core.readBytes
@@ -22,11 +27,25 @@ import kotlin.test.*
 class AudioDownloaderTest {
     private val content = ImmersionContent("video", "Title", "/api/media/video.mp3", null, "https://youtu.be/video", 1)
 
+    private class TestCoordinator : AudioDownloadCoordinator {
+        var held = false
+        override suspend fun tryAcquire(contentId: String): AudioDownloadLease? {
+            if (held) return null
+            held = true
+            return object : AudioDownloadLease {
+                override val recoveryProtocol = "web-lock-v1"
+                override suspend fun release() { check(held); held = false }
+            }
+        }
+    }
+
     private class MemoryFiles : AudioStorage {
         val files = mutableMapOf<String, ByteArray>()
         var cancelWrite = false
         var afterStore: suspend () -> Unit = {}
         var deleteFailure: Throwable? = null
+        var afterConfirm: suspend (String) -> Unit = {}
+        override suspend fun confirmLinked(location: String) { afterConfirm(location) }
         override suspend fun delete(location: String) {
             deleteFailure?.let { throw it }
             files.remove(location)
@@ -43,6 +62,7 @@ class AudioDownloaderTest {
     }
 
     private fun scenario(status: HttpStatusCode, type: String?, body: String, cancel: Boolean = false,
+                         coordinator: AudioDownloadCoordinator = UncoordinatedAudioDownloads,
                          configure: suspend (JdbcSqliteDriver) -> Unit = {},
                          verify: suspend (AudioDownloaderImpl, AppDatabase, MemoryFiles) -> Unit) = runBlocking {
         val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
@@ -55,7 +75,7 @@ class AudioDownloaderTest {
             assertEquals("http://localhost:8080/api/media/video.mp3", request.url.toString())
             respond(body, status, if (type == null) headersOf() else headersOf(HttpHeaders.ContentType, type))
         })
-        try { verify(AudioDownloaderImpl(client, files, DatabaseAccess(db), Url("http://localhost:8080")), db, files) }
+        try { verify(AudioDownloaderImpl(client, files, DatabaseAccess(db), Url("http://localhost:8080"), coordinator), db, files) }
         finally { client.close(); driver.close() }
     }
 
@@ -63,6 +83,94 @@ class AudioDownloaderTest {
         assertFailsWith<AudioDownloadException> { downloader.downloadAudio(content) }
         assertTrue(files.files.isEmpty())
         assertEquals("ERROR", db.appDatabaseQueries.selectContentById("video").awaitAsOne().downloadStatus)
+    }
+
+    @Test fun leaseProtectsDownloadingStateUntilSqlLinkAndMarkerIsRemovedOnSuccess() {
+        val owner = TestCoordinator()
+        scenario(HttpStatusCode.OK, "audio/mpeg", "audio", coordinator = owner) { downloader, db, files ->
+            files.afterStore = {
+                assertTrue(owner.held)
+                assertEquals("web-lock-v1", db.appDatabaseQueries.getSyncMetadata("audio_download_lock:video").awaitAsOneOrNull())
+                assertEquals(0, AudioDownloadRecovery(DatabaseAccess(db), owner).recover())
+                assertEquals("DOWNLOADING", db.appDatabaseQueries.selectContentById("video").awaitAsOne().downloadStatus)
+            }
+            downloader.downloadAudio(content)
+            assertFalse(owner.held)
+            assertNull(db.appDatabaseQueries.getSyncMetadata("audio_download_lock:video").awaitAsOneOrNull())
+            assertEquals("COMPLETED", db.appDatabaseQueries.selectContentById("video").awaitAsOne().downloadStatus)
+        }
+    }
+
+    @Test fun failedRequestReleasesLeaseAndClearsRecoveryMarker() {
+        val owner = TestCoordinator()
+        scenario(HttpStatusCode.ServiceUnavailable, "audio/mpeg", "error", coordinator = owner) { downloader, db, _ ->
+            assertFailsWith<AudioDownloadException> { downloader.downloadAudio(content) }
+            assertFalse(owner.held)
+            assertNull(db.appDatabaseQueries.getSyncMetadata("audio_download_lock:video").awaitAsOneOrNull())
+        }
+    }
+
+    @Test fun cancelledStorageReleasesLeaseAndClearsRecoveryMarker() {
+        val owner = TestCoordinator()
+        scenario(HttpStatusCode.OK, "audio/mpeg", "audio", cancel = true, coordinator = owner) { downloader, db, _ ->
+            assertFailsWith<CancellationException> { downloader.downloadAudio(content) }
+            assertFalse(owner.held)
+            assertNull(db.appDatabaseQueries.getSyncMetadata("audio_download_lock:video").awaitAsOneOrNull())
+        }
+    }
+
+    @Test fun busyLeaseRejectsDownloadBeforeChangingSqlState() {
+        val owner = TestCoordinator().apply { held = true }
+        scenario(HttpStatusCode.OK, "audio/mpeg", "audio", coordinator = owner) { downloader, db, files ->
+            assertFailsWith<AudioDownloadException> { downloader.downloadAudio(content) }
+            assertEquals("IDLE", db.appDatabaseQueries.selectContentById("video").awaitAsOne().downloadStatus)
+            assertTrue(owner.held)
+            assertTrue(files.files.isEmpty())
+        }
+    }
+
+    @Test fun markerFailureRollsBackDownloadingStateAndReleasesLease() {
+        val owner = TestCoordinator()
+        scenario(HttpStatusCode.OK, "audio/mpeg", "audio", coordinator = owner, configure = { driver ->
+            driver.execute(null, "CREATE TRIGGER reject_marker BEFORE INSERT ON SyncMetadata BEGIN SELECT RAISE(FAIL, 'marker write failed'); END", 0)
+        }) { downloader, db, files ->
+            assertFails { downloader.downloadAudio(content) }
+            assertEquals("IDLE", db.appDatabaseQueries.selectContentById("video").awaitAsOne().downloadStatus)
+            assertNull(db.appDatabaseQueries.getSyncMetadata("audio_download_lock:video").awaitAsOneOrNull())
+            assertFalse(owner.held)
+            assertTrue(files.files.isEmpty())
+        }
+    }
+
+    @Test fun confirmsPublicationOnlyAfterSqlLinkWhileHoldingTheLease() {
+        val owner = TestCoordinator()
+        scenario(HttpStatusCode.OK, "audio/mpeg", "audio", coordinator = owner) { downloader, db, files ->
+            var confirmed = false
+            files.afterConfirm = { location ->
+                assertTrue(owner.held)
+                val row = db.appDatabaseQueries.selectContentById("video").awaitAsOne()
+                assertEquals("COMPLETED", row.downloadStatus)
+                assertEquals(location, row.localAudioPath)
+                confirmed = true
+            }
+            downloader.downloadAudio(content)
+            assertTrue(confirmed)
+            assertFalse(owner.held)
+        }
+    }
+
+    @Test fun failedConfirmationPreservesCommittedAudioForStartupReconciliation() {
+        val owner = TestCoordinator()
+        scenario(HttpStatusCode.OK, "audio/mpeg", "audio", coordinator = owner) { downloader, db, files ->
+            val failure = IllegalStateException("Cannot confirm pending audio")
+            files.afterConfirm = { throw failure }
+            assertEquals(failure.message, assertFailsWith<IllegalStateException> { downloader.downloadAudio(content) }.message)
+            val row = db.appDatabaseQueries.selectContentById("video").awaitAsOne()
+            assertEquals("COMPLETED", row.downloadStatus)
+            assertEquals("local/video.mp3", row.localAudioPath)
+            assertTrue(files.files.containsKey(row.localAudioPath))
+            assertFalse(owner.held)
+        }
     }
 
     @Test fun rejectsHtmlBeforeWriting() = scenario(HttpStatusCode.OK, "text/html; charset=utf-8", "<html>login</html>") { downloader, _, files ->

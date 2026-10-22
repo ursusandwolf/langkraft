@@ -6,4 +6,6 @@ interface AudioStorage {
     /** Publish a durable, playable location only after the stream has been stored in full. */
     suspend fun store(contentId: String, source: ByteReadChannel, expectedBytes: Long?): String
     suspend fun delete(location: String)
+    /** Called after the SQL link committed, before releasing the content lease. */
+    suspend fun confirmLinked(location: String) = Unit
 }
