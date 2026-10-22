@@ -24,6 +24,26 @@ import kotlin.test.*
 class MediaRoutesTest {
     @TempDir lateinit var root: Path
 
+    @Test fun applicationStartupRunsRetentionWithoutAnyImportRequests() = testApplication {
+        val downloads = root.resolve("downloads")
+        val old = BackendMediaStorage(downloads.toString(), now = { 1000 })
+        val id = UUID.randomUUID().toString()
+        old.beginImport(id).use {
+            Files.writeString(downloads.resolve("$id/video.mp3"), "expired audio")
+            old.publish(id)
+        }
+        environment { config = MapApplicationConfig(
+            "jwt.secret" to "test-secret-with-at-least-thirty-two-characters",
+            "jwt.issuer" to "tests", "jwt.audience" to "tests", "jwt.realm" to "test", "jwt.validity_ms" to "86400000",
+            "storage.data_dir" to root.resolve("backend").toString(), "storage.downloads_dir" to downloads.toString(),
+            "storage.media_retention_ms" to "100", "gemini.api_key" to "mock_key",
+            "ingestion.cleanup_interval_ms" to "3600000", "ingestion.job_expiry_ms" to "86400000", "ingestion.worker_count" to "1"
+        ) }
+        application { module() }
+        startApplication()
+        assertFalse(Files.exists(downloads.resolve(id)), "Startup must clean expired media without a request to /ingest")
+    }
+
     @Test fun getHeadRangeAndExpiredMediaKeepHttpContract() = testApplication {
         environment { config = MapApplicationConfig() }
         var now = 1000L
