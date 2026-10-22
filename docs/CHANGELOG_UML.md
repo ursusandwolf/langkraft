@@ -1,3 +1,24 @@
+# REL-10 — 2026-10-22 — LK-04, Observer между вкладками
+
+```text
++---------------------------+        notifies        +-----------------------------+
+| BrowserSqlDriver A        |----------------------->| database-events.js          |
+| SQLDelight <<Adapter>>    | after commit / notify  | profile BroadcastChannel    |
++---------------------------+                        +--------------+--------------+
+                                                                   | committed hint
++---------------------------+     invalidates         +-------------v---------------+
+| BrowserSqlDriver B        |<------------------------| DatabaseClient B            |
+| Query.Listener <<Observer>>|                        | focus / pageshow / visible  |
++-------------+-------------+                         +-----------------------------+
+              | queryResultsChanged (no SQL / no echo)
++-------------v-------------+       acquires          +-----------------------------+
+| repository Flow          |------------------------>| DatabaseAccess mutex        |
+| local subscriptions      |                         | then SQLite read            |
++---------------------------+                         +-----------------------------+
+```
+
+Расширен существующий **Observer** SQLDelight через инфраструктурный канал уведомлений. BrowserSqlDriver сохраняет роль **Adapter**, repository/database границы не меняются. Входящие hints объединяются до конца локальной транзакции; rollback не публикуется. Канал — подсказка перечитать данные, не журнал синхронизации и не distributed lock. Lifecycle leases recovery-v2 остаются отдельным протоколом.
+
 # REL-09 — 2026-10-22 — lifecycle recovery-v2
 
 ```text

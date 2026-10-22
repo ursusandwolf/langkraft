@@ -4,6 +4,8 @@
 
 Web lifecycle recovery-v2 реализован функциями [profile-lifecycle.js](../shared/src/jsMain/storage/profile-lifecycle.js), без новых Kotlin-классов. SQL worker, audio-страница и recovery держат shared lease; ручная очистка требует exclusive lease и проходит состояния active → deleting → deleted в отдельном реестре. Операция повторяется после частичного отказа, tombstone блокирует старые ссылки. Псевдографика модулей и существующие паттерны — REL-09 в [UML-ченджлоге](CHANGELOG_UML.md), ограничения — [LEGACY_RECOVERY](LEGACY_RECOVERY.md).
 
+LK-04 расширяет существующие **Observer** (`Query.Listener`) и **Adapter** (`BrowserSqlDriver`): DatabaseClient использует `database-events.js` для profile-scoped BroadcastChannel и локальных focus/visibility событий. Listener только инвалидируется, чтение repository Flow остаётся под DatabaseAccess. Нового доменного класса не добавлено; схема взаимодействия — REL-10 в [UML-ченджлоге](CHANGELOG_UML.md).
+
 ## Модели и SRS
 
 ```mermaid

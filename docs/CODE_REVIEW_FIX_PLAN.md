@@ -2,6 +2,8 @@
 
 ## Актуализация после интеграции dev/main — 22 октября 2026
 
+REL-S2 включён в dev через PR #5 после успешных JVM/Web CI. LK-04 исправляется в REL-S3: BrowserSqlDriver публикует commit hints через profile-scoped BroadcastChannel, другая вкладка инвалидирует Query.Listener и перечитывает Flow через DatabaseAccess. Есть focus/visibility fallback, rollback/close/echo регресс, параллельные SQLite записи и два полных Compose-приложения без reload. Состояние текущих проверок — в REL-10 changelog; исторические предложения LK-04 ниже не означают, что этот код ещё отсутствует.
+
 Первоначальный текст ниже относится к старому main и сохранён как история. Текущие классы и API: [DEVELOPER_GUIDE](DEVELOPER_GUIDE.md), [UML_CLASSES](UML_CLASSES.md). Для запуска используйте [RUNNING](RUNNING.md).
 
 LK-02 исправлен для обработанных ошибок и отмены: FileAudioStorage не теряет владение при возврате dispatcher; успешная SQL-привязка не откатывается удалением audio; прежний offline-путь сохраняется; перед компенсацией проверяются актуальные SQL-ссылки под DatabaseAccess. Семь новых регрессионных тестов и результаты — в changelog INT-11. Полная crash recovery/учёт pending всё ещё открыты. LK-05 и MIME-защита LK-06 перенесены в интеграцию. В LK-01 выполнены URL/admission/timeout/длительность и отдельные media-каталоги jobs; общая квота/retention ещё не готовы. LK-03 и LK-04 остаются в плане. Старые упоминания Ogg/Opus и синхронного ContentRepository не описывают текущий MP3/async-job контракт.

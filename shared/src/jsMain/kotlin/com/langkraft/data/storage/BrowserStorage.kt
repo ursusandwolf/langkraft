@@ -11,6 +11,8 @@ external fun createDatabaseWorker(): Worker
 external interface DatabaseClient {
     fun request(action: String, sql: String?, params: Array<Any?>): Promise<dynamic>
     fun close()
+    fun setChangeListener(listener: (() -> Unit)?)
+    fun publishChanges()
 }
 external fun createDatabaseClient(): DatabaseClient
 external fun beginAudio(contentId: String): Promise<String>

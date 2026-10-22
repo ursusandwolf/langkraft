@@ -1,3 +1,11 @@
+# REL-10 — 2026-10-22 — межвкладочная инвалидация библиотеки (LK-04)
+
+- REL-S2 слит в dev через PR #5, merge 384a30f, после успешных GitHub JVM/Web CI 39775953381. Дерево merge совпало с проверенным 55941bd; девять коммитов сохранены. Старая sprint-ветка удалена только после проверки ancestor. Main остаётся на b44ab98 до выпуска; следующая разработка — sprint/rel-s3-multitab.
+- BrowserSqlDriver публикует лёгкий committed hint через profile-scoped BroadcastChannel после SQLDelight notifyListeners/успешного COMMIT. Входящий hint только инвалидирует локальные запросы, не вызывает SQL и не рассылается обратно. Все repository Flow продолжают читать под DatabaseAccess; hints во время локальной транзакции объединяются и обрабатываются после её завершения.
+- Добавлен database-events.js: объединение публикаций в microtask, fallback focus/pageshow/visibility, закрытие канала/DOM listeners вместе с клиентом. Сообщение не содержит SQL, строк БД, токенов или аудио. Отсутствие/ошибка канала не превращает успешную запись в ошибку. Прямой SQL через низкоуровневый client требует явного publishChanges после своего COMMIT; SQLDelight вызывает его автоматически.
+- Пять JS Kotlin-тестов проверяют invalidation без SQL/эха, отложенные hints, rollback/ошибку COMMIT и закрытие. Chromium storage проверяет две страницы, изоляцию профилей, параллельные записи, focus fallback и cleanup. Полный Compose UI-тест наблюдает обновление repository SELECT библиотеки во второй вкладке после импорта в первой без reload.
+- LK-04 воспроизведён новым тестом на прежней production-сборке REL-09: таймаут ожидания обновления второй библиотеки при отсутствии runtime errors. Исправленные development/production проходят тот же сценарий и полный UI-регресс; 31 Kotlin/Chromium-тест (26 прежних + 5 новых), npm storage/recovery, JS syntax, diff и пять Mermaid-диаграмм успешны. JVM runtime не менялся; его итоговый CI подтверждён PR #5.
+
 # REL-09 — 2026-10-22 — ручное удаление новых Web-копий
 
 - Новые копии получают recovered-v2-UUID: старые сборки отвергают ID и не открывают их БД. Основной и прежние recovered-UUID остаются доступными, удаление для них запрещено. SQL/audio/client schema и формат архива v1 не менялись.

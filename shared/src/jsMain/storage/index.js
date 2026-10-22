@@ -1,5 +1,6 @@
 import { profileNames, selectedProfile } from "./profile.js";
 import { acquireProfileLease } from "./profile-lifecycle.js";
+import { databaseEvents } from "./database-events.js";
 
 const DATABASE = profileNames(selectedProfile).audio;
 const PREFIX = "indexeddb-audio:";
@@ -113,12 +114,14 @@ export function createDatabaseWorker(profile = selectedProfile) {
 // One message/error listener per worker; every request is removed on completion.
 export function createDatabaseClient(profile = selectedProfile) {
   const worker = createDatabaseWorker(profile);
+  const events = databaseEvents(profile);
   const pending = new Map();
   let sequence = 0;
   let closed = false;
   const close = (error = new Error("Database connection closed")) => {
     if (closed) return;
     closed = true;
+    events.close();
     worker.terminate();
     for (const entry of pending.values()) {
       clearTimeout(entry.timer);
@@ -140,6 +143,8 @@ export function createDatabaseClient(profile = selectedProfile) {
   worker.onerror = event => close(new Error(event.message || "Database worker failed"));
   worker.onmessageerror = () => close(new Error("Invalid database worker message"));
   return {
+    setChangeListener: events.setChangeListener,
+    publishChanges: events.publishChanges,
     request(action, sql, params = []) {
       if (closed) return Promise.reject(new Error("Database connection closed"));
       return new Promise((resolve, reject) => {

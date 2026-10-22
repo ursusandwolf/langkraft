@@ -219,6 +219,53 @@ try {
   assert.equal(pendingResult.again, false);
   assert.deepEqual(await snapshot(pendingResult.id), { exists: false, chunks: 0 });
   console.log("PASS: published pending resolution requires content ownership and removes manifest/chunks idempotently");
+  const peer = await context.newPage();
+  peer.on('pageerror',error=>errors.push(error.message));
+  await peer.goto(page.url());await peer.waitForFunction(()=>!!window.storage);
+  await page.evaluate(async()=>{
+    window.eventsClient=window.storage.createDatabaseClient();
+    await window.eventsClient.request('exec','CREATE TABLE TabProbe(id TEXT PRIMARY KEY,value INTEGER)');
+    window.hints=0;window.eventsClient.setChangeListener(()=>{window.hints++;});
+  });
+  await peer.evaluate(async()=>{
+    window.eventsClient=window.storage.createDatabaseClient();
+    await window.eventsClient.request('exec','SELECT * FROM TabProbe');
+    window.hints=0;window.eventsClient.setChangeListener(()=>{window.hints++;});
+    window.isolated=window.storage.createDatabaseClient('recovered-11111111-1111-1111-1111-111111111111');
+    window.isolatedHints=0;window.isolated.setChangeListener(()=>{window.isolatedHints++;});
+  });
+  const sourceHints=await page.evaluate(()=>window.hints);
+  await page.evaluate(async()=>{
+    await window.eventsClient.request('exec',"INSERT INTO TabProbe VALUES ('A',1)");
+    window.eventsClient.publishChanges();
+  });
+  await peer.waitForFunction(()=>window.hints>0);
+  assert.deepEqual(await peer.evaluate(()=>window.eventsClient.request('exec','SELECT * FROM TabProbe')),[['A',1]]);
+  assert.equal(await page.evaluate(()=>window.hints),sourceHints,'Received invalidation must not echo');
+  assert.equal(await peer.evaluate(()=>window.isolatedHints),0,'Profile channels must be isolated');
+  await Promise.all([
+    page.evaluate(()=>window.eventsClient.request('exec',"INSERT INTO TabProbe VALUES ('B',2)")),
+    peer.evaluate(()=>window.eventsClient.request('exec',"INSERT INTO TabProbe VALUES ('C',3)"))
+  ]);
+  assert.deepEqual(await page.evaluate(()=>window.eventsClient.request('exec','SELECT id FROM TabProbe ORDER BY id')),[['A'],['B'],['C']]);
+  const focused=await peer.evaluate(()=>{
+    const before=window.hints;window.dispatchEvent(new Event('focus'));return window.hints-before;
+  });
+  assert.equal(focused,1);
+  const focusFallback=await peer.evaluate(()=>{
+    const original=window.BroadcastChannel;window.BroadcastChannel=undefined;
+    const client=window.storage.createDatabaseClient();window.BroadcastChannel=original;
+    let hints=0;client.setChangeListener(()=>{hints++;});
+    window.dispatchEvent(new Event('focus'));client.close();window.dispatchEvent(new Event('focus'));
+    return hints;
+  });
+  assert.equal(focusFallback,1,'Focus fallback works without BroadcastChannel and detaches on close');
+  await peer.evaluate(async()=>{
+    await window.eventsClient.request('close');window.eventsClient.close();window.isolated.close();
+  });
+  await peer.close();
+  await page.evaluate(async()=>{await window.eventsClient.request('close');window.eventsClient.close();});
+  console.log('PASS: profile-scoped invalidation has no echo, concurrent SQLite writes persist, and focus fallback detaches on close');
   assert.deepEqual(errors, []);
 } finally {
   await browser.close();
