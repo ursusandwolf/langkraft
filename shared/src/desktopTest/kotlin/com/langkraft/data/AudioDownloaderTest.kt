@@ -44,6 +44,8 @@ class AudioDownloaderTest {
         var cancelWrite = false
         var afterStore: suspend () -> Unit = {}
         var deleteFailure: Throwable? = null
+        var afterConfirm: suspend (String) -> Unit = {}
+        override suspend fun confirmLinked(location: String) { afterConfirm(location) }
         override suspend fun delete(location: String) {
             deleteFailure?.let { throw it }
             files.remove(location)
@@ -137,6 +139,37 @@ class AudioDownloaderTest {
             assertNull(db.appDatabaseQueries.getSyncMetadata("audio_download_lock:video").awaitAsOneOrNull())
             assertFalse(owner.held)
             assertTrue(files.files.isEmpty())
+        }
+    }
+
+    @Test fun confirmsPublicationOnlyAfterSqlLinkWhileHoldingTheLease() {
+        val owner = TestCoordinator()
+        scenario(HttpStatusCode.OK, "audio/mpeg", "audio", coordinator = owner) { downloader, db, files ->
+            var confirmed = false
+            files.afterConfirm = { location ->
+                assertTrue(owner.held)
+                val row = db.appDatabaseQueries.selectContentById("video").awaitAsOne()
+                assertEquals("COMPLETED", row.downloadStatus)
+                assertEquals(location, row.localAudioPath)
+                confirmed = true
+            }
+            downloader.downloadAudio(content)
+            assertTrue(confirmed)
+            assertFalse(owner.held)
+        }
+    }
+
+    @Test fun failedConfirmationPreservesCommittedAudioForStartupReconciliation() {
+        val owner = TestCoordinator()
+        scenario(HttpStatusCode.OK, "audio/mpeg", "audio", coordinator = owner) { downloader, db, files ->
+            val failure = IllegalStateException("Cannot confirm pending audio")
+            files.afterConfirm = { throw failure }
+            assertEquals(failure.message, assertFailsWith<IllegalStateException> { downloader.downloadAudio(content) }.message)
+            val row = db.appDatabaseQueries.selectContentById("video").awaitAsOne()
+            assertEquals("COMPLETED", row.downloadStatus)
+            assertEquals("local/video.mp3", row.localAudioPath)
+            assertTrue(files.files.containsKey(row.localAudioPath))
+            assertFalse(owner.held)
         }
     }
 

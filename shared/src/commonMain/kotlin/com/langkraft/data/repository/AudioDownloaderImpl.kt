@@ -81,6 +81,9 @@ class AudioDownloaderImpl(
                     }
                     linked = true
                 }
+                // Failure here leaves a committed SQL link and durable pending
+                // marker. Startup recovery must retain the referenced audio.
+                storage.confirmLinked(requireNotNull(location))
             }
             currentCoroutineContext().ensureActive()
             return requireNotNull(location)

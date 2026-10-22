@@ -97,11 +97,18 @@ try {
   await page.screenshot({path:path.join(artifacts,'word.png')});
   await page.mouse.click(600,615);
   await waitQuery('SELECT word FROM Vocabulary',rows=>rows.length===1);
+  assert.deepEqual(await page.evaluate(()=>window.storage.listPendingAudio()),[],'Committed download must acknowledge its publication');
   assert.deepEqual(await query("SELECT key FROM SyncMetadata WHERE key LIKE 'audio_download_lock:%'"),[],'Successful download must clear its recovery marker');
   const owner=await context.newPage();
   await owner.goto(origin+'/storage-owner');
   await owner.waitForFunction(()=>!!window.storage);
-  await owner.evaluate(async()=>{window.contentLease=await window.storage.acquireContentDownload('active-owner');});
+  const activePublished=await owner.evaluate(async()=>{
+    window.contentLease=await window.storage.acquireContentDownload('active-owner');
+    const id=await window.storage.beginAudio('active-owner');
+    await window.storage.appendAudio(id,new Uint8Array([4]));
+    await window.storage.commitAudio(id,1);
+    return id;
+  });
   for(const id of ['stale-new','active-owner','legacy-owner']) {
     await query("INSERT INTO Content(id,title,audioUrl,sourceUrl,createdAt,downloadStatus) VALUES (?,?,?,?,?,?)",[id,id,content.audioUrl,content.sourceUrl,-1,'DOWNLOADING']);
     if(id!=='legacy-owner') await query('INSERT INTO SyncMetadata(key,value) VALUES (?,?)',['audio_download_lock:'+id,'web-lock-v1']);
@@ -117,6 +124,28 @@ try {
     await window.storage.appendAudio(id,new Uint8Array([7]));
     return id;
   });
+  const publishedOrphan=await page.evaluate(async()=>{
+    window.orphanLease=await window.storage.acquireContentDownload('published-orphan');
+    const id=await window.storage.beginAudio('published-orphan');
+    await window.storage.appendAudio(id,new Uint8Array([1,2,3]));
+    await window.storage.commitAudio(id,3);
+    return id;
+  });
+  const referencedPublished=await page.evaluate(async()=>{
+    window.referenceLease=await window.storage.acquireContentDownload('published-ref');
+    const id=await window.storage.beginAudio('published-ref');
+    await window.storage.appendAudio(id,new Uint8Array([8]));
+    await window.storage.commitAudio(id,1);
+    return id;
+  });
+  await query("INSERT INTO Content(id,title,audioUrl,sourceUrl,createdAt,downloadStatus,localAudioPath) VALUES (?,?,?,?,?,?,?)",
+    ['other-ref','Other reference',content.audioUrl,content.sourceUrl,-1,'COMPLETED','indexeddb-audio:'+referencedPublished]);
+  const legacyPublished=await page.evaluate(async()=>{
+    const id=await window.storage.beginAudio('legacy-published');
+    await window.storage.appendAudio(id,new Uint8Array([9]));
+    await window.storage.commitAudio(id,1);
+    return id;
+  });
   const requestsBeforeReload=mediaRequests;
   await open();
   assert.deepEqual(await query('SELECT localAudioPath,downloadStatus FROM Content WHERE id=?',[content.id]),[[saved[0][0],'COMPLETED']]);
@@ -124,11 +153,17 @@ try {
     ['active-owner','DOWNLOADING'],['legacy-owner','DOWNLOADING'],['stale-new','ERROR']
   ]);
   assert.equal(await page.evaluate(()=>window.storage.acquireContentDownload('active-owner')),null,'Active owner must exclude both recovery and a second download');
+  assert.deepEqual(await audioSnapshot(activePublished),{exists:true,chunks:1});
+  assert.deepEqual(await audioSnapshot(referencedPublished),{exists:true,chunks:1});
+  assert.deepEqual((await page.evaluate(()=>window.storage.listPendingAudio())).map(entry=>entry.contentId),['active-owner']);
+  await query('DELETE FROM Content WHERE id=?',['other-ref']);
   await owner.close();
+  await page.waitForFunction(async()=>!(await navigator.locks.query()).held.some(lock=>
+    lock.name==='langkraft-content-download:active-owner'));
   await open();
   assert.deepEqual(await query('SELECT downloadStatus FROM Content WHERE id=?',['active-owner']),[['ERROR']]);
   assert.deepEqual(await query('SELECT downloadStatus FROM Content WHERE id=?',['legacy-owner']),[['DOWNLOADING']]);
-  const remaining=await page.evaluate(async id=>{
+  async function audioSnapshot(id) { return page.evaluate(async id=>{
     const db=await new Promise((resolve,reject)=>{
       const request=indexedDB.open('langkraft-audio',1);
       request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);
@@ -140,8 +175,13 @@ try {
       tx.oncomplete=()=>resolve({exists:!!manifest.result,chunks:chunks.result});
       tx.onabort=()=>reject(tx.error);
     });}finally{db.close();}
-  },abandoned);
-  assert.deepEqual(remaining,{exists:false,chunks:0});
+  },id); }
+  assert.deepEqual(await audioSnapshot(abandoned),{exists:false,chunks:0});
+  assert.deepEqual(await audioSnapshot(publishedOrphan),{exists:false,chunks:0});
+  assert.deepEqual(await audioSnapshot(activePublished),{exists:false,chunks:0});
+  assert.deepEqual(await audioSnapshot(referencedPublished),{exists:true,chunks:1},'Confirmed assets are not general retention candidates after unlink');
+  assert.deepEqual(await audioSnapshot(legacyPublished),{exists:true,chunks:1});
+  assert.deepEqual(await page.evaluate(()=>window.storage.listPendingAudio()),[]);
   await page.mouse.click(600,775);await page.waitForTimeout(400);await page.mouse.click(200,380);await page.waitForTimeout(600);
   await page.context().setOffline(true);
   await page.mouse.click(710,705);await page.waitForFunction(()=>window.activeAudio?.currentTime>0&&!window.activeAudio?.paused);
@@ -155,4 +195,5 @@ try {
   console.log('PASS: desktop and mobile rendering without runtime errors');
   console.log('PASS: app startup removes abandoned audio while preserving saved offline playback');
   console.log('PASS: SQL recovery restores stale downloads, preserves active/legacy owners and recovers a closed owner');
+  console.log('PASS: published pending recovery removes orphans, preserves active/legacy/foreign references and confirms bound assets');
 } catch(error) {if(page) await page.screenshot({path:path.join(artifacts,'failure.png')}).catch(()=>{});console.error('Browser errors:',errors);throw error;} finally {releaseMedia?.();await browser.close();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}

@@ -3,6 +3,7 @@ const PREFIX = "indexeddb-audio:";
 let audioDatabase;
 const ownerId = crypto.randomUUID();
 const activeDownloads = new Map();
+const contentDownloads = new Map();
 const lockName = id => `langkraft-audio-download:${id}`;
 
 // Separate from the asset lock: SQL stays DOWNLOADING before the first chunk
@@ -14,7 +15,15 @@ export async function acquireContentDownload(contentId) {
   const ready = new Promise((resolve, reject) => { granted = resolve; rejected = reject; });
   const finished = navigator.locks.request(`langkraft-content-download:${contentId}`, { ifAvailable: true }, lock => {
     if (!lock) { granted(null); return; }
-    return new Promise(release => granted({ coordinated: true, release: async () => { release(); await finished; } }));
+    return new Promise(release => {
+      const lease = { coordinated: true, release: async () => {
+        if (contentDownloads.get(contentId) === lease) contentDownloads.delete(contentId);
+        release();
+        await finished;
+      } };
+      contentDownloads.set(contentId, lease);
+      granted(lease);
+    });
   });
   finished.catch(rejected);
   return ready;
@@ -50,7 +59,7 @@ function deleteAudioChunks(tx, id) {
 }
 
 // Only manifests written with the lifetime-lock protocol can be recovered.
-// Legacy/no-lock downloads and complete assets require a separate SQL-aware policy.
+// Complete pending assets are handled separately by the SQL-aware PendingAudioRecovery.
 export async function recoverIncompleteAudio() {
   if (!navigator.locks?.request) return 0;
   const candidates = await transaction("readonly", (tx, done) => {
@@ -171,10 +180,14 @@ export async function beginAudio(contentId) {
   const id = crypto.randomUUID();
   const lease = await holdDownload(id);
   activeDownloads.set(id, lease);
+  // Only the full content-lease protocol makes later SQL-aware deletion safe.
+  // Older callers and environments without Web Locks remain outside this GC.
+  const pendingVersion = contentDownloads.get(contentId)?.coordinated ? 1 : 0;
   try {
     await transaction("readwrite", tx => {
       tx.objectStore("audio").add({ id, contentId, count: 0, size: 0, complete: false,
-        ownerId, updatedAt: Date.now(), lockVersion: lease.coordinated ? 1 : 0 });
+        ownerId, updatedAt: Date.now(), lockVersion: lease.coordinated ? 1 : 0,
+        pendingVersion, pending: pendingVersion === 1 });
     });
   } catch (error) { await releaseDownload(id); throw error; }
   return id;
@@ -218,6 +231,40 @@ export async function commitAudio(id, expectedBytes) {
   });
   await releaseDownload(id);
   return location;
+}
+
+export async function listPendingAudio() {
+  if (!navigator.locks?.request) return [];
+  return transaction("readonly", (tx, done) => {
+    const request = tx.objectStore("audio").getAll();
+    request.onsuccess = () => done(request.result
+      .filter(entry => entry.complete && entry.pending && entry.pendingVersion === 1)
+      .map(entry => ({ location: PREFIX + entry.id, contentId: entry.contentId, recoveryProtocol: "web-lock-v1" })));
+  });
+}
+
+// Caller holds the content lease and has checked ALL SQLite references under
+// DatabaseAccess. A failed/unknown SQL read must never reach this mutation.
+export async function resolvePendingAudio(location, referenced) {
+  if (!location.startsWith(PREFIX)) throw new Error("Unknown audio location");
+  const id = location.slice(PREFIX.length);
+  return transaction("readwrite", (tx, done, fail) => {
+    const audio = tx.objectStore("audio");
+    const request = audio.get(id);
+    request.onsuccess = () => {
+      const entry = request.result;
+      if (!entry?.complete || !entry.pending || entry.pendingVersion !== 1) return done(false);
+      if (!contentDownloads.get(entry.contentId)?.coordinated) {
+        return fail(new Error("Pending audio resolution requires its content lease"));
+      }
+      if (referenced) {
+        entry.pending = false;
+        entry.updatedAt = Date.now();
+        audio.put(entry);
+      } else deleteAudioChunks(tx, id);
+      done(true);
+    };
+  });
 }
 
 export async function abortAudio(id) {

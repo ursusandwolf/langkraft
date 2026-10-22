@@ -1,3 +1,31 @@
+# REL-03 — 2026-10-22 — pending-публикация и проверка SQL-ссылок
+
+```text
++-------------------------+     after SQL COMMIT     +--------------------------+
+| AudioDownloaderImpl     |------------------------->| AudioStorage             |
+| <<Application Service>> |                          | confirmLinked(location)  |
++-------------------------+                          +-------------+------------+
+                                                                  ^ implements
++-------------------------+     uses                 +-------------+------------+
+| PendingAudioRecovery    |------------------------->| IndexedDbAudioStorage    |
+| <<Application Service>> |                          | <<Platform Adapter>>     |
+| recover()               |                          | pending list / resolve   |
++------------+------------+                          +-------------+------------+
+             | uses                                               ^ implements
+       +-----+-----------------------+               +-------------+------------+
+       v                             v               | PendingAudioStorage      |
++---------------------+ +-------------------------+  | <<Recovery Port>>        |
+| DatabaseAccess      | | AudioDownloadCoordinator|  +--------------------------+
+| ALL Content refs    | | full content lease      |
++---------------------+ +-------------------------+
+
+published pending -> SQL link -> confirmLinked -> confirmed (outside pending GC)
+closed owner -> free lease -> SQL refs? yes: confirm / no: delete manifest+chunks
+SQL read failed / active owner / unknown protocol -> preserve
+```
+
+Сохранены Ports/Adapters и компенсация. Долговечная pending-метка фиксирует незавершённую передачу владения между двумя хранилищами; это не распределённая транзакция. Проверка SQL проходит под DatabaseAccess и content lease; атомарное удаление ограничено IndexedDB. [Решение и точки аварии](ADR_AUDIO_DOWNLOAD_RECOVERY.md).
+
 # REL-02 — 2026-10-22 — согласование SQL-статуса и владельца
 
 ```text

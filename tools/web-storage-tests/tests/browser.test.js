@@ -145,6 +145,8 @@ try {
   }, abandoned);
   assert.deepEqual(await snapshot(abandoned), { exists: true, chunks: 2 });
   await writer.close();
+  await page.waitForFunction(async id => !(await navigator.locks.query()).held.some(lock =>
+    lock.name === `langkraft-audio-download:${id}`), abandoned);
   await triggerCleanup();
   assert.deepEqual(await snapshot(abandoned), { exists: false, chunks: 0 });
   await triggerCleanup();
@@ -194,6 +196,29 @@ try {
   const recoveredAgain = await page.evaluate(() => window.storage.recoverIncompleteAudio());
   assert.equal(recoveredAgain, 0);
   console.log("PASS: no-lock fallback remains usable and recovery is conservative and idempotent");
+  const pendingResult = await page.evaluate(async () => {
+    const lease = await window.storage.acquireContentDownload("pending-probe");
+    const id = await window.storage.beginAudio("pending-probe");
+    await window.storage.appendAudio(id, new Uint8Array([3]));
+    const location = await window.storage.commitAudio(id, 1);
+    await lease.release();
+    let rejected = false;
+    try { await window.storage.resolvePendingAudio(location, false); } catch { rejected = true; }
+    const before = (await window.storage.listPendingAudio()).filter(entry => entry.location === location);
+    const size = (await window.storage.readAudioBlob(location)).size;
+    const recoveryLease = await window.storage.acquireContentDownload("pending-probe");
+    const removed = await window.storage.resolvePendingAudio(location, false);
+    const again = await window.storage.resolvePendingAudio(location, false);
+    await recoveryLease.release();
+    return { id, rejected, count: before.length, size, removed, again };
+  });
+  assert.equal(pendingResult.rejected, true);
+  assert.equal(pendingResult.count, 1);
+  assert.equal(pendingResult.size, 1);
+  assert.equal(pendingResult.removed, true);
+  assert.equal(pendingResult.again, false);
+  assert.deepEqual(await snapshot(pendingResult.id), { exists: false, chunks: 0 });
+  console.log("PASS: published pending resolution requires content ownership and removes manifest/chunks idempotently");
   assert.deepEqual(errors, []);
 } finally {
   await browser.close();
