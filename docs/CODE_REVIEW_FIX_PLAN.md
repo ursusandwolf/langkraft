@@ -2,7 +2,7 @@
 
 ## Актуализация после интеграции dev/main — 22 октября 2026
 
-REL-S2 включён в dev через PR #5 после успешных JVM/Web CI. LK-04 исправляется в REL-S3: BrowserSqlDriver публикует commit hints через profile-scoped BroadcastChannel, другая вкладка инвалидирует Query.Listener и перечитывает Flow через DatabaseAccess. Есть focus/visibility fallback, rollback/close/echo регресс, параллельные SQLite записи и два полных Compose-приложения без reload. Состояние текущих проверок — в REL-10 changelog; исторические предложения LK-04 ниже не означают, что этот код ещё отсутствует.
+REL-S2 включён в dev через PR #5, REL-S3/LK-04 — через PR #6 (`63a6a94`) после успешных JVM/Web CI. LK-04 исправлен: BrowserSqlDriver публикует commit hints через profile-scoped BroadcastChannel, другая вкладка инвалидирует Query.Listener и перечитывает Flow через DatabaseAccess. Есть focus/visibility fallback, rollback/close/echo регресс, параллельные SQLite записи и два полных Compose-приложения без reload. Проверки — в REL-10/REL-11 changelog; исторические предложения LK-04 ниже не означают, что этот код ещё отсутствует.
 
 Первоначальный текст ниже относится к старому main и сохранён как история. Текущие классы и API: [DEVELOPER_GUIDE](DEVELOPER_GUIDE.md), [UML_CLASSES](UML_CLASSES.md). Для запуска используйте [RUNNING](RUNNING.md).
 

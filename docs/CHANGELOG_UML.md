@@ -1,3 +1,24 @@
+# REL-11 — 2026-10-22 — выпуск без изменений архитектуры
+
+```text
++---------------------------+   PR #6, merge   +-----------------------------+
+| sprint/rel-s3-multitab     |---------------->| dev: REL-S2 + REL-S3        |
+| LK-04, reviewed + CI      |                 | release candidate + CI      |
++---------------------------+                 +--------------+--------------+
+                                                            | release PR + CI
+                                             +--------------v--------------+
+                                             | main: ordinary merge        |
+                                             | retain both histories       |
+                                             +--------------+--------------+
+                                                            | fast-forward dev
+                                             +--------------v--------------+
+                                             | main/dev: same tree and HEAD |
+                                             | remove merged sprint only   |
+                                             +-----------------------------+
+```
+
+Это схема выпуска Git, не новая UML-модель классов. Runtime, **Adapter**, **Observer** и lifecycle lease-протоколы не меняются; актуальная схема LK-04 находится в REL-10 ниже.
+
 # REL-10 — 2026-10-22 — LK-04, Observer между вкладками
 
 ```text
