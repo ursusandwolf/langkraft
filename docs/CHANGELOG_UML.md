@@ -1,3 +1,49 @@
+# REL-14 — 2026-10-22 — backend media budget
+
+```mermaid
+classDiagram
+    class MediaLimits
+    class BackendMediaStorage {
+        +beginImport(jobId) AutoCloseable
+        +checkImportBudget(jobId)
+        +retainAudio(jobId, audio)
+        +publish(jobId, commitReady)
+    }
+    class YouTubeIngestionService
+    class ProcessRunner {
+        <<interface>>
+        +executeIn(arguments, directory, checkBudget) String
+    }
+    class ExecutableProcessRunner
+    class WaveformExtractor
+    BackendMediaStorage --> MediaLimits
+    YouTubeIngestionService --> BackendMediaStorage : reservation and monitor
+    ProcessRunner <|.. ExecutableProcessRunner
+    WaveformExtractor --> ProcessRunner
+```
+
+Расширен существующий **lease**-протокол, новые GoF-иерархии не вводятся. BackendMediaStorage сериализует admission/бюджет/retention; MediaLimits — неизменяемая конфигурация. Сервис владеет coroutineScope обработки и монитора, runner вызывает checkBudget и reap известных потомков. PCM/logs принадлежат job-каталогу. Схема БД не менялась. [ADR](ADR_BACKEND_MEDIA_BUDGET.md).
+
+# REL-13 — 2026-10-22 — backend media lifecycle
+
+```mermaid
+classDiagram
+    class BackendMediaStorage {
+        +beginImport(jobId) AutoCloseable
+        +publish(jobId, commitReady)
+        +acquireMedia(segments) MediaLease
+        +cleanup() CleanupResult
+    }
+    class YouTubeIngestionService
+    class YtdlpClient
+    class MediaLease
+    YouTubeIngestionService --> BackendMediaStorage : import lease / retention
+    YtdlpClient --> BackendMediaStorage : discard owned import
+    BackendMediaStorage --> MediaLease : response lifetime
+```
+
+BackendModule разделяет один BackendMediaStorage между импортом и HTTP MediaRoutes. Это lifecycle-координация через **lease** и monitor, без новой GoF-иерархии. Durable marker подтверждает владение UUID-каталогом при повторяемой уборке; публикация ready и callback READY в БД предшествуют открытию читателей. Прежний DownloadCleanup удалён как неподключённая утилита. Схема БД не менялась; cleanup IngestionJobs сохраняет активные состояния. TTL выключен по умолчанию, квоты с резервированием ещё не реализованы. [ADR](ADR_BACKEND_MEDIA_RETENTION.md), [актуальная карта](UML_CLASSES.md).
+
 # REL-12 — 2026-10-22 — удалённый AI Adapter
 
 ```mermaid

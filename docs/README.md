@@ -7,6 +7,8 @@
 | Разобраться в модулях, DI, сценариях, паттернах и правилах разработки | [DEVELOPER_GUIDE](DEVELOPER_GUIDE.md) |
 | Посмотреть текущие классы, интерфейсы и связи | [UML_CLASSES](UML_CLASSES.md) |
 | Изменить данные, миграции или offline storage | [DATA_LAYER](DATA_LAYER.md) |
+| Настроить срок хранения backend-аудио | [ADR_BACKEND_MEDIA_RETENTION](ADR_BACKEND_MEDIA_RETENTION.md) |
+| Ограничить backend media bytes и параллельные резервы | [ADR_BACKEND_MEDIA_BUDGET](ADR_BACKEND_MEDIA_BUDGET.md) |
 | Разобраться в Web bootstrap/worker | [WEB_APP](WEB_APP.md) |
 | Понять восстановление незавершённых Web/Desktop/TUI-загрузок | [ADR_AUDIO_DOWNLOAD_RECOVERY](ADR_AUDIO_DOWNLOAD_RECOVERY.md) |
 | Восстановить старый профиль без изменения исходника | [LEGACY_RECOVERY](LEGACY_RECOVERY.md) |

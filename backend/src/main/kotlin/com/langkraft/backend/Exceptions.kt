@@ -7,3 +7,7 @@ class IngestionException(message: String, cause: Throwable? = null) : LangkraftE
 class AiException(message: String, cause: Throwable? = null) : LangkraftException(message, cause)
 
 class IngestionBusyException : LangkraftException("Import capacity reached; try again later")
+
+class MediaCapacityException : LangkraftException("Media storage capacity reached; try again later")
+
+class MediaLimitException(message: String = "Import exceeds configured media byte limit") : LangkraftException(message)

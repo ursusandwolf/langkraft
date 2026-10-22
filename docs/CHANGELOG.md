@@ -1,3 +1,20 @@
+# REL-14 — 2026-10-22 — backend media budget с резервированием
+
+- MediaLimits задаёт opt-in per-import/total byte limits, интервал монитора и максимальную длительность. Общий бюджет требует положительный per-import limit. BackendMediaStorage резервирует полный бюджет queued/active job до записи в БД; actual bytes активного каталога не считаются повторно. Legacy/unknown и файлы после неудачной очистки остаются в учёте. Нехватка даёт 503/Retry-After до persistence; слишком малый резерв откатывает созданные marker/directory.
+- CoroutineScope контролирует фактические размеры во время обработки, отменяет/reaps процессы до cleanup/release. Metadata preflight отклоняет live, неизвестную/чрезмерную длительность и известный oversized filesize/estimate. После отказа по квоте job получает ERROR, worker продолжает очередь.
+- ProcessRunner.executeIn размещает metadata/yt-dlp/ffmpeg logs в job-каталоге, проверяет callback бюджета каждые 100 мс и после exit до удаления лога. Лимит лога 2 МиБ теперь действует во время работы. Известные потомки завершаются даже после выхода родителя. PCM waveform перенесён в job-каталог, quota failure больше не превращается в нулевой waveform.
+- После разбора subtitle/waveform удаляются intermediates; остаются MP3 и ownership marker. Перед publish повторяется бюджетная проверка, резерв заменяется actual bytes. Byte-limits по умолчанию выключены; периодический монитор допускает превышение между проверками, строгая граница требует квоты FS. [ADR](ADR_BACKEND_MEDIA_BUDGET.md).
+- Проверено: 98 shared + 68 backend JVM-тестов, 0 failures; один symlink-тест пропущен на Windows без привилегии. Новые сценарии: конкурентные резервы, legacy/accounting, частичный cleanup, отказ до persistence, metadata, actual overflow/отмена/продолжение worker, waveform quota, настоящие процессы/потомки/рост логов. Реальный YouTube в этом этапе не вызывался.
+
+# REL-13 — 2026-10-22 — opt-in backend media retention
+
+- Добавлен BackendMediaStorage: import lease с момента admission/очереди, read lease на выдачу MP3 и единый monitor для публикации/cleanup. UUID-каталог получает `.langkraft-media-v1`; ready timestamp отсчитывается от публикации. Callback записи READY выполняется до открытия читателей; отказ сохраняет import lease для компенсации.
+- `storage.media_retention_ms` / `LANGKRAFT_MEDIA_RETENTION_MS` (0 по умолчанию) включает уборку при старте ingestion service и по cleanup interval. Удаляются только истёкшие managed job-каталоги без активных imports/readers. Legacy/unknown/symlink сохраняются; ошибки удаления логируются, метка остаётся/восстанавливается для повтора. Старый неиспользуемый DownloadCleanup удалён.
+- MediaRoutes сохраняет GET/HEAD/Range/416 для MP3, защищая файл до конца ответа/отключения клиента. Служебные файлы и pending imports не выдаются. После TTL audioUrl возвращает 404; локальные клиентские копии и метаданные не меняются. Job cleanup удаляет только READY/ERROR, сохраняя активную очередь.
+- Сервис импорта создаётся при старте Application.module: maintenance запускается даже без запросов импорта, при остановке закрывается тот же экземпляр. Отдельный интеграционный тест проверяет удаление старого managed media сразу при старте приложения.
+- Проверено: 98 shared + 53 backend JVM-теста, 0 failures; один symlink-тест пропущен на Windows без необходимой привилегии. Новые тесты покрывают TTL, публикацию, legacy/pending, несколько readers, частичный отказ/повтор, queued/active jobs, GET/HEAD/Range/416 и настоящий Netty/CIO с 32 МиБ, обратным давлением и отключением клиента.
+- Протокол рассчитан на один backend на downloads_dir/БД. Квота с резервированием, byte-limit внешних процессов, retention клиентских копий и аварийные следы IndexedDB остаются отдельными задачами. [ADR и инструкции](ADR_BACKEND_MEDIA_RETENTION.md).
+
 # REL-12 — 2026-10-22 — AI в клиенте через backend
 
 - `commonModule` подключает `RemoteLinguisticAssistant` вместо локального mock. Перевод слова с контекстом, перевод реплики, грамматический анализ и коррекция используют общий HTTP-клиент, текущий JWT и настроенный backend URL. Ключ Gemini остаётся на сервере; без него backend использует прежний mock.

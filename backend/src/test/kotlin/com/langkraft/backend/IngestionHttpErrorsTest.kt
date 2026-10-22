@@ -17,12 +17,16 @@ class IngestionHttpErrorsTest {
             install(StatusPages) { configureBackendExceptions() }
             routing {
                 get("/busy") { throw IngestionBusyException() }
+                get("/media-full") { throw MediaCapacityException() }
                 get("/invalid") { SourceUrlValidator.validate("https://example.com/video") }
             }
         }
         val busy = client.get("/busy")
         assertEquals(HttpStatusCode.ServiceUnavailable, busy.status)
         assertEquals("5", busy.headers[HttpHeaders.RetryAfter])
+        val full = client.get("/media-full")
+        assertEquals(HttpStatusCode.ServiceUnavailable, full.status)
+        assertEquals("5", full.headers[HttpHeaders.RetryAfter])
         assertEquals(HttpStatusCode.BadRequest, client.get("/invalid").status)
     }
 }

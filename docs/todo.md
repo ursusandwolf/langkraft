@@ -71,11 +71,15 @@
 
 ## Backlog после интеграции
 
+- [x] REL-S4: удалённый AI в UI; PR #8 → dev и выпуск PR #9 → main, обе ветки на `0f14ff0`, JVM/Web CI успешны.
+- [x] REL-S5 / REL-13: opt-in backend retention новых managed job-каталогов, защита queued/active импортов и HTTP-потоков, GET/HEAD/Range, сохранение legacy. [ADR и ограничения](ADR_BACKEND_MEDIA_RETENTION.md). Общая квота остаётся отдельной задачей.
+
 - [x] Web legacy/no-lock: экспорт/импорт и восстановление в отдельный браузерный профиль без очистки исходного IndexedDB (REL-07). Поддержаны schema v1–v3, VFS v5/audio v1; архив до 64 МиБ.
 - [x] Список Web recovery-профилей и частичных копий без открытия БД, выбор копии для запуска/восстановления (REL-08).
 - [x] Ручное удаление выбранных новых recovery-v2 профилей (REL-09): lifetime-lock SQL/audio/recovery, постоянный tombstone до очистки, повтор после частичного отказа и запрет старых ссылок. Очищаются записи без deleteDatabase; пустые контейнеры и реестр сохраняются. Основной и старые профили защищены от удаления.
 - [ ] Потоковый Web recovery для больших библиотек.
-- [ ] Общие квоты/retention медиа и очистка аварийных следов IndexedDB.
+- [x] REL-S6 / REL-14: backend byte-бюджет с резервированием до admission, per-import/total limits, metadata preflight, контроль actual bytes/процессов и удаление intermediates. [ADR](ADR_BACKEND_MEDIA_BUDGET.md). Retention PR #10 включён в dev (`bd6fb11`), CI успешен.
+- [ ] Квоты/retention клиентских копий медиа и очистка аварийных следов IndexedDB.
 - [ ] Политика профилей аккаунтов и дальнейшая координация нескольких вкладок. LK-04 исправлен в REL-S3; это не общая сериализация всех операций между вкладками.
 - [ ] Включение и регресс Android target.
 - [ ] Проверка Gemini с реальным ключом и конкретных аудиоустройств/VLC в окружении пользователя.
