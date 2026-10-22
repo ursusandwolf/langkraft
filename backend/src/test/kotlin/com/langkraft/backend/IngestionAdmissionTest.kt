@@ -102,4 +102,28 @@ class IngestionAdmissionTest {
         listOf(url, "https://youtu.be/video?t=1", "https://m.youtube.com/shorts/video", "https://youtube.com/live/video", "https://youtube.com/embed/video")
             .forEach(SourceUrlValidator::validate)
     }
+
+    @Test fun periodicCleanupKeepsQueuedAndActiveImportsUntilShutdown() = runBlocking {
+        var now = 1000L
+        val storage = BackendMediaStorage(directory.toString(), 100, { now })
+        val entered = CompletableDeferred<Unit>()
+        val runner = ProcessRunner { entered.complete(Unit); awaitCancellation() }
+        val fastCleanup = MapApplicationConfig("ingestion.cleanup_interval_ms" to "10",
+            "ingestion.job_expiry_ms" to "1", "ingestion.worker_count" to "1", "ingestion.queue_capacity" to "1")
+        val service = YouTubeIngestionService(YtdlpClient(directory.toString(), runner, storage), repository, fastCleanup, this)
+        try {
+            val active = service.startIngestion(url)
+            entered.await()
+            val queued = service.startIngestion(url)
+            now += 10_000
+            delay(100)
+            assertTrue(File(directory.toFile(), active).isDirectory)
+            assertTrue(File(directory.toFile(), queued).isDirectory)
+            assertNotNull(repository.get(active))
+            assertNotNull(repository.get(queued))
+            service.close()
+            waitFor { !File(directory.toFile(), active).exists() }
+            assertFalse(File(directory.toFile(), queued).exists())
+        } finally { service.close() }
+    }
 }

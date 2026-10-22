@@ -65,16 +65,19 @@ class IngestionJobRepositoryTest {
     fun `test cleanup`() {
         val now = System.currentTimeMillis()
         val expiryMs = 30L * 24 * 60 * 60 * 1000
-        val oldJob = IngestionJob("1", ContentProcessingStatus.IDLE, "url", createdAt = now - 2 * expiryMs, lastUpdatedAt = now - 2 * expiryMs)
+        val oldJob = IngestionJob("1", ContentProcessingStatus.READY, "url", createdAt = now - 2 * expiryMs, lastUpdatedAt = now - 2 * expiryMs)
         val newJob = IngestionJob("2", ContentProcessingStatus.IDLE, "url", createdAt = now, lastUpdatedAt = now)
         
         repository.save(oldJob)
         repository.save(newJob)
+        repository.save(IngestionJob("active", ContentProcessingStatus.DOWNLOADING_AUDIO, "url",
+            createdAt = now - 2 * expiryMs, lastUpdatedAt = now - 2 * expiryMs))
         
         // Keep recent jobs while removing expired ones.
         repository.cleanup(expiryMs)
         
         assertNull(repository.get("1"))
         assertEquals("2", repository.get("2")?.jobId)
+        assertEquals(ContentProcessingStatus.DOWNLOADING_AUDIO, repository.get("active")?.status)
     }
 }

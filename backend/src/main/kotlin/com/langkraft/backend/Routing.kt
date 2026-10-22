@@ -6,7 +6,6 @@ import com.langkraft.domain.ai.TextRequest
 import com.langkraft.domain.ai.SentenceTranslationResult
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
-import io.ktor.server.http.content.staticFiles
 import io.ktor.server.plugins.statuspages.StatusPagesConfig
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
@@ -17,7 +16,6 @@ import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
 import org.koin.ktor.ext.inject
-import java.io.File
 
 import com.langkraft.domain.model.*
 import io.ktor.server.auth.*
@@ -59,6 +57,7 @@ fun Route.apiRoutes() {
     val ingestionService by inject<YouTubeIngestionService>()
     val aiAssistant by inject<LinguisticAssistant>()
     val syncService by inject<SyncService>()
+    val mediaStorage by inject<BackendMediaStorage>()
 
     // PUBLIC API ROUTES
     route("/api") {
@@ -82,7 +81,7 @@ fun Route.apiRoutes() {
             call.respond(job)
         }
 
-        staticFiles("/media", File(application.environment.config.propertyOrNull("storage.downloads_dir")?.getString() ?: "downloads"))
+        mediaRoutes(mediaStorage)
     }
 
     // AUTHENTICATED API ROUTES

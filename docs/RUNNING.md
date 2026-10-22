@@ -97,6 +97,7 @@ java -cp "backend/build/install/backend/lib/*" io.ktor.server.netty.EngineMain
 | --- | --- |
 | `LANGKRAFT_JWT_SECRET` | Обязательный backend secret ≥32 символов |
 | `GEMINI_API_KEY` | Опциональный ключ backend AI; без него mock |
+| `LANGKRAFT_MEDIA_RETENTION_MS` | TTL новых backend MP3/job-каталогов в миллисекундах; 0 по умолчанию выключает удаление |
 | `LANGKRAFT_BACKEND_DATA_DIR` | Backend `langkraft.db`; default `data` относительно cwd процесса |
 | `LANGKRAFT_DOWNLOADS_DIR` | Backend media в каталогах jobId; default `downloads` относительно cwd |
 | `LANGKRAFT_DATA_DIR` | Desktop/TUI профиль; default `~/.langkraft`, внутри DB, `audio/` и `download-locks/` |
@@ -104,7 +105,9 @@ java -cp "backend/build/install/backend/lib/*" io.ktor.server.netty.EngineMain
 | `FFMPEG_EXECUTABLE` | Исполняемый ffmpeg для waveform; default `ffmpeg` |
 | `FFPLAY_EXECUTABLE` | Исполняемый ffplay; default `ffplay` |
 
-Порт 8080, host `0.0.0.0`, JWT issuer/audience/24h validity и параметры worker/queue/cleanup заданы в [application.conf](../backend/src/main/resources/application.conf). Worker count=4, queue capacity=8, cleanup interval=1 час, job expiry=24 часа. Это очистка **записей jobs**, а не реализованная TTL-политика всех media-файлов. Импорт ограничен известной положительной длительностью до четырёх часов; yt-dlp timeout 600 с, waveform ffmpeg 120 с. Общая дисковая квота остаётся backlog.
+Порт 8080, host `0.0.0.0`, JWT issuer/audience/24h validity и параметры worker/queue/cleanup заданы в [application.conf](../backend/src/main/resources/application.conf). Worker count=4, queue capacity=8, cleanup interval=1 час, job expiry=24 часа (только READY/ERROR). Импорт ограничен известной положительной длительностью до четырёх часов; yt-dlp timeout 600 с, waveform ffmpeg 120 с. Общая дисковая квота остаётся backlog.
+
+Retention backend включается явно, например `$env:LANGKRAFT_MEDIA_RETENTION_MS = '604800000'` для семи дней. Перезапустите backend после настройки. Уборка выполняется при старте ingestion service и затем каждый cleanup interval, только для новых UUID job-каталогов с протокольной меткой. Очередь, активный импорт и выдаваемый HTTP-поток защищены lease. Legacy без метки сохраняется; время отсчитывается от публикации, чтение его не продлевает. После TTL сетевой audioUrl возвращает 404: заранее скачайте offline-копию либо повторите импорт. Локальные клиентские копии не удаляются. Используйте один процесс backend на каталог downloads/БД. [Правила и ограничения](ADR_BACKEND_MEDIA_RETENTION.md).
 
 Client DB v3 использует SQLDelight, backend DB — Exposed/SQLite. Это разные базы, несмотря на одинаковое имя `langkraft.db`: не направляйте обе переменные каталогов в один каталог. Web хранит SQLite и audio в IndexedDB выбранного origin. Desktop/TUI используют общий профиль; native content lock и SQL recovery проверены в отдельных JVM. Полная конкурентная работа SRS/sync/migrations с общим профилем отдельно не подтверждена.
 
