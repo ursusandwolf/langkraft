@@ -1,3 +1,11 @@
+# REL-06 — 2026-10-22 — legacy/no-lock: read-only аудит и изолированная копия
+
+- Зафиксирована политика: отсутствие метки/lock у старой операции не доказывает завершения владельца. Исходные legacy/no-lock данные автоматически не сбрасываются и не удаляются. Для Web сохраняется эта политика; отдельный export/copy recovery перенесён в backlog.
+- Добавлена Python-утилита tools/recovery/recover_legacy_profile.py (stdlib, Python 3.10+). По умолчанию — read-only аудит; --clone-to создаёт отдельный профиль через согласованный SQLite backup с проверкой схемы до/после snapshot. Существующее/пересекающееся назначение отклоняется, частичная копия не публикуется.
+- Переносятся только стабильные связанные обычные audio внутри managed-каталога, с проверкой identity/size/mtime и SHA-256. SQL-пути переписываются на новый профиль; DOWNLOADING становится COMPLETED с сохранённым audio либо ERROR. Недоступное/неполное audio становится ERROR только в копии. Неизвестные/unlinked/partial исходные файлы сохраняются.
+- Словарь/SRS, субтитры, pending sync, source refs и курсоры сохраняются в snapshot. Auth token и старые download-метки очищаются только в копии; отчёт не содержит токенов. Исходная сессия и данные продолжают существовать отдельно. Руководство: LEGACY_RECOVERY.md.
+- Пройдены девять Python-тестов, включая активного WAL-писателя, смену схемы во время snapshot, общие файлы, SRS/очередь, отказ записи и нестабильный audio. Тесты включены в JVM job CI. Копия реального smoke-профиля открыта Desktop/TUI smoke. Kotlin/JVM runtime не менялся; последние полные результаты — REL-05 (132 JVM + 26 Kotlin/Chromium).
+
 # REL-05 — 2026-10-22 — Desktop/TUI: файловый pending-журнал
 
 - Воспроизведён готовый MP3, оставшийся после перезапуска без SQL link. Desktop/TUI используют JournaledFileAudioStorage — Decorator над FileAudioStorage с портом PendingAudioStorage. Sidecar `<asset>.mp3.pending` содержит версию, contentId и имя файла; полная запись принудительно сохраняется до создания `.part` и требует native content lease.

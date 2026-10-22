@@ -1,3 +1,30 @@
+# REL-06 — 2026-10-22 — legacy recovery в изолированный профиль
+
+```text
++-----------------------------------------+
+| recover_legacy_profile <<Python module>> |
+| audit_profile / clone_profile            |
++-------------------+---------------------+
+                    | read-only SQL
+                    v
++-------------------------+       backup snapshot      +------------------------+
+| Original client profile |--------------------------->| Preparing profile      |
+| DB + managed audio      |                            | DB + stable audio copy |
++-------------------------+                            +------------+-----------+
+                                                                   | validate
+                                                      +------------v-----------+
+                                                      | New recovered profile  |
+                                                      | rewritten paths/status |
+                                                      | auth cleared + report  |
+                                                      +------------------------+
+
+RecoveryError <|-- UnavailableAudio
+unknown ownership -> preserve original; repair status only inside isolated snapshot
+failed preparation -> retain preparing directory; destination not published
+```
+
+Это операционная Python-утилита, а не новый слой Kotlin-приложения. SQLite backup и файловое копирование — адаптация инфраструктуры к recovery-сценарию; новые GoF-паттерны не вводились. Изоляция профилей заменяет недоказуемое определение смерти старого владельца. [Руководство](LEGACY_RECOVERY.md).
+
 # REL-05 — 2026-10-22 — файловый Decorator и replay-журнал
 
 ```text
