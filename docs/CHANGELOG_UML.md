@@ -1,3 +1,291 @@
+# REL-11 — 2026-10-22 — выпуск без изменений архитектуры
+
+```text
++---------------------------+   PR #6, merge   +-----------------------------+
+| sprint/rel-s3-multitab     |---------------->| dev: REL-S2 + REL-S3        |
+| LK-04, reviewed + CI      |                 | release candidate + CI      |
++---------------------------+                 +--------------+--------------+
+                                                            | release PR + CI
+                                             +--------------v--------------+
+                                             | main: ordinary merge        |
+                                             | retain both histories       |
+                                             +--------------+--------------+
+                                                            | fast-forward dev
+                                             +--------------v--------------+
+                                             | main/dev: same tree and HEAD |
+                                             | remove merged sprint only   |
+                                             +-----------------------------+
+```
+
+Это схема выпуска Git, не новая UML-модель классов. Runtime, **Adapter**, **Observer** и lifecycle lease-протоколы не меняются; актуальная схема LK-04 находится в REL-10 ниже.
+
+В release CI уточнена синхронизация тестов после закрытия владельца: Promise-предикат waitForFunction → явный await/poll page.evaluate → фактическая операция с ограниченным ожиданием. Добавлена управляемая задержка shared lease; проверки живого владельца остаются fail-fast. async-wait.js — функция тестовой инфраструктуры, новых классов/паттернов и изменений runtime нет.
+
+# REL-10 — 2026-10-22 — LK-04, Observer между вкладками
+
+```text
++---------------------------+        notifies        +-----------------------------+
+| BrowserSqlDriver A        |----------------------->| database-events.js          |
+| SQLDelight <<Adapter>>    | after commit / notify  | profile BroadcastChannel    |
++---------------------------+                        +--------------+--------------+
+                                                                   | committed hint
++---------------------------+     invalidates         +-------------v---------------+
+| BrowserSqlDriver B        |<------------------------| DatabaseClient B            |
+| Query.Listener <<Observer>>|                        | focus / pageshow / visible  |
++-------------+-------------+                         +-----------------------------+
+              | queryResultsChanged (no SQL / no echo)
++-------------v-------------+       acquires          +-----------------------------+
+| repository Flow          |------------------------>| DatabaseAccess mutex        |
+| local subscriptions      |                         | then SQLite read            |
++---------------------------+                         +-----------------------------+
+```
+
+Расширен существующий **Observer** SQLDelight через инфраструктурный канал уведомлений. BrowserSqlDriver сохраняет роль **Adapter**, repository/database границы не меняются. Входящие hints объединяются до конца локальной транзакции; rollback не публикуется. Канал — подсказка перечитать данные, не журнал синхронизации и не distributed lock. Lifecycle leases recovery-v2 остаются отдельным протоколом.
+
+# REL-09 — 2026-10-22 — lifecycle recovery-v2
+
+```text
++------------------------+  shared lease  +-----------------------------------+
+| database.worker.js     |--------------->| profile-lifecycle.js <<JS module>> |
+| SQLite connection     |                | acquire / withProfileLease        |
++------------------------+                | removeWebRecoveryProfile          |
++------------------------+  shared lease  |                                   |
+| index.js: audio page   |--------------->| Web Locks: shared / exclusive     |
++------------------------+                +-----------------+-----------------+
++------------------------+  shared lease                    | strict transactions
+| recovery.js: snapshots |----------------+                 v
+| clone / export / import|                |  +--------------------------------+
++------------------------+                |  | Profile registry <<states>>    |
+                                         |  | active -> deleting -> deleted  |
++------------------------+ exclusive     |  +----------------+---------------+
+| recovery-page.js       |---------------+                   | clear records
+| confirm / retry removal|                                   v
++------------------------+                +-----------------------------------+
+                                          | SQLite blocks + audio/chunks      |
+                                          | no deleteDatabase; containers stay|
+                                          +-----------------------------------+
+```
+
+Это модульные функции и протокол shared/exclusive lease с реестром состояний, новые GoF-классы не вводятся. Существующие VFS **Adapter** не меняются. Download/content leases сохраняют отдельные границы. Tombstone перед очисткой делает операцию повторяемой после частичного отказа; общей транзакции двух БД нет. Старые ID не удаляются, v2 отвергается прежними сборками.
+
+# REL-08 — 2026-10-22 — инвентаризация recovery-профилей
+
+```text
++---------------------------+       calls       +---------------------------------+
+| recovery-page.js          |------------------>| recovery.js <<JS module>>       |
+| refresh / select source   |                   | listWebRecoveryProfiles()       |
++---------------------------+                   +----------------+----------------+
+                                                                | enumerates only
+                                               +----------------v----------------+
+                                               | IndexedDB.databases()           |
+                                               | names; no open / upgrade / delete|
+                                               +---------------------------------+
+```
+
+Это функции существующих JS-модулей, новый GoF-паттерн не вводится. Основной профиль исключён; неполные копии видны без открытия. Существующие VFS Adapter и протоколы download lease не менялись. Общий lifetime-lock профиля для безопасного удаления ещё не реализован.
+
+# REL-07 — 2026-10-22 — Web recovery: profile namespaces и компактный архив
+
+```text
++--------------------------+       calls       +----------------------------------+
+| recovery-page.js         |------------------>| recovery.js <<JS module>>        |
+| separate DOM entry       |                   | clone / export / import functions |
++--------------------------+                   +--------+-------------------------+
+                                                       | readonly snapshots
++--------------------------+                           |
+| Original IndexedDB       |---------------------------+
+| VFS v5 + audio v1        |                           | new UUID profile only
++--------------------------+                           v
+                                      +----------------------------------+
+                                      | database.worker.js               |
+                                      | repair SQL copy / quick_check    |
+                                      +---------------+------------------+
+                                                      | uses
+                                      +---------------v------------------+
+                                      | IDBBatchAtomicVFS <<Adapter>>     |
+                                      | isolated DB + short SQLite file  |
+                                      +---------------+------------------+
+                                                      | VACUUM INTO
+                                      +---------------v------------------+
+                                      | MemoryVFS <<Adapter>>            |
+                                      | compact live SQLite pages        |
+                                      +---------------+------------------+
+                                                      v
+                                      JSON archive <----> NEW profile
+
+profile.js -> DB names + SQLite file + download lock namespace
+default URL -> historical profile; ?profile=recovered-UUID -> isolated copy
+```
+
+Классы VFS принадлежат существующей wa-sqlite. Recovery/page/profile — JS-модули с функциями, без новой доменной иерархии или GoF-паттерна. Архив не содержит истории raw VFS; SQL/audio не образуют общего атомарного снимка. Исходник сохраняется, незавершённая копия не получает ссылку. [Ограничения и запуск](LEGACY_RECOVERY.md).
+
+# REL-06 — 2026-10-22 — legacy recovery в изолированный профиль
+
+```text
++-----------------------------------------+
+| recover_legacy_profile <<Python module>> |
+| audit_profile / clone_profile            |
++-------------------+---------------------+
+                    | read-only SQL
+                    v
++-------------------------+       backup snapshot      +------------------------+
+| Original client profile |--------------------------->| Preparing profile      |
+| DB + managed audio      |                            | DB + stable audio copy |
++-------------------------+                            +------------+-----------+
+                                                                   | validate
+                                                      +------------v-----------+
+                                                      | New recovered profile  |
+                                                      | rewritten paths/status |
+                                                      | auth cleared + report  |
+                                                      +------------------------+
+
+RecoveryError <|-- UnavailableAudio
+unknown ownership -> preserve original; repair status only inside isolated snapshot
+failed preparation -> retain preparing directory; destination not published
+```
+
+Это операционная Python-утилита, а не новый слой Kotlin-приложения. SQLite backup и файловое копирование — адаптация инфраструктуры к recovery-сценарию; новые GoF-паттерны не вводились. Изоляция профилей заменяет недоказуемое определение смерти старого владельца. [Руководство](LEGACY_RECOVERY.md).
+
+# REL-05 — 2026-10-22 — файловый Decorator и replay-журнал
+
+```text
++---------------------------+             +----------------------------+
+| AudioDownloaderImpl       |-----uses---->| AudioStorage <<Port>>      |
+| SQL link -> confirmLinked |             +--------------+-------------+
++---------------------------+                            ^ implements
+                                         +--------------+-------------+
++---------------------------+            | JournaledFileAudioStorage  |
+| PendingAudioRecovery      |---uses----->| <<Decorator + Adapter>>    |
+| free lease + ALL SQL refs  |   via       | pending sidecar / resolve  |
++---------------------------+ PendingPort +--------------+-------------+
+                                                        | delegates
+                                         +--------------v-------------+
+                                         | FileAudioStorage           |
+                                         | beforeWrite -> journal     |
+                                         | stream -> .part -> .mp3    |
+                                         +----------------------------+
+
+native content lease -> force journal -> create .part -> publish MP3
+SQL COMMIT -> confirmLinked -> remove journal
+crash -> free lease -> SQL refs? keep + confirm : delete payload then journal
+partial cleanup failure -> journal remains -> replay on next startup
+```
+
+JournaledFileAudioStorage реализует оба порта AudioStorage/PendingAudioStorage и декорирует потоковый FileAudioStorage. Журнал — долговечная запись незавершённой передачи владения. В IndexedDB используется транзакция, в файловой системе — проверяемое идемпотентное повторение с удалением журнала последним; распределённой транзакции с SQLite нет.
+
+# REL-04 — 2026-10-22 — Desktop/TUI: platform lease
+
+```text
++-------------------------+                  +--------------------------+
+| AudioDownloaderImpl     |------uses-------->| AudioDownloadCoordinator |
+| AudioDownloadRecovery   |                  | <<Platform Port>>        |
++------------+------------+                  +-------------+------------+
+             | SQL + protocol                              ^ implements
+             v                              +-------------+------------+
++-------------------------+                 | FileAudioDownloadCoordinator|
+| DatabaseAccess          |                 | <<JVM Adapter>>          |
+| Content + SyncMetadata  |                 | JVM claimed registry     |
++-------------------------+                 | FileChannel / FileLock   |
+                                            +-------------+------------+
+                                                          | owns
+                                            +-------------v------------+
+                                            | AudioDownloadLease       |
+                                            | jvm-file-lock-v1         |
+                                            | idempotent release       |
+                                            +--------------------------+
+
+DesktopModule -> same profile / download-locks -> downloader + DB startup recovery
+active OS lock -> preserve DOWNLOADING
+free OS lock + known SQL marker -> ERROR / COMPLETED with old path
+```
+
+Порт и общий Application Service сохранены; Java NIO — платформенный Adapter. Взаимное исключение внутри JVM дополняет кооперативный межпроцессный lock. Schema/Repository не изменялись. Уборка файлов после аварии потребует отдельного pending-журнала, текущий фикс восстанавливает SQL-статус.
+
+# REL-03 — 2026-10-22 — pending-публикация и проверка SQL-ссылок
+
+```text
++-------------------------+     after SQL COMMIT     +--------------------------+
+| AudioDownloaderImpl     |------------------------->| AudioStorage             |
+| <<Application Service>> |                          | confirmLinked(location)  |
++-------------------------+                          +-------------+------------+
+                                                                  ^ implements
++-------------------------+     uses                 +-------------+------------+
+| PendingAudioRecovery    |------------------------->| IndexedDbAudioStorage    |
+| <<Application Service>> |                          | <<Platform Adapter>>     |
+| recover()               |                          | pending list / resolve   |
++------------+------------+                          +-------------+------------+
+             | uses                                               ^ implements
+       +-----+-----------------------+               +-------------+------------+
+       v                             v               | PendingAudioStorage      |
++---------------------+ +-------------------------+  | <<Recovery Port>>        |
+| DatabaseAccess      | | AudioDownloadCoordinator|  +--------------------------+
+| ALL Content refs    | | full content lease      |
++---------------------+ +-------------------------+
+
+published pending -> SQL link -> confirmLinked -> confirmed (outside pending GC)
+closed owner -> free lease -> SQL refs? yes: confirm / no: delete manifest+chunks
+SQL read failed / active owner / unknown protocol -> preserve
+```
+
+Сохранены Ports/Adapters и компенсация. Долговечная pending-метка фиксирует незавершённую передачу владения между двумя хранилищами; это не распределённая транзакция. Проверка SQL проходит под DatabaseAccess и content lease; атомарное удаление ограничено IndexedDB. [Решение и точки аварии](ADR_AUDIO_DOWNLOAD_RECOVERY.md).
+
+# REL-02 — 2026-10-22 — согласование SQL-статуса и владельца
+
+```text
++-------------------------+      uses      +--------------------------------+
+| AudioDownloaderImpl     |--------------->| AudioDownloadCoordinator       |
+| <<Application Service>> |                | <<Platform Port>>              |
++------------+------------+                | tryAcquire(contentId) -> lease |
+             |                            +---------------+----------------+
+             | SQL + marker                               ^ implements
+             v                            +---------------+----------------+
++-------------------------+               | WebAudioDownloadCoordinator    |
+| DatabaseAccess          |<----------+    | <<Adapter>>                    |
+| AppDatabase transaction |           |    | content Web Lock              |
+| Content + SyncMetadata  |           |    +--------------------------------+
++-------------------------+           |          ^ uses
+                                      |          |
+                           +----------+----------+-------------+
+                           | AudioDownloadRecovery              |
+                           | <<Application Service>>            |
+                           | free lease + known marker          |
+                           | recheck SQL -> restore status      |
+                           +------------------------------------+
+
+lease held: DOWNLOADING + marker -> HTTP -> asset -> SQL link + remove marker
+crash: free lease + marker -> ERROR (no old path) / COMPLETED (old path kept)
+active lease / unknown marker / no coordination -> preserve
+```
+
+Ports/Adapters отделяют браузерную синхронизацию от общего downloader. UncoordinatedAudioDownloads сохраняет поведение платформ без реализации lease. Изменение статуса и метки образует одну SQLite-транзакцию; отдельная asset-блокировка REL-01 защищает manifest/chunks. [Решение и ограничения](ADR_AUDIO_DOWNLOAD_RECOVERY.md).
+
+# REL-01 — 2026-10-22 — LK-03: lifetime lock и уборка
+
+```text
++-------------------------+       calls       +---------------------------+
+| IndexedDbAudioStorage   |------------------>| storage/index.js          |
+| <<Platform Adapter>>    |                   | <<JS module>>             |
+| store / delete          |                   | begin / append / commit   |
++-------------------------+                   | abort / recoverIncomplete |
+                                              +-------------+-------------+
+                                                            | coordinates
+                                              +-------------v-------------+
+                                              | Web Locks <<Browser API>> |
+                                              | exclusive lock per asset  |
+                                              +-------------+-------------+
+                                                            | protects
+                                              +-------------v-------------+
+                                              | IndexedDB audio + chunks  |
+                                              | <<Transactional Store>>   |
+                                              +---------------------------+
+
+begin -> hold lock -> append* -> commit/abort -> release lock
+closed owner -> free lock -> recheck incomplete -> atomic manifest+chunks delete
+active owner / complete / legacy / no-lock -> preserve
+```
+
+Порт/адаптер AudioStorage сохранён. Web Locks — механизм взаимного исключения владельца и уборщика; удаление manifest/chunks атомарно в пределах IndexedDB. Это не транзакция с SQLite. Уборка запускается из WebDatabaseFactory и beginAudio; SQL recovery и сбор готовых непривязанных объектов остаются отдельной задачей.
+
 # INT-11 — 2026-10-22 — LK-02: передача владения и компенсация
 
 ```text

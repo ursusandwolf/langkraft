@@ -8,6 +8,8 @@
 | Посмотреть текущие классы, интерфейсы и связи | [UML_CLASSES](UML_CLASSES.md) |
 | Изменить данные, миграции или offline storage | [DATA_LAYER](DATA_LAYER.md) |
 | Разобраться в Web bootstrap/worker | [WEB_APP](WEB_APP.md) |
+| Понять восстановление незавершённых Web/Desktop/TUI-загрузок | [ADR_AUDIO_DOWNLOAD_RECOVERY](ADR_AUDIO_DOWNLOAD_RECOVERY.md) |
+| Восстановить старый профиль без изменения исходника | [LEGACY_RECOVERY](LEGACY_RECOVERY.md) |
 | Проверить контракт субтитров | [SUBTITLES](SUBTITLES.md) |
 | Узнать изменения и тестовые результаты | [CHANGELOG](CHANGELOG.md), [UML-журнал](CHANGELOG_UML.md) |
 | Выбрать следующую задачу | [todo](todo.md), [план кодревью](CODE_REVIEW_FIX_PLAN.md) |

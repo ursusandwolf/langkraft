@@ -1,5 +1,7 @@
 import * as storage from "../../../shared/src/jsMain/storage/index.js";
+import * as recovery from "../../../shared/src/jsMain/storage/recovery.js";
 window.storage = storage;
+window.recovery = recovery;
 window.databaseRequest = (worker, action, sql, params = []) => new Promise((resolve, reject) => {
   const id = crypto.randomUUID();
   const listener = event => {

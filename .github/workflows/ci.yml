@@ -26,6 +26,8 @@ jobs:
       - uses: gradle/actions/setup-gradle@v6
         with:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+      - name: Legacy profile recovery tests
+        run: python3 -W error::ResourceWarning -m unittest discover -s tools/recovery/tests -v
       - run: bash ./gradlew --no-daemon :shared:desktopTest :backend:test
       - name: Desktop and TUI wiring
         env:

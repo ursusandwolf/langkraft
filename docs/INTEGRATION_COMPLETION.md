@@ -1,5 +1,11 @@
 # Проверка интеграции — 22 октября 2026
 
+REL-S2 и REL-S3 завершены: [PR #5](https://github.com/ursusandwolf/langkraft/pull/5) и [PR #6](https://github.com/ursusandwolf/langkraft/pull/6) включены в dev; merge REL-S3 — `63a6a94`, его дерево совпало с проверенным `be6b1a2`. [CI REL-S3](https://github.com/ursusandwolf/langkraft/actions/runs/39777909189) успешен: JVM, 31 Kotlin/Chromium-тест, storage/recovery и полный development/production UI. Выпуск объединяет оба спринта через обычный merge dev → main. Критерий завершения синхронизации: release CI успешен, деревья main/dev равны, dev fast-forward обновлён до release merge; слитые sprint-ветки удаляются после проверки ancestor. История не переписывается. Актуальное состояние веток проверяется через git fetch, а приведённые ниже хеши относятся к своим историческим этапам.
+
+## Исторический срез после REL-S2
+
+Актуальная проверка веток после REL-S2: обе исходные истории (`dev 3003225` и `main 945ab35`) входят в main. До нового спринта main/dev совпадали на b44ab98. REL-S2 слит в dev через [PR #5](https://github.com/ursusandwolf/langkraft/pull/5), merge 384a30f; [CI 39775953381](https://github.com/ursusandwolf/langkraft/actions/runs/39775953381) полностью успешен. Git merge-tree не выявил конфликтов, дерево merge совпало с протестированным 55941bd, девять коммитов сохранены. Main остаётся на b44ab98 до следующего выпуска; это нормальное отставание стабильной ветки. Для LK-04 выделена sprint/rel-s3-multitab; слитая REL-S2 ветка удалена локально и на origin. Ниже — результаты первоначальной интеграции, они не заменяют проверки новых спринтов.
+
 Интеграция завершена: база dev `3003225`, история main `945ab35` сохранена. Ветка работы — `integration/dev-base-20261021`. Основные коммиты: `ecf787a` (baseline/ingest), `ef58d01` (data/Web/auth/sync), `43c72cb` (ручной merge), `0349898` (coroutines ABI), `dffc614` (Ubuntu launcher/ZIP), `d1163ef` (browser locale).
 
 Слиты [PR #1: integration → dev](https://github.com/ursusandwolf/langkraft/pull/1), merge `8675897b1aa6c5b4f7d33399358882168ce1c9d3`, и [PR #2: dev → main](https://github.com/ursusandwolf/langkraft/pull/2), merge `9576ab4c439edc656dad0612f04ee44a735d39d0`. Перед PR #2 проверено точное совпадение дерева dev с протестированным `d1163ef`; дерево main после слияния также совпало. Force push и переписывание истории не использовались.

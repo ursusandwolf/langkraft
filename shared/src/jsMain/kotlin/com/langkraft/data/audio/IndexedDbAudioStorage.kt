@@ -4,6 +4,8 @@ import com.langkraft.data.storage.abortAudio
 import com.langkraft.data.storage.appendAudio
 import com.langkraft.data.storage.beginAudio
 import com.langkraft.data.storage.commitAudio
+import com.langkraft.data.storage.listPendingAudio
+import com.langkraft.data.storage.resolvePendingAudio
 import io.ktor.utils.io.ByteReadChannel
 import io.ktor.utils.io.readAvailable
 import kotlinx.coroutines.NonCancellable
@@ -12,7 +14,15 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.coroutineContext
 
-class IndexedDbAudioStorage : AudioStorage {
+class IndexedDbAudioStorage : AudioStorage, PendingAudioStorage {
+    override suspend fun listPending(): List<PendingAudioAsset> = listPendingAudio().await().map {
+        PendingAudioAsset(it.location, it.contentId, it.recoveryProtocol)
+    }
+    override suspend fun resolvePending(location: String, referenced: Boolean): Boolean =
+        resolvePendingAudio(location, referenced).await()
+    override suspend fun confirmLinked(location: String) {
+        resolvePendingAudio(location, true).await()
+    }
     override suspend fun delete(location: String) {
         require(location.startsWith("indexeddb-audio:"))
         abortAudio(location.removePrefix("indexeddb-audio:")).await()

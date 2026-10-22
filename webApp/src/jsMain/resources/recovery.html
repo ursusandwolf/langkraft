@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Langkraft — восстановление профиля</title>
+  <style>
+    body { max-width: 760px; margin: 2rem auto; padding: 0 1rem; font: 1rem/1.6 system-ui, sans-serif; color: #153e32; background: #f5f7f4; }
+    button, input, a { font: inherit; }
+    button { padding: .6rem 1rem; margin: .3rem .4rem .3rem 0; cursor: pointer; }
+    button:disabled { cursor: wait; }
+    :focus-visible { outline: 3px solid #176b52; outline-offset: 3px; }
+    pre { overflow: auto; padding: 1rem; background: white; color: #17251f; }
+    #status { min-height: 3rem; }
+    #profiles { overflow-wrap: anywhere; padding-left: 1.2rem; }
+    #profiles li { margin-bottom: 1rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Восстановление профиля</h1>
+    <p>Источник: <strong id="source"></strong></p>
+    <p>Создайте отдельную копию библиотеки и доступного связанного аудио. Исходный профиль сохраняется. В копии сбрасываются зависшие загрузки и вход в аккаунт; словарь, SRS и очередь синхронизации переносятся.</p>
+    <p>Экспорт создаёт копию и скачивает её архив. Импорт архива создаёт ещё один профиль. Лимит архива — 64 МиБ; для больших библиотек этот способ пока не подходит.</p>
+    <button id="clone" type="button">Создать копию</button>
+    <button id="export" type="button">Экспортировать копию</button>
+    <p><label for="archive">Архив восстановления (.json)</label><br><input id="archive" type="file" accept="application/json,.json"></p>
+    <button id="import" type="button">Восстановить из архива</button>
+    <p id="status" role="status" aria-live="polite">Готово к восстановлению.</p>
+    <p id="result" hidden><a id="open-copy">Открыть восстановленную копию</a></p>
+    <pre id="report" aria-label="Отчёт восстановления"></pre>
+    <section aria-labelledby="profiles-heading">
+      <h2 id="profiles-heading">Сохранённые копии</h2>
+      <p>Список относится к этому браузеру и адресу сайта. Неполные копии тоже занимают место. Для удаления новой копии (recovered-v2) закройте все её вкладки и заранее скачайте архив. Данные стираются без возможности отмены; пустые хранилища и отметка удаления сохраняются, чтобы старая ссылка не создала профиль заново. Старые копии можно восстановить в новый профиль.</p>
+      <button id="refresh-profiles" type="button">Обновить список копий</button>
+      <p id="profiles-status" role="status" aria-live="polite"></p>
+      <ul id="profiles"></ul>
+    </section>
+  </main>
+  <script src="webApp-recovery.js"></script>
+</body>
+</html>
