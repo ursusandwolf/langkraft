@@ -1,3 +1,30 @@
+# REL-01 — 2026-10-22 — LK-03: lifetime lock и уборка
+
+```text
++-------------------------+       calls       +---------------------------+
+| IndexedDbAudioStorage   |------------------>| storage/index.js          |
+| <<Platform Adapter>>    |                   | <<JS module>>             |
+| store / delete          |                   | begin / append / commit   |
++-------------------------+                   | abort / recoverIncomplete |
+                                              +-------------+-------------+
+                                                            | coordinates
+                                              +-------------v-------------+
+                                              | Web Locks <<Browser API>> |
+                                              | exclusive lock per asset  |
+                                              +-------------+-------------+
+                                                            | protects
+                                              +-------------v-------------+
+                                              | IndexedDB audio + chunks  |
+                                              | <<Transactional Store>>   |
+                                              +---------------------------+
+
+begin -> hold lock -> append* -> commit/abort -> release lock
+closed owner -> free lock -> recheck incomplete -> atomic manifest+chunks delete
+active owner / complete / legacy / no-lock -> preserve
+```
+
+Порт/адаптер AudioStorage сохранён. Web Locks — механизм взаимного исключения владельца и уборщика; удаление manifest/chunks атомарно в пределах IndexedDB. Это не транзакция с SQLite. Уборка запускается из WebDatabaseFactory и beginAudio; SQL recovery и сбор готовых непривязанных объектов остаются отдельной задачей.
+
 # INT-11 — 2026-10-22 — LK-02: передача владения и компенсация
 
 ```text

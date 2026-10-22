@@ -56,6 +56,8 @@ ContentSelectionViewModel → IngestContentUseCase → RemoteContentSource/Backe
 
 ### Offline-аудио и LK-02
 
+Web recovery (REL-S2/LK-03): storage/index.js удерживает Web Lock на каждый новый незавершённый asset. WebDatabaseFactory и beginAudio вызывают recoverIncompleteAudio: свободный lock → повторная проверка incomplete → атомарное удаление manifest/chunks. Активный владелец, complete, legacy и записи без lock сохраняются. Без Web Locks скачивание работает, уборка пропускается. Таймаут не считается доказательством закрытия вкладки; SQL-статусы и готовые непривязанные объекты требуют отдельной сверки.
+
 OfflineDownloadDelegate → AudioDownloaderImpl → HTTP stream → AudioStorage → узкая SQL-привязка. Storage возвращает location только после полной записи и проверки длины. FileAudioStorage владеет временным и опубликованным файлом до успешного возврата location; отмена на границе dispatcher очищает ещё не переданный файл. На Web используется manifest/chunks и `indexeddb-audio:` location.
 
 AudioDownloaderImpl сначала читает фактическую запись БД, сохраняет прежний путь при DOWNLOADING и отвергает повторный уже запущенный download. Поток остаётся отменяемым. Короткая завершающая привязка выполняется под DatabaseAccess в NonCancellable; после успешной привязки владельцем становится БД. Отмена всё равно пробрасывается вызывающему коду, но уже связанный файл и COMPLETED не откатываются.

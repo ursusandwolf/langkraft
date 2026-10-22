@@ -199,7 +199,7 @@ classDiagram
 
 StateViewModel в коде generic `StateViewModel<S>`; Player использует PlayerState. AudioPlayerImpl — expect/actual с реализациями Web HTMLAudioElement и Desktop VLC; FfmpegAudioPlayer — JVM реализация на ffplay. Koin выбирает движок, исходники Android сохранены вне активной сборки. AudioPlayer/AudioStorage — платформенные порты и адаптеры. UI — **Presentation Model/MVVM**, делегаты разделяют операции, StateFlow — **Observer**.
 
-Для LK-02 важны три владельца: storage до возврата location → downloader до SQL link → БД после link. Компенсация удаляет только новый объект без SQL-ссылок. Аварийная recovery после завершения процесса остаётся отдельной задачей.
+Для LK-02 важны три владельца: storage до возврата location → downloader до SQL link → БД после link. Компенсация удаляет только новый объект без SQL-ссылок. В Web JS-модуль storage удерживает Web Lock на незавершённую загрузку; recoverIncompleteAudio удаляет manifest/chunks нового формата только при свободном lock. Запуск — WebDatabaseFactory и beginAudio. Готовые, legacy и no-lock объекты сохраняются; SQL recovery после аварии остаётся отдельной задачей. Связи с браузерными API показаны в [UML-ченджлоге REL-01](CHANGELOG_UML.md).
 
 Исходники: [ui/player](../shared/src/commonMain/kotlin/com/langkraft/ui/player), [AudioPlayer.kt](../shared/src/commonMain/kotlin/com/langkraft/audio/AudioPlayer.kt), [AudioStorage.kt](../shared/src/commonMain/kotlin/com/langkraft/data/audio/AudioStorage.kt), [AudioDownloaderImpl.kt](../shared/src/commonMain/kotlin/com/langkraft/data/repository/AudioDownloaderImpl.kt).
 

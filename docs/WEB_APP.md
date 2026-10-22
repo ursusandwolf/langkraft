@@ -6,6 +6,8 @@ The Kotlin/JS IR + Compose Canvas application shares MainApp, view models, SRS, 
 
 Local SQLite WASM runs in a worker, persists through IndexedDB and uses async SQLDelight. Audio is streamed to IndexedDB and played from a Blob. Offline here means saved library/audio within a loaded application; no full offline application cache is configured.
 
+New audio downloads hold a per-asset Web Lock until commit/abort. On database startup and before each download, recovery removes incomplete manifests and their chunks only after acquiring that asset's free lock. Active owners and complete audio are preserved. HTTPS or localhost is required for Web Locks; without the API, downloads still work but automatic cleanup is skipped. Legacy manifests and downloads created without locks are kept conservatively. SQL DOWNLOADING recovery and complete-but-unlinked assets remain separate work. See [Web Locks](https://developer.mozilla.org/en-US/docs/Web/API/Web_Locks_API) for the browser coordination contract.
+
 index.html loads browser-locale.js before Skiko/Compose to normalize POSIX locale tags rejected by Intl.Locale. Client linguistic features currently use MockLinguisticAssistant from commonModule. GEMINI_API_KEY enables the backend provider, not a remote AI implementation in the browser.
 
 Complete environment/run instructions: [RUNNING.md](RUNNING.md). Module boundaries, DI and extension points: [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md); current UML: [UML_CLASSES.md](UML_CLASSES.md).

@@ -83,8 +83,30 @@ try {
   await page.screenshot({path:path.join(artifacts,'word.png')});
   await page.mouse.click(600,615);
   await waitQuery('SELECT word FROM Vocabulary',rows=>rows.length===1);
+  // Leave a partial writer behind without abort; only app startup recovery can
+  // remove it after navigation. No beginAudio is called in the new document.
+  const abandoned=await page.evaluate(async()=>{
+    const id=await window.storage.beginAudio('startup-recovery');
+    await window.storage.appendAudio(id,new Uint8Array([7]));
+    return id;
+  });
   const requestsBeforeReload=mediaRequests;
-  await open();await page.mouse.click(600,775);await page.waitForTimeout(400);await page.mouse.click(200,380);await page.waitForTimeout(600);
+  await open();
+  const remaining=await page.evaluate(async id=>{
+    const db=await new Promise((resolve,reject)=>{
+      const request=indexedDB.open('langkraft-audio',1);
+      request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);
+    });
+    try{return await new Promise((resolve,reject)=>{
+      const tx=db.transaction(['audio','chunks'],'readonly');
+      const manifest=tx.objectStore('audio').get(id);
+      const chunks=tx.objectStore('chunks').count(IDBKeyRange.bound([id,0],[id,Infinity]));
+      tx.oncomplete=()=>resolve({exists:!!manifest.result,chunks:chunks.result});
+      tx.onabort=()=>reject(tx.error);
+    });}finally{db.close();}
+  },abandoned);
+  assert.deepEqual(remaining,{exists:false,chunks:0});
+  await page.mouse.click(600,775);await page.waitForTimeout(400);await page.mouse.click(200,380);await page.waitForTimeout(600);
   await page.context().setOffline(true);
   await page.mouse.click(710,705);await page.waitForFunction(()=>window.activeAudio?.currentTime>0&&!window.activeAudio?.paused);
   assert.equal(mediaRequests,requestsBeforeReload,'Offline playback must not fetch remote audio');
@@ -95,4 +117,5 @@ try {
   assert.deepEqual(errors,[]);
   console.log('PASS: Web import error/retry, async job polling, playback, durable audio, vocabulary and offline reload');
   console.log('PASS: desktop and mobile rendering without runtime errors');
+  console.log('PASS: app startup removes abandoned audio while preserving saved offline playback');
 } catch(error) {if(page) await page.screenshot({path:path.join(artifacts,'failure.png')}).catch(()=>{});console.error('Browser errors:',errors);throw error;} finally {await browser.close();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
