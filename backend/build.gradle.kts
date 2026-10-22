@@ -1,7 +1,7 @@
 plugins {
     kotlin("jvm")
     id("io.ktor.plugin") version "2.3.5"
-    kotlin("plugin.serialization") version "2.0.21"
+    kotlin("plugin.serialization")
 }
 
 application {
@@ -14,6 +14,7 @@ dependencies {
     implementation("io.ktor:ktor-server-netty:2.3.5")
     implementation("io.ktor:ktor-server-content-negotiation:2.3.5")
     implementation("io.ktor:ktor-server-status-pages:2.3.5")
+    implementation("io.ktor:ktor-server-partial-content:2.3.5")
     implementation("io.ktor:ktor-serialization-kotlinx-json:2.3.5")
     implementation("io.insert-koin:koin-ktor:3.5.0")
     implementation("io.insert-koin:koin-logger-slf4j:3.5.0")
@@ -26,6 +27,9 @@ dependencies {
     implementation("io.ktor:ktor-client-content-negotiation:2.3.5")
     implementation("io.ktor:ktor-client-logging:2.3.5")
     
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.0")
+
     // Logging
     implementation("ch.qos.logback:logback-classic:1.4.11")
 
@@ -41,11 +45,10 @@ dependencies {
     implementation("org.xerial:sqlite-jdbc:3.42.0.0")
     testImplementation("org.xerial:sqlite-jdbc:3.42.0.0")
 
-    // YtdlpJava replacement
-    implementation("com.github.sapher:youtubedl-java:1.1") 
-
     testImplementation(kotlin("test"))
     testImplementation("org.junit.jupiter:junit-jupiter:5.9.2")
+    testImplementation("io.ktor:ktor-server-test-host:2.3.5")
+    testImplementation("app.cash.sqldelight:sqlite-driver:2.0.0")
 }
 
 tasks.test {

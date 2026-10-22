@@ -10,7 +10,6 @@ build/
 
 # Kotlin
 .kotlin/
-kotlin-js-store/
 
 # Local configuration
 local.properties
@@ -23,3 +22,23 @@ local.properties
 # Project specific
 downloads/
 temp/
+/data/
+/backend/data/
+*.db
+*.db-*
+*.bak
+node_modules/
+
+# Main credential and generated-file exclusions
+.env.*
+!.env.example
+!.env.sample
+*.jks
+*.keystore
+*.class
+*.log
+hs_err_pid*
+replay_pid*
+out/
+Thumbs.db
+Desktop.ini

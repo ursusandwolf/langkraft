@@ -1,91 +1,97 @@
 package com.langkraft.backend
 
 import com.langkraft.domain.model.SubtitleLine
-import org.slf4j.LoggerFactory
-import java.util.UUID
 
-/**
- * A simple SRT parser to convert raw subtitle files into Domain models.
- */
+class SubtitleParseException(message: String) : IllegalArgumentException(message)
+
+/** Rejects the entire file on an invalid cue; overlaps are preserved in stable start-time order. */
 object SrtParser {
-    private val logger = LoggerFactory.getLogger(SrtParser::class.java)
-    private val BLOCK_SEPARATOR = Regex("(\\r?\\n){2,}")
-    private val TIMESTAMP_PATTERN = Regex("(\\d{2}:)?\\d{2}:\\d{2}[,. ]\\d{3} --> (\\d{2}:)?\\d{2}:\\d{2}[,. ]\\d{3}")
+    private const val TIMESTAMP = "([0-9]{2,}):([0-5][0-9]):([0-5][0-9])[,\\.]([0-9]{3})"
+    private val timeRange = Regex("$TIMESTAMP[ \\t]*-->[ \\t]*$TIMESTAMP")
+    private val indexPattern = Regex("[0-9]+")
 
-    fun parse(contentId: String, content: String): List<SubtitleLine> {
-        val isVtt = content.startsWith("WEBVTT")
-        val blocks = content.split(BLOCK_SEPARATOR)
-        
-        return blocks.mapNotNull { block ->
-            val lines = block.trim().lines()
-            if (lines.isEmpty()) return@mapNotNull null
-            
-            // For VTT, the first block might be just "WEBVTT"
-            if (isVtt && lines[0].startsWith("WEBVTT")) return@mapNotNull null
+    fun parse(contentId: String, srtContent: String): List<SubtitleLine> {
+        if (srtContent.removePrefix("\uFEFF").startsWith("WEBVTT")) return parse(contentId, vttToSrt(srtContent))
+        val lines = srtContent.removePrefix("\uFEFF").lines()
+        val cues = mutableListOf<SubtitleLine>()
+        val occurrences = mutableMapOf<String, Int>()
+        var previousIndex = 0L
+        var i = 0
 
-            // Find line with timestamps
-            val timeMatch = TIMESTAMP_PATTERN.find(block)
-            val timeLine = timeMatch?.value ?: return@mapNotNull null
-            
-            val (startStr, endStr) = timeLine.split(" --> ").let { it[0] to it[1] }
-            
-            val startMs = parseTimestamp(startStr) ?: return@mapNotNull null
-            val endMs = parseTimestamp(endStr) ?: return@mapNotNull null
-            
-            // Text is everything after the timestamp line in this block
-            val timeLineIndex = lines.indexOfFirst { it.contains(" --> ") }
-            val text = lines.drop(timeLineIndex + 1).joinToString(" ").trim()
-            if (text.isEmpty()) return@mapNotNull null
-            
-            SubtitleLine(
-                id = "${contentId}_${startMs}_${endMs}",
+        while (i < lines.size) {
+            val line = lines[i].trim()
+            if (line.isEmpty()) { i++; continue }
+
+            val indexLine = i + 1
+            val index = line.takeIf { indexPattern.matches(it) }?.toLongOrNull()
+                ?: invalid(indexLine, "Expected a positive cue index")
+            if (index <= previousIndex) invalid(indexLine, "Cue indices must be positive and strictly increasing")
+            previousIndex = index
+
+            i++
+            if (i >= lines.size) invalid(indexLine, "Missing time range")
+            val timestampLine = i + 1
+            val range = timeRange.matchEntire(lines[i].trim())
+                ?: invalid(timestampLine, "Expected HH:MM:SS,mmm --> HH:MM:SS,mmm")
+            val startMs = parseTimestamp(range.groupValues.subList(1, 5), timestampLine)
+            val endMs = parseTimestamp(range.groupValues.subList(5, 9), timestampLine)
+            if (endMs <= startMs) invalid(timestampLine, "Cue end must be later than its start")
+
+            i++
+            val text = mutableListOf<String>()
+            while (i < lines.size && lines[i].trim().isNotEmpty()) {
+                val part = lines[i].trim()
+                if (timeRange.matches(part)) invalid(i + 1, "Missing blank separator between cues")
+                text += part
+                i++
+            }
+            if (text.isEmpty()) invalid(indexLine, "Missing cue text")
+
+            val baseId = "${contentId}_${startMs}_${endMs}"
+            val occurrence = (occurrences[baseId] ?: 0) + 1
+            occurrences[baseId] = occurrence
+            cues.add(SubtitleLine(
+                id = if (occurrence == 1) baseId else "${baseId}_$occurrence",
                 contentId = contentId,
                 startMs = startMs,
                 endMs = endMs,
-                originalText = text,
+                originalText = text.joinToString(" "),
                 translationText = null
-            )
+            ))
         }
+        if (cues.isEmpty()) invalid(1, "Subtitle file is empty")
+        return cues.sortedBy { it.startMs }
     }
 
-    private fun parseTimestamp(timestamp: String): Long? {
-        val cleaned = timestamp.replace(",", ".").replace(" ", "").trim()
-        val parts = cleaned.split(":")
-        
-        return try {
-            when (parts.size) {
-                3 -> { // HH:MM:SS.mmm
-                    val hours = parts[0].toLong()
-                    val minutes = parts[1].toLong()
-                    val secondsWithMillis = parts[2].split(".")
-                    val seconds = secondsWithMillis[0].toLong()
-                    val millis = parseMillis(secondsWithMillis.getOrNull(1))
-                    
-                    hours * 3_600_000 + minutes * 60_000 + seconds * 1_000 + millis
-                }
-                2 -> { // MM:SS.mmm
-                    val minutes = parts[0].toLong()
-                    val secondsWithMillis = parts[1].split(".")
-                    val seconds = secondsWithMillis[0].toLong()
-                    val millis = parseMillis(secondsWithMillis.getOrNull(1))
-                    
-                    minutes * 60_000 + seconds * 1_000 + millis
-                }
-                else -> {
-                    logger.warn("Unknown timestamp format: $timestamp")
-                    null
-                }
-            }
-        } catch (e: Exception) {
-            logger.error("Failed to parse timestamp: $timestamp", e)
-            null
+    private fun vttToSrt(content: String): String {
+        val blocks = content.removePrefix("\uFEFF").replace("\r\n", "\n").replace('\r', '\n')
+            .split(Regex("\n[ \\t]*\n+"))
+        val timestamp = "((?:[0-9]{2,}:)?[0-5][0-9]:[0-5][0-9]\\.[0-9]{3})"
+        val range = Regex("$timestamp[ \\t]+-->[ \\t]+$timestamp(?:[ \\t]+[^ \\t]+:[^ \\t]+)*")
+        val cues = mutableListOf<String>()
+        for (block in blocks.drop(1)) {
+            val lines = block.trim().lines()
+            if (lines.all { it.isBlank() }) continue
+            if (lines[0] == "NOTE" || lines[0].startsWith("NOTE ") || lines[0] == "STYLE" || lines[0] == "REGION") continue
+            val offset = if ("-->" in lines[0]) 0 else 1
+            val match = lines.getOrNull(offset)?.trim()?.let(range::matchEntire)
+                ?: throw SubtitleParseException("Invalid VTT cue ${cues.size + 1}: missing or invalid time range")
+            fun normalize(time: String) = if (time.count { it == ':' } == 1) "00:$time" else time
+            val text = lines.drop(offset + 1).joinToString("\n")
+            cues += "${cues.size + 1}\n${normalize(match.groupValues[1])} --> ${normalize(match.groupValues[2])}\n$text"
         }
+        return cues.joinToString("\n\n")
     }
 
-    private fun parseMillis(millisStr: String?): Long {
-        if (millisStr == null) return 0L
-        // Pad or truncate to exactly 3 digits for milliseconds
-        val normalized = millisStr.padEnd(3, '0').take(3)
-        return normalized.toLong()
+    private fun parseTimestamp(parts: List<String>, line: Int): Long {
+        val hours = parts[0].toLongOrNull() ?: invalid(line, "Timestamp exceeds the supported range")
+        val remainder = parts[1].toLong() * 60_000 + parts[2].toLong() * 1000 + parts[3].toLong()
+        if (hours > (Long.MAX_VALUE - remainder) / 3_600_000) {
+            invalid(line, "Timestamp exceeds the supported range")
+        }
+        return hours * 3_600_000 + remainder
     }
+
+    private fun invalid(line: Int, reason: String): Nothing =
+        throw SubtitleParseException("Invalid SRT at line $line: $reason")
 }

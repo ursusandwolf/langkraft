@@ -271,9 +271,25 @@ class TuiApp : KoinComponent {
     }
 }
 
-fun main() {
+fun main(args: Array<String>) {
     initKoin {
         modules(createDesktopModule(isTui = true))
+    }
+    val koin = org.koin.mp.KoinPlatform.getKoin()
+    kotlinx.coroutines.runBlocking { koin.get<com.langkraft.data.sync.UserSession>().restore() }
+    if ("--smoke" in args) {
+        val terminal = com.googlecode.lanterna.terminal.virtual.DefaultVirtualTerminal()
+        val screen = com.googlecode.lanterna.screen.TerminalScreen(terminal)
+        screen.startScreen()
+        screen.newTextGraphics().putString(0, 0, "Langkraft TUI")
+        screen.refresh()
+        screen.stopScreen()
+        terminal.close()
+        koin.get<com.langkraft.audio.AudioPlayer>().release()
+        koin.get<com.langkraft.data.database.DatabaseHandle>().close()
+        org.koin.core.context.stopKoin()
+        println("TUI terminal and wiring smoke OK")
+        return
     }
     TuiApp().start()
 }

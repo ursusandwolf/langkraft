@@ -11,7 +11,6 @@ class SyncService(
 ) {
     suspend fun performSync(userEmail: String, request: SyncRequest): SyncResponse {
         val user = userRepository.findByEmail(userEmail) ?: throw UnauthorizedException("User not found")
-        val serverChanges = vocabRepo.sync(user.id, request.clientChanges, request.lastSyncTimestamp)
-        return SyncResponse(System.currentTimeMillis(), serverChanges)
+        return vocabRepo.synchronize(user.id, request.clientChanges, request.lastSyncTimestamp)
     }
 }

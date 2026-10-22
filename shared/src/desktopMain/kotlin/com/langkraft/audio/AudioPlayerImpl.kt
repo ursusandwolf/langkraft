@@ -29,10 +29,11 @@ actual class AudioPlayerImpl : AudioPlayer {
         }
     }
 
-    actual override fun load(url: String) {
+    actual override fun load(url: String, requestId: Long) {
         val mediaUrl = if (url.startsWith("http")) url else File(url).absolutePath
-        mediaPlayer.media().play(mediaUrl)
-        _isPlaying.value = true
+        mediaPlayer.controls().stop()
+        mediaPlayer.media().prepare(mediaUrl)
+        _isPlaying.value = false
     }
 
     actual override fun play() {
@@ -60,7 +61,8 @@ actual class AudioPlayerImpl : AudioPlayer {
 
     actual override fun release() {
         mediaPlayer.controls().stop()
-        mediaPlayer.release()
+        scope.cancel()
+        mediaPlayerComponent.release()
         _isPlaying.value = false
         _currentTimeMs.value = 0
     }

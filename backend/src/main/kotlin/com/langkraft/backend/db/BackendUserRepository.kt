@@ -5,9 +5,9 @@ import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.util.*
 
-class BackendUserRepository {
+class BackendUserRepository(private val db: org.jetbrains.exposed.sql.Database) {
 
-    fun createUser(email: String, passwordHash: String, displayName: String): String = transaction {
+    fun createUser(email: String, passwordHash: String, displayName: String): String = transaction(db) {
         val userId = UUID.randomUUID().toString()
         Users.insert {
             it[id] = userId
@@ -18,7 +18,7 @@ class BackendUserRepository {
         userId
     }
 
-    fun findByEmail(email: String) = transaction {
+    fun findByEmail(email: String) = transaction(db) {
         Users.select { Users.email eq email }
             .map {
                 UserRow(

@@ -3,7 +3,7 @@ plugins {
     id("org.jetbrains.compose")
     id("org.jetbrains.kotlin.plugin.compose")
     id("app.cash.sqldelight")
-    kotlin("plugin.serialization") version "2.0.21"
+    kotlin("plugin.serialization")
 }
 
 /*
@@ -20,7 +20,7 @@ kotlin {
     // androidTarget()
     jvm("desktop") // For testing on desktop
     js(IR) {
-        browser()
+        browser { testTask { useKarma { useChromeHeadless() } } }
         binaries.executable()
     }
 
@@ -30,10 +30,12 @@ kotlin {
                 implementation(compose.runtime)
                 implementation(compose.foundation)
                 implementation(compose.material)
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
                 implementation("org.jetbrains.kotlinx:kotlinx-datetime:0.4.1")
+                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0")
                 implementation("app.cash.sqldelight:runtime:2.0.0")
                 implementation("app.cash.sqldelight:coroutines-extensions:2.0.0")
+                implementation("app.cash.sqldelight:async-extensions:2.0.0")
                 implementation("io.ktor:ktor-client-core:2.3.5")
                 implementation("io.ktor:ktor-client-logging:2.3.5")
                 implementation("io.ktor:ktor-client-content-negotiation:2.3.5")
@@ -42,13 +44,12 @@ kotlin {
                 // Koin DI
                 val koinVersion = "3.5.0"
                 implementation("io.insert-koin:koin-core:$koinVersion")
-                implementation("io.insert-koin:koin-compose:1.1.0")
             }
         }
         val commonTest by getting {
             dependencies {
                 implementation(kotlin("test"))
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.0")
             }
         }
         /*
@@ -60,6 +61,7 @@ kotlin {
         }
         */
         val desktopMain by getting {
+            kotlin.srcDir("src/jvmMain/kotlin")
             val osName = System.getProperty("os.name").lowercase()
             val targetOs = when {
                 osName.contains("mac") -> "mac"
@@ -71,7 +73,7 @@ kotlin {
                 implementation(compose.desktop.currentOs)
                 implementation("app.cash.sqldelight:sqlite-driver:2.0.0")
                 implementation("io.ktor:ktor-client-cio:2.3.5")
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.7.3")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.8.0")
                 
                 // VLCj for robust audio playback
                 implementation("uk.co.caprica:vlcj:4.8.0")
@@ -82,8 +84,12 @@ kotlin {
         }
         val jsMain by getting {
             dependencies {
-                implementation("app.cash.sqldelight:web-worker-driver:2.0.0")
+                implementation("io.ktor:ktor-client-js:2.3.5")
+                implementation(npm("@langkraft/web-storage", project.file("src/jsMain/storage")))
             }
+        }
+        val desktopTest by getting {
+            dependencies { implementation("io.ktor:ktor-client-mock:2.3.5") }
         }
     }
 }
@@ -92,6 +98,7 @@ sqldelight {
     databases {
         create("AppDatabase") {
             packageName.set("com.langkraft.db")
+            generateAsync.set(true)
         }
     }
 }

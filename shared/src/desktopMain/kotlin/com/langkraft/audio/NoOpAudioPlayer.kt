@@ -7,7 +7,7 @@ class NoOpAudioPlayer : AudioPlayer {
     override val currentTimeMs = MutableStateFlow(0L)
     override val isPlaying = MutableStateFlow(false)
 
-    override fun load(url: String) {
+    override fun load(url: String, requestId: Long) {
         // No-op
     }
 

@@ -6,21 +6,25 @@ import com.langkraft.domain.model.IngestionJob
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.transactions.transaction
-import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.TestInstance
+import org.junit.jupiter.api.io.TempDir
+import java.nio.file.Path
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class IngestionJobRepositoryTest {
+
+    @TempDir
+    lateinit var tempDir: Path
 
     private lateinit var db: Database
     private lateinit var repository: IngestionJobRepository
 
-    @BeforeAll
+    @BeforeEach
     fun setup() {
-        db = Database.connect("jdbc:sqlite:file:testdb?mode=memory&cache=shared", driver = "org.sqlite.JDBC")
+        db = Database.connect("jdbc:sqlite:${tempDir.resolve("jobs.db")}", driver = "org.sqlite.JDBC")
         transaction(db) {
             SchemaUtils.create(IngestionJobs)
         }
@@ -54,19 +58,21 @@ class IngestionJobRepositoryTest {
         
         val updated = repository.get("1")
         assertEquals(ContentProcessingStatus.READY, updated?.status)
-        assertEquals(now, updated?.lastUpdatedAt)
+        assertTrue(requireNotNull(updated).lastUpdatedAt in now..System.currentTimeMillis())
     }
 
     @Test
     fun `test cleanup`() {
-        val oldJob = IngestionJob("1", ContentProcessingStatus.IDLE, "url", createdAt = 100, lastUpdatedAt = 100)
-        val newJob = IngestionJob("2", ContentProcessingStatus.IDLE, "url", createdAt = 5000, lastUpdatedAt = 5000)
+        val now = System.currentTimeMillis()
+        val expiryMs = 30L * 24 * 60 * 60 * 1000
+        val oldJob = IngestionJob("1", ContentProcessingStatus.IDLE, "url", createdAt = now - 2 * expiryMs, lastUpdatedAt = now - 2 * expiryMs)
+        val newJob = IngestionJob("2", ContentProcessingStatus.IDLE, "url", createdAt = now, lastUpdatedAt = now)
         
         repository.save(oldJob)
         repository.save(newJob)
         
-        // Cleanup older than 1000ms
-        repository.cleanup(1000)
+        // Keep recent jobs while removing expired ones.
+        repository.cleanup(expiryMs)
         
         assertNull(repository.get("1"))
         assertEquals("2", repository.get("2")?.jobId)

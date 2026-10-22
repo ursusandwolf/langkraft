@@ -17,6 +17,8 @@ data class PlayerState(
     val selectedWordContext: SubtitleLine? = null,
     val wordTranslation: TranslationResult? = null,
     val isTranslatingWord: Boolean = false,
+    val isSavingWord: Boolean = false,
+    val wordError: String? = null,
     val deepAnalysis: DeepAnalysisResult? = null,
     val isAnalyzing: Boolean = false,
     val sentenceTranslations: Map<String, String> = emptyMap(), // subtitle line id -> translation
@@ -26,7 +28,9 @@ data class PlayerState(
     val memorizationText: String? = null,
     val isUserScrolling: Boolean = false,
     val lastUserInteractionTime: Long = 0,
-    val error: String? = null
+    val error: String? = null,
+    val canPlayOnline: Boolean = false,
+    val isUsingRemoteAudio: Boolean = false
 )
 
 sealed class PlayerEvent {
@@ -35,6 +39,8 @@ sealed class PlayerEvent {
     object ToggleLoop : PlayerEvent()
     object StepBack : PlayerEvent()
     object ToggleOffline : PlayerEvent()
+    object PlayOnline : PlayerEvent()
+    object DismissError : PlayerEvent()
     data class SetPlaybackSpeed(val speed: Float) : PlayerEvent()
     data class SeekTo(val timeMs: Long) : PlayerEvent()
     object UserScrollStarted : PlayerEvent()

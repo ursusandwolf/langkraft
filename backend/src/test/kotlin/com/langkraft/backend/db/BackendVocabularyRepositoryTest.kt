@@ -7,21 +7,25 @@ import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.transactions.transaction
-import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.TestInstance
+import org.junit.jupiter.api.io.TempDir
+import java.nio.file.Path
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-@TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class BackendVocabularyRepositoryTest {
 
+    @TempDir
+    lateinit var tempDir: Path
+
+    private lateinit var db: Database
     private lateinit var repository: BackendVocabularyRepository
     private val userId = "user-1"
 
-    @BeforeAll
+    @BeforeEach
     fun setup() {
-        val db = Database.connect("jdbc:sqlite:file:testdbvocab?mode=memory&cache=shared", driver = "org.sqlite.JDBC")
+        db = Database.connect("jdbc:sqlite:${tempDir.resolve("vocabulary.db")}", driver = "org.sqlite.JDBC")
         transaction(db) {
             SchemaUtils.create(Users, VocabularySync)
             Users.insert {
@@ -74,7 +78,7 @@ class BackendVocabularyRepositoryTest {
         repository.sync(userId, listOf(SyncEntry(word, "DELETE")), 0)
         
         val syncResult = repository.sync(userId, emptyList(), 0)
-        assertTrue(syncResult.isEmpty(), "Word should be deleted")
+        assertEquals("DELETE", syncResult.single().changeType, "Deletion must reach other clients")
     }
 
     @Test
@@ -82,13 +86,13 @@ class BackendVocabularyRepositoryTest {
         val word1 = VocabularyWord(id = "w1", word = "Word 1", contextSentence = "Ctx 1", lastUpdated = 1000)
         val word2 = VocabularyWord(id = "w2", word = "Word 2", contextSentence = "Ctx 2", lastUpdated = 2000)
         
-        repository.sync(userId, listOf(SyncEntry(word1, "UPSERT")), 0)
+        val checkpoint = repository.synchronize(userId, listOf(SyncEntry(word1, "UPSERT")), 0).serverTimestamp
         
         val word3 = VocabularyWord(id = "w3", word = "Word 3", contextSentence = "Ctx 3", lastUpdated = 3000)
-        transaction {
+        transaction(db) {
             VocabularySync.insert {
                 it[id] = "w3"
-                it[VocabularySync.userId] = userId
+                it[VocabularySync.userId] = this@BackendVocabularyRepositoryTest.userId
                 it[word] = word3.word
                 it[contextSentence] = word3.contextSentence
                 it[addedAt] = 0
@@ -99,10 +103,11 @@ class BackendVocabularyRepositoryTest {
                 it[lapseCount] = 0
                 it[tags] = ""
                 it[lastUpdated] = 3000
+                it[serverUpdated] = checkpoint + 1
             }
         }
         
-        val result = repository.sync(userId, listOf(SyncEntry(word2, "UPSERT")), 1500)
+        val result = repository.sync(userId, listOf(SyncEntry(word2, "UPSERT")), checkpoint)
         
         assertEquals(1, result.size)
         assertEquals("w3", result.first().word.id, "Should return word3 which is newer than 1500 and not in request")

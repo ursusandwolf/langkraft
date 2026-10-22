@@ -22,105 +22,30 @@ import com.langkraft.ui.writing.WritingViewModel
 import com.langkraft.ui.Screen
 import com.langkraft.di.initKoin
 import com.langkraft.di.createDesktopModule
-import org.koin.compose.koinInject
 import com.langkraft.ui.theme.LangkraftTheme
 import com.langkraft.ui.BaseViewModel
-import org.koin.compose.getKoin
 import org.koin.core.parameter.ParametersDefinition
 
-fun main() {
+fun main(args: Array<String>) {
     initKoin {
         modules(createDesktopModule(isTui = false))
+    }
+
+    if ("--smoke" in args) {
+        val koin = org.koin.mp.KoinPlatform.getKoin()
+        val handle = koin.get<com.langkraft.data.database.DatabaseHandle>()
+        val player = koin.get<com.langkraft.audio.AudioPlayer>()
+        player.release()
+        handle.close()
+        org.koin.core.context.stopKoin()
+        println("Desktop wiring smoke OK")
+        return
     }
 
     application {
         Window(onCloseRequest = ::exitApplication, title = "Langkraft - German Immersion") {
             LangkraftTheme {
                 MainApp()
-            }
-        }
-    }
-}
-
-@Composable
-inline fun <reified T : BaseViewModel> rememberViewModel(
-    key: Any? = null,
-    noinline parameters: ParametersDefinition? = null
-): T {
-    val koin = getKoin()
-    val viewModel = remember(key) { koin.get<T>(parameters = parameters) }
-    DisposableEffect(viewModel) {
-        onDispose {
-            viewModel.onCleared()
-        }
-    }
-    return viewModel
-}
-
-@Composable
-fun MainApp() {
-    var currentScreen by remember { mutableStateOf<Screen>(Screen.Dashboard) }
-    
-    val scaffoldState = rememberScaffoldState()
-
-    Scaffold(
-        scaffoldState = scaffoldState,
-        bottomBar = {
-            BottomNavigation(backgroundColor = MaterialTheme.colors.surface) {
-                BottomNavigationItem(
-                    icon = { Icon(Icons.Default.Home, null) },
-                    label = { Text("Stats") },
-                    selected = currentScreen is Screen.Dashboard,
-                    onClick = { currentScreen = Screen.Dashboard }
-                )
-                BottomNavigationItem(
-                    icon = { Icon(Icons.Default.PlayArrow, null) },
-                    label = { Text("Learn") },
-                    selected = currentScreen is Screen.ContentSelection || currentScreen is Screen.Player,
-                    onClick = { currentScreen = Screen.ContentSelection }
-                )
-                BottomNavigationItem(
-                    icon = { Icon(Icons.Default.CheckCircle, null) },
-                    label = { Text("Review") },
-                    selected = currentScreen is Screen.SrsTraining,
-                    onClick = { currentScreen = Screen.SrsTraining }
-                )
-                BottomNavigationItem(
-                    icon = { Icon(Icons.Default.Edit, null) },
-                    label = { Text("Write") },
-                    selected = currentScreen is Screen.Writing,
-                    onClick = { currentScreen = Screen.Writing }
-                )
-            }
-        }
-    ) { padding ->
-        Box(modifier = Modifier.padding(padding).fillMaxSize()) {
-            when (val screen = currentScreen) {
-                is Screen.Dashboard -> {
-                    DashboardView(rememberViewModel())
-                }
-                is Screen.ContentSelection -> {
-                    ContentSelectionView(rememberViewModel(), onContentSelected = { 
-                        currentScreen = Screen.Player(it.id)
-                    })
-                }
-                is Screen.SrsTraining -> {
-                    SrsTrainingView(rememberViewModel(), onFinish = {
-                        currentScreen = Screen.Dashboard
-                    })
-                }
-                is Screen.Writing -> {
-                    WritingView(rememberViewModel(), onBack = {
-                        currentScreen = Screen.Dashboard
-                    })
-                }
-                is Screen.Player -> {
-                    val viewModel = rememberViewModel<PlayerViewModel>(key = screen.contentId)
-                    LaunchedEffect(screen.contentId) {
-                        viewModel.onEvent(com.langkraft.ui.player.PlayerEvent.LoadContent(screen.contentId))
-                    }
-                    ImmersionPlayerView(viewModel)
-                }
             }
         }
     }

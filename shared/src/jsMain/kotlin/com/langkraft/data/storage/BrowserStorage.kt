@@ -1,0 +1,20 @@
+@file:JsModule("@langkraft/web-storage")
+@file:JsNonModule
+
+package com.langkraft.data.storage
+
+import org.w3c.dom.Worker
+import org.w3c.files.Blob
+import kotlin.js.Promise
+
+external fun createDatabaseWorker(): Worker
+external interface DatabaseClient {
+    fun request(action: String, sql: String?, params: Array<Any?>): Promise<dynamic>
+    fun close()
+}
+external fun createDatabaseClient(): DatabaseClient
+external fun beginAudio(contentId: String): Promise<String>
+external fun appendAudio(id: String, bytes: dynamic): Promise<Unit>
+external fun commitAudio(id: String, expectedBytes: Double?): Promise<String>
+external fun abortAudio(id: String): Promise<Unit>
+external fun readAudioBlob(location: String): Promise<Blob>

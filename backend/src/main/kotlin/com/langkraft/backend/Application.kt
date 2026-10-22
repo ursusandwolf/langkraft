@@ -5,10 +5,13 @@ import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
 import io.ktor.server.application.call
 import io.ktor.server.application.install
+import io.ktor.server.application.ApplicationStopping
+import org.koin.ktor.ext.get
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.statuspages.StatusPages
+import io.ktor.server.plugins.partialcontent.PartialContent
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
@@ -29,15 +32,19 @@ data class TextRequest(val text: String)
 fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
 fun Application.module() {
-    val jwtSecret = environment.config.property("jwt.secret").getString()
+    install(PartialContent)
+    val jwtSecret = environment.config.propertyOrNull("jwt.secret")?.getString()
+        ?.takeIf { it.length >= 32 } ?: error("Set LANGKRAFT_JWT_SECRET to at least 32 characters")
     val jwtIssuer = environment.config.property("jwt.issuer").getString()
     val jwtAudience = environment.config.property("jwt.audience").getString()
     val jwtRealm = environment.config.property("jwt.realm").getString()
 
     install(Koin) {
         slf4jLogger()
-        modules(backendModule)
+        modules(backendModule, org.koin.dsl.module { single { environment.config } })
     }
+
+    environment.monitor.subscribe(ApplicationStopping) { get<YouTubeIngestionService>().close() }
 
     install(ContentNegotiation) {
         json()

@@ -14,6 +14,7 @@ import androidx.compose.material.IconButton
 import androidx.compose.material.MaterialTheme
 import androidx.compose.material.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -29,8 +30,12 @@ fun WordDetailsSheet(
     result: TranslationResult?,
     isSaving: Boolean,
     onSave: (VocabularyWord) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    isTranslating: Boolean = result == null,
+    error: String? = null,
+    onRetry: () -> Unit = {}
 ) {
+    val wordId = remember(word, contextLine?.id) { randomUUID() }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -64,9 +69,9 @@ fun WordDetailsSheet(
         Spacer(modifier = Modifier.height(16.dp))
         
         Text(text = "Translation:", style = MaterialTheme.typography.overline)
-        if (result == null) {
+        if (isTranslating) {
             CircularProgressIndicator(modifier = Modifier.size(24.dp))
-        } else {
+        } else if (result != null) {
             Text(text = result.translation, style = MaterialTheme.typography.h6)
             if (result.explanation != null) {
                 Spacer(modifier = Modifier.height(8.dp))
@@ -74,13 +79,19 @@ fun WordDetailsSheet(
             }
         }
         
+        if (error != null) {
+            Text(error, color = MaterialTheme.colors.error)
+            if (result == null) {
+                androidx.compose.material.TextButton(onClick = onRetry) { Text("RETRY TRANSLATION") }
+            }
+        }
         Spacer(modifier = Modifier.height(24.dp))
         
         Button(
             onClick = {
                 if (result != null && contextLine != null) {
                     onSave(VocabularyWord(
-                        id = randomUUID(),
+                        id = wordId,
                         word = word,
                         lemma = result.lemma,
                         translation = result.translation,
@@ -90,7 +101,7 @@ fun WordDetailsSheet(
                     ))
                 }
             },
-            enabled = result != null && !isSaving,
+            enabled = result != null && contextLine != null && !isSaving && !isTranslating,
             modifier = Modifier.fillMaxWidth()
         ) {
             Text("ADD TO DICTIONARY")

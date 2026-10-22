@@ -38,12 +38,13 @@ class ContentSelectionViewModel(
 
     fun importContent(url: String) {
         scope.launch {
-            updateState { it.copy(isImporting = true) }
-            val result = ingestContentUseCase(url)
-            updateState { it.copy(isImporting = false) }
-            
-            result.onFailure { e ->
-                updateState { it.copy(error = e.message) }
+            updateState { it.copy(isImporting = true, error = null) }
+            try {
+                ingestContentUseCase(url).onFailure { e ->
+                    updateState { it.copy(error = e.message) }
+                }
+            } finally {
+                updateState { it.copy(isImporting = false) }
             }
         }
     }

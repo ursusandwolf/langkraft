@@ -18,6 +18,7 @@ kotlin {
         val jsMain by getting {
             dependencies {
                 implementation(project(":shared"))
+                implementation("io.ktor:ktor-http:2.3.5")
                 implementation(compose.runtime)
                 implementation(compose.ui)
                 implementation(compose.foundation)

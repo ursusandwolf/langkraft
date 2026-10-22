@@ -42,7 +42,7 @@ fun ImmersionPlayerView(
     }
 
     // Auto-scroll logic tied to index changes
-    LaunchedEffect(state.currentSubtitleIndex) {
+    LaunchedEffect(state.content?.id, state.currentSubtitleIndex) {
         val index = state.currentSubtitleIndex
         if (index != -1 && !state.isUserScrolling) {
             listState.animateScrollToItem(index)
@@ -101,6 +101,9 @@ fun ImmersionPlayerView(
     ) { padding ->
         Box(modifier = modifier.padding(padding)) {
             Column(modifier = Modifier.fillMaxSize()) {
+                if (state.canPlayOnline) {
+                    Button(onClick = { viewModel.onEvent(PlayerEvent.PlayOnline) }) { Text("Play online") }
+                }
                 // Waveform visualization at the top
                 state.content?.let { content ->
                     val progress by remember {
@@ -162,7 +165,10 @@ fun ImmersionPlayerView(
                                 word = word,
                                 contextLine = state.selectedWordContext,
                                 result = state.wordTranslation,
-                                isSaving = false,
+                                isSaving = state.isSavingWord,
+                                isTranslating = state.isTranslatingWord,
+                                error = state.wordError,
+                                onRetry = viewModel::retryTranslation,
                                 onSave = { viewModel.saveWord(it) },
                                 onDismiss = { viewModel.onEvent(PlayerEvent.DismissWordDetails) }
                             )
@@ -200,7 +206,7 @@ fun ImmersionPlayerView(
                 Snackbar(
                     modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
                     action = {
-                        TextButton(onClick = { /* Clear error */ }) {
+                        TextButton(onClick = { viewModel.onEvent(PlayerEvent.DismissError) }) {
                             Text("OK", color = Color.Yellow)
                         }
                     }
