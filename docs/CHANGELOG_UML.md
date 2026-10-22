@@ -1,3 +1,22 @@
+# REL-12 — 2026-10-22 — удалённый AI Adapter
+
+```mermaid
+classDiagram
+    class LinguisticAssistant {
+        <<interface>>
+    }
+    class RemoteLinguisticAssistant
+    class HttpClient
+    class PlayerLinguisticDelegate
+    class WritingViewModel
+    LinguisticAssistant <|.. RemoteLinguisticAssistant
+    PlayerLinguisticDelegate --> LinguisticAssistant
+    WritingViewModel --> LinguisticAssistant
+    RemoteLinguisticAssistant --> HttpClient : JWT /api/ai/*
+```
+
+`commonModule` выбирает `RemoteLinguisticAssistant`, **Adapter** существующего порта к HTTP backend. BackendModule сохраняет **Strategy** Gemini/mock и **Decorator** CachingLinguisticAssistant; клиент не получает ключ Gemini. Общие `TranslateRequest`, `TextRequest`, `SentenceTranslationResult` связывают четыре маршрута и адаптер, включая новый перевод реплики. WritingViewModel владеет Job/поколением коррекции для отмены и защиты от позднего ответа. Актуальная карта — [UML_CLASSES](UML_CLASSES.md).
+
 # REL-11 — 2026-10-22 — выпуск без изменений архитектуры
 
 ```text

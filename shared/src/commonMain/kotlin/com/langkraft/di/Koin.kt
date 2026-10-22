@@ -1,7 +1,7 @@
 package com.langkraft.di
 
 import com.langkraft.domain.ai.LinguisticAssistant
-import com.langkraft.domain.ai.MockLinguisticAssistant
+import com.langkraft.data.ai.RemoteLinguisticAssistant
 import com.langkraft.data.repository.*
 import com.langkraft.data.audio.AudioDownloadCoordinator
 import com.langkraft.data.audio.UncoordinatedAudioDownloads
@@ -84,7 +84,7 @@ val commonModule = module {
     single { IngestContentUseCase(get(), get()) }
     
     // AI
-    single<LinguisticAssistant> { MockLinguisticAssistant() }
+    single<LinguisticAssistant> { RemoteLinguisticAssistant(get(), get<AppConfig>().backendUrl) }
 
     // SRS
     single<SpacedRepetitionAlgorithm> { Sm2Algorithm() }
