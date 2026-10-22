@@ -9,6 +9,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
+import kotlin.coroutines.CoroutineContext
 
 data class WritingState(
     val inputText: String = "",
@@ -19,14 +24,24 @@ data class WritingState(
 )
 
 class WritingViewModel(
-    private val linguisticAssistant: LinguisticAssistant
-) : StateViewModel<WritingState>(WritingState()) {
+    private val linguisticAssistant: LinguisticAssistant,
+    baseContext: CoroutineContext = Dispatchers.Main
+) : StateViewModel<WritingState>(WritingState(), baseContext) {
+    private var correctionJob: Job? = null
+    private var generation = 0L
+
+    private fun cancelCorrection() {
+        generation++
+        correctionJob?.cancel()
+    }
 
     fun onTextChanged(text: String) {
+        cancelCorrection()
         updateState { it.copy(
             inputText = text,
             correction = null,
-            error = null
+            error = null,
+            isAnalyzing = false
         ) }
     }
 
@@ -34,12 +49,19 @@ class WritingViewModel(
         val text = currentState.inputText.trim()
         if (text.isBlank()) return
 
+        cancelCorrection()
+        val request = generation
         updateState { it.copy(isAnalyzing = true, error = null) }
-        scope.launch {
+        correctionJob = scope.launch {
             try {
                 val result = linguisticAssistant.correctText(text)
+                ensureActive()
+                if (request != generation) return@launch
                 updateState { it.copy(correction = result, isAnalyzing = false) }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
+                if (request != generation) return@launch
                 updateState { it.copy(isAnalyzing = false, error = "Korrektur fehlgeschlagen: ${e.message}") }
             }
         }
@@ -50,6 +72,7 @@ class WritingViewModel(
     }
 
     fun clearCorrection() {
-        updateState { it.copy(correction = null, showMemorization = false) }
+        cancelCorrection()
+        updateState { it.copy(correction = null, showMemorization = false, isAnalyzing = false, error = null) }
     }
 }

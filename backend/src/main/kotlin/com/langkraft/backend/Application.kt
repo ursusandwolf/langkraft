@@ -15,19 +15,12 @@ import io.ktor.server.plugins.partialcontent.PartialContent
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.routing
-import kotlinx.serialization.Serializable
 import org.koin.ktor.plugin.Koin
 import org.koin.logger.slf4jLogger
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
-
-@Serializable
-data class TranslateRequest(val word: String, val context: String)
-
-@Serializable
-data class TextRequest(val text: String)
 
 fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 

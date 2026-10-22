@@ -17,6 +17,7 @@ audio.writeUInt32LE(16,16); audio.writeUInt16LE(1,20); audio.writeUInt16LE(1,22)
 audio.writeUInt32LE(16000,24); audio.writeUInt32LE(32000,28); audio.writeUInt16LE(2,32); audio.writeUInt16LE(16,34);
 audio.write('data',36); audio.writeUInt32LE(audio.length-44,40);
 let imports=0, mediaRequests=0;
+const aiRequests=[];
 let holdMedia=false, releaseMedia, onMediaHeld;
 const content={id:'web-fixture',title:'Deutsch im Alltag',audioUrl:'/api/media/test.wav',localAudioPath:null,
   sourceUrl:'https://youtu.be/video',durationSeconds:4,subtitles:[{id:'cue',contentId:'web-fixture',startMs:0,endMs:4000,originalText:'Hallo Welt',translationText:null}]};
@@ -34,6 +35,13 @@ const server=createServer(async(req,res)=>{
     mediaRequests++;
     if(holdMedia) await new Promise(resolve=>{releaseMedia=resolve;onMediaHeld();});
     res.writeHead(200,{'Content-Type':'audio/wav','Content-Length':audio.length});res.end(audio);return;
+  }
+  if(pathname==='/api/ai/translate-word') {
+    let body=''; for await(const chunk of req) body+=chunk;
+    aiRequests.push({authorization:req.headers.authorization,body:JSON.parse(body)});
+    if(req.headers.authorization!=='Bearer web-ai-fixture') {res.writeHead(401).end('Unauthorized');return;}
+    res.setHeader('Content-Type','application/json');
+    res.end(JSON.stringify({translation:'Hello from remote AI',lemma:'hallo',partOfSpeech:'interjection'}));return;
   }
   if(pathname.startsWith('/api/')) {res.writeHead(401).end('Unauthorized');return;}
   const relative=pathname==='/'?'index.html':pathname.slice(1);
@@ -64,6 +72,9 @@ try {
   const open=async()=>{await page.goto(origin);await page.waitForFunction(()=>document.documentElement.dataset.appReady==='true',null,{timeout:60000});await page.waitForTimeout(400);await page.addScriptTag({url:origin+'/storage-probe/harness.js'});};
   const query=(sql,params=[])=>page.evaluate(async({sql,params})=>{const client=window.storage.createDatabaseClient();try{return await client.request('exec',sql,params);}finally{client.close();}},{sql,params});
   const waitQuery=async(sql,predicate)=>{const deadline=Date.now()+12000;while(Date.now()<deadline){const rows=await query(sql);if(predicate(rows))return rows;await page.waitForTimeout(100);}throw new Error('Timed out: '+sql);};
+  await open();
+  // Restore a fixture session through the production UserSession startup path.
+  await query('INSERT OR REPLACE INTO SyncMetadata(key,value) VALUES (?,?)',['auth_token','web-ai-fixture']);
   await open();
   assert.deepEqual(await page.evaluate(()=>Array.from(navigator.languages)),['de-DE','en-US']);
   assert.equal(await page.evaluate(()=>navigator.language),'de-DE');
@@ -128,10 +139,14 @@ try {
   holdMedia=false;releaseMedia();releaseMedia=undefined;
   const saved=await waitQuery('SELECT localAudioPath,downloadStatus FROM Content',rows=>rows[0]?.[1]==='COMPLETED');
   assert.match(saved[0][0],/^indexeddb-audio:/);
+  const wordResponse=page.waitForResponse(response=>response.url().endsWith('/api/ai/translate-word'));
   await page.mouse.click(40,165);await page.waitForTimeout(1000);
+  assert.equal((await wordResponse).status(),200);
+  assert.deepEqual(aiRequests[0],{authorization:'Bearer web-ai-fixture',body:{word:'Hallo',context:'Hallo Welt'}});
   await page.screenshot({path:path.join(artifacts,'word.png')});
   await page.mouse.click(600,615);
   await waitQuery('SELECT word FROM Vocabulary',rows=>rows.length===1);
+  assert.deepEqual(await query('SELECT translation,lemma FROM Vocabulary'),[['Hello from remote AI','hallo']]);
   assert.deepEqual(await page.evaluate(()=>window.storage.listPendingAudio()),[],'Committed download must acknowledge its publication');
   assert.deepEqual(await query("SELECT key FROM SyncMetadata WHERE key LIKE 'audio_download_lock:%'"),[],'Successful download must clear its recovery marker');
   const owner=await context.newPage();
@@ -298,6 +313,7 @@ try {
   await recoveryPage.close();
   assert.deepEqual(errors,[]);
   console.log('PASS: Web import error/retry, async job polling, playback, durable audio, vocabulary and offline reload');
+  console.log('PASS: restored JWT session sends word/context to remote AI; backend translation and lemma reach vocabulary');
   console.log('PASS: desktop and mobile rendering without runtime errors');
   console.log('PASS: app startup removes abandoned audio while preserving saved offline playback');
   console.log('PASS: SQL recovery restores stale downloads, preserves active/legacy owners and recovers a closed owner');

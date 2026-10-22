@@ -1,6 +1,9 @@
 package com.langkraft.backend
 
 import com.langkraft.domain.ai.LinguisticAssistant
+import com.langkraft.domain.ai.TranslateRequest
+import com.langkraft.domain.ai.TextRequest
+import com.langkraft.domain.ai.SentenceTranslationResult
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
 import io.ktor.server.http.content.staticFiles
@@ -89,6 +92,11 @@ fun Route.apiRoutes() {
                 post("/translate-word") {
                     val request = call.receive<TranslateRequest>()
                     call.respond(aiAssistant.translateWord(request.word, request.context))
+                }
+
+                post("/translate-sentence") {
+                    val request = call.receive<TextRequest>()
+                    call.respond(SentenceTranslationResult(aiAssistant.translateSentence(request.text)))
                 }
 
                 post("/analyze-sentence") {
