@@ -9,3 +9,5 @@ Responsibilities: LocalContentRepository, RemoteContentSource and AudioDownloade
 Backend imports are persistent bounded jobs; closing a POST does not cancel an accepted job. Service shutdown cancels workers and process trees. URL validation, timeouts, strict subtitles and per-job media paths protect ingestion. Media serves HTTP Range. Sync includes tombstones, server cursor and local revision-aware acknowledgements.
 
 Follow README for dependencies/run instructions and docs/todo.md for outstanding work. Never treat historical roadmap Done markers or archived review reports as current production certification.
+
+Current onboarding: docs/RUNNING.md, docs/DEVELOPER_GUIDE.md and docs/UML_CLASSES.md. Client ViewModels currently receive MockLinguisticAssistant; Gemini selection/key applies to the backend AI routes. LK-02 now protects storage return and SQL link ownership across cancellation, with conservative reference-aware compensation; durable crash recovery remains open.

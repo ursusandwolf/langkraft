@@ -1,3 +1,28 @@
+# INT-11 — 2026-10-22 — LK-02: передача владения и компенсация
+
+```text
++--------------------------+         uses         +-------------------------+
+| AudioDownloaderImpl      |--------------------->| AudioStorage <<Port>>   |
+| <<Application Service>>  |                      | store / delete          |
+| previous / location      |                      +------------+------------+
+| linked                   |                                   ^ implements
++-------------+------------+                     +-------------+-------------+
+              |                                  | FileAudioStorage          |
+              | serialized by                    | IndexedDbAudioStorage     |
+              v                                  | <<Platform Adapters>>     |
++--------------------------+                     +---------------------------+
+| DatabaseAccess           |
+| run under shared mutex   |      checks          +---------------------------+
+|                         |--------------------->| AppDatabase (generated)   |
++--------------------------+                     | Content localAudioPath    |
+                                                +---------------------------+
+
+Ownership: storage --successful return--> downloader --SQL link--> database
+Failure:   check persisted references --unbound only--> compensating delete
+```
+
+Порты/адаптеры и Repository сохранены; компенсация — механизм согласования двух хранилищ. Исключение возврата после COMMIT не отменяет владение БД. Crash recovery остаётся отдельной задачей. Полная текущая UML-карта: [UML_CLASSES](UML_CLASSES.md), паттерны и модули: [DEVELOPER_GUIDE](DEVELOPER_GUIDE.md).
+
 # INT-10 — 2026-10-22 — итоговая интеграция
 
 ```text
