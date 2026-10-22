@@ -164,7 +164,7 @@ try {
   console.log("PASS: malformed archives, invalid profile identifiers and future schema are rejected");
   const collision = await page.evaluate(async profile => {
     const uuid = crypto.randomUUID;
-    crypto.randomUUID = () => profile.slice(10);
+    crypto.randomUUID = () => profile.slice(13);
     try { await window.recovery.cloneWebProfile(); return false; }
     catch (error) { return error.message.includes("already exists"); }
     finally { crypto.randomUUID = uuid; }
@@ -198,7 +198,10 @@ try {
   const inventory = await page.evaluate(async () => {
     const before = (await indexedDB.databases()).map(db => db.name).sort();
     const open = indexedDB.open;
-    indexedDB.open = () => { throw new Error('Inventory must not open databases'); };
+    indexedDB.open = function(name, ...args) {
+      if (name !== 'langkraft-recovery-profiles-v2') throw new Error('Inventory must not open profile databases');
+      return open.call(this, name, ...args);
+    };
     let profiles;
     try { profiles = await window.recovery.listWebRecoveryProfiles(); }
     finally { indexedDB.open = open; }
@@ -217,6 +220,102 @@ try {
   assert.ok(inventory.profiles.some(entry => entry.sqlite && !entry.audio), 'Failed quota/schema copies stay discoverable');
   assert.ok(inventory.profiles.every(entry => entry.profile.startsWith('recovered-')));
   console.log('PASS: recovery inventory discovers complete and partial copies without opening or changing any database');
+  const sqlBusy = await page.evaluate(async profile => {
+    const client = window.storage.createDatabaseClient(profile);
+    try {
+      await client.request('exec', 'SELECT * FROM Content');
+      try { await window.recovery.removeWebRecoveryProfile(profile); return false; }
+      catch (error) { return error.message.includes('Profile is open'); }
+    } finally { await client.request('close'); client.close(); }
+  }, report.profile);
+  assert.equal(sqlBusy, true, 'A live SQL worker prevents removal');
+  const audioBusy = await page.evaluate(async profile => {
+    try { await window.recovery.removeWebRecoveryProfile(profile); return false; }
+    catch (error) { return error.message.includes('Profile is open'); }
+  }, imported.profile);
+  assert.equal(audioBusy, true, 'Cached audio keeps a page-lifetime lease after SQL closes');
+  const cloneRace = await page.evaluate(async profile => {
+    const copy = window.recovery.cloneWebProfile(profile);
+    const removal = window.recovery.removeWebRecoveryProfile(profile).then(() => false, error => error.message.includes('Profile is open'));
+    return { copy: (await copy).profile, rejected: await removal };
+  }, report.profile);
+  assert.equal(cloneRace.rejected, true, 'Recovery source holds a lease across both snapshots');
+  await cloned.close();
+  await page.waitForFunction(async profile => !(await navigator.locks.query()).held.some(lock =>
+    lock.name === `langkraft-profile-lifetime:${profile}`), imported.profile);
+  const removed = await page.evaluate(async profile => {
+    const deleteDatabase = indexedDB.deleteDatabase;
+    indexedDB.deleteDatabase = () => { throw new Error('Never queue deleteDatabase'); };
+    try { await window.recovery.removeWebRecoveryProfile(profile); await window.recovery.removeWebRecoveryProfile(profile); }
+    finally { indexedDB.deleteDatabase = deleteDatabase; }
+    const remaining = await window.recovery.listWebRecoveryProfiles();
+    const client = window.storage.createDatabaseClient(profile);
+    let staleRejected = false;
+    try { await client.request('exec','CREATE TABLE Recreated(id)'); }
+    catch (error) { staleRejected = error.message.includes('removed'); }
+    finally { client.close(); }
+    let cloneRejected = false;
+    try { await window.recovery.cloneWebProfile(profile); } catch { cloneRejected = true; }
+    const counts = [];
+    for (const [name, stores] of [[`langkraft-sqlite-${profile}`,['blocks']], [`langkraft-audio-${profile}`,['audio','chunks']]]) {
+      const db = await new Promise((resolve,reject) => {
+        const request=indexedDB.open(name);request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);
+      });
+      try {
+        counts.push(...await new Promise((resolve,reject)=>{
+          const tx=db.transaction(stores,'readonly'); const requests=stores.map(store=>tx.objectStore(store).count());
+          tx.oncomplete=()=>resolve(requests.map(request=>request.result));tx.onabort=()=>reject(tx.error);
+        }));
+      } finally {db.close();}
+    }
+    return {visible:remaining.some(entry=>entry.profile===profile),staleRejected,cloneRejected,counts};
+  }, imported.profile);
+  assert.deepEqual(removed,{visible:false,staleRejected:true,cloneRejected:true,counts:[0,0,0]});
+  const retry = await page.evaluate(async () => {
+    const copy=await window.recovery.cloneWebProfile();
+    const originalOpen=indexedDB.open;
+    indexedDB.open=function(name,...args) {
+      if(name===`langkraft-audio-${copy.profile}`) throw new Error('Injected audio clear failure');
+      return originalOpen.call(this,name,...args);
+    };
+    let failed=false;
+    try {await window.recovery.removeWebRecoveryProfile(copy.profile);} catch {failed=true;}
+    finally {indexedDB.open=originalOpen;}
+    const state=(await window.recovery.listWebRecoveryProfiles()).find(entry=>entry.profile===copy.profile).state;
+    let blocked=false;
+    try {await window.recovery.cloneWebProfile(copy.profile);} catch {blocked=true;}
+    await window.recovery.removeWebRecoveryProfile(copy.profile);
+    const partial=(await window.recovery.listWebRecoveryProfiles()).find(entry=>entry.state==='active'&&entry.sqlite&&!entry.audio);
+    await window.recovery.removeWebRecoveryProfile(partial.profile);
+    const databases=await indexedDB.databases();
+    const rejected=[];
+    for(const profile of ['', 'recovered-00000000-0000-0000-0000-000000000000','../../main']) {
+      try {await window.recovery.removeWebRecoveryProfile(profile);rejected.push(false);} catch {rejected.push(true);}
+    }
+    Object.defineProperty(navigator,'locks',{value:undefined,configurable:true});
+    let noLocks=false;
+    try {await window.recovery.removeWebRecoveryProfile(copy.profile);} catch {noLocks=true;}
+    finally {delete navigator.locks;}
+    return {failed,state,blocked,rejected,noLocks,createdAudio:databases.some(db=>db.name===`langkraft-audio-${partial.profile}`)};
+  });
+  assert.deepEqual(retry,{failed:true,state:'deleting',blocked:true,rejected:[true,true,true],noLocks:true,createdAudio:false});
+  await page.evaluate(async profile => {
+    window.terminatedClient = window.storage.createDatabaseClient(profile);
+    await window.terminatedClient.request('exec','SELECT * FROM Content');
+    window.terminatedClient.close(); // Abrupt Worker.terminate, without a SQL close message.
+  }, cloneRace.copy);
+  await page.waitForFunction(async profile => !(await navigator.locks.query()).held.some(lock =>
+    lock.name === `langkraft-profile-lifetime:${profile}`), cloneRace.copy);
+  await page.evaluate(profile => window.recovery.removeWebRecoveryProfile(profile), cloneRace.copy);
+  const sourceAfterRemoval = await page.evaluate(async () => {
+    const client=window.storage.createDatabaseClient();
+    try {return {auth:await client.request('exec',"SELECT value FROM SyncMetadata WHERE key='auth_token'"),
+      words:await client.request('exec','SELECT * FROM Vocabulary'),
+      status:await client.request('exec',"SELECT downloadStatus FROM Content WHERE id='video'")};}
+    finally {await client.request('close');client.close();}
+  });
+  assert.deepEqual(sourceAfterRemoval,{auth:[["PRIVATE-RECOVERY-TOKEN"]],words:verified.Vocabulary,status:[["DOWNLOADING"]]});
+  console.log('PASS: profile removal excludes live SQL/audio/recovery, clears records, rejects stale links and retries partial failures without deleteDatabase');
   console.log("PASS: existing destination/missing source/quota failure preserve original data and publish no failed copy");
   const legacyContext = await browser.newContext();
   const legacy = await legacyContext.newPage();

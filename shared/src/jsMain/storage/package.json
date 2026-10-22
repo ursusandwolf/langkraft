@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "files": ["index.js", "database.worker.js", "profile.js", "recovery.js", "recovery-page.js"],
+  "files": ["index.js", "database.worker.js", "profile.js", "profile-lifecycle.js", "recovery.js", "recovery-page.js"],
   "exports": { ".": "./index.js", "./recovery-page": "./recovery-page.js" },
   "dependencies": { "wa-sqlite": "1.0.0" }
 }

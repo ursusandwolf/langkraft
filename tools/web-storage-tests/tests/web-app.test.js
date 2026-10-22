@@ -233,9 +233,25 @@ try {
   const inventoryLink=recoveryPage.locator('#profiles a').filter({hasText:'Восстановить из этой копии'}).first();
   assert.match(await inventoryLink.getAttribute('href'),/recovery\.html\?profile=recovered-/);
   assert.match(await recoveryPage.locator('#profiles-status').textContent(),/Найдено копий: 3/);
+  const copyProfile=new URL(copyUrl).searchParams.get('profile');
+  const removeCopy=recoveryPage.getByRole('button',{name:`Удалить копию ${copyProfile}`,exact:true});
+  recoveryPage.once('dialog',dialog=>dialog.dismiss());
+  await removeCopy.click();
+  assert.equal(await recoveryPage.locator('#profiles li').count(),3);
+  recoveryPage.once('dialog',dialog=>dialog.accept());
+  await removeCopy.click();
+  await recoveryPage.waitForFunction(()=>!document.getElementById('clone').disabled);
+  assert.match(await recoveryPage.locator('#status').textContent(),/Profile is open/);
+  await copyPage.close();
+  await page.waitForFunction(async profile=>!(await navigator.locks.query()).held.some(lock=>
+    lock.name===`langkraft-profile-lifetime:${profile}`),copyProfile);
+  recoveryPage.once('dialog',dialog=>dialog.accept());
+  await recoveryPage.getByRole('button',{name:`Удалить копию ${copyProfile}`,exact:true}).click();
+  await recoveryPage.waitForFunction(()=>document.querySelectorAll('#profiles li').length===2);
+  assert.match(await recoveryPage.locator('#status').textContent(),/Данные копии .* удалены/);
   assert.deepEqual(await query('SELECT downloadStatus FROM Content WHERE id=?',['legacy-owner']),[['DOWNLOADING']]);
   await recoveryPage.screenshot({path:path.join(artifacts,'recovery.png')});
-  await copyPage.close();await recoveryPage.close();
+  await recoveryPage.close();
   assert.deepEqual(errors,[]);
   console.log('PASS: Web import error/retry, async job polling, playback, durable audio, vocabulary and offline reload');
   console.log('PASS: desktop and mobile rendering without runtime errors');

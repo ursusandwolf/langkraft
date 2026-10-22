@@ -3,18 +3,32 @@ import * as SQLite from "wa-sqlite";
 import { IDBBatchAtomicVFS } from "wa-sqlite/src/examples/IDBBatchAtomicVFS.js";
 import { profileNames } from "./profile.js";
 import { MemoryVFS } from "wa-sqlite/src/examples/MemoryVFS.js";
+import { acquireProfileLease } from "./profile-lifecycle.js";
 
 async function openDatabase(profile) {
-  const wasmUrl = new URL("wa-sqlite/dist/wa-sqlite-async.wasm", import.meta.url).href;
-  const module = await SQLiteESMFactory({ locateFile: () => wasmUrl });
-  const sqlite = SQLite.Factory(module);
-  const names = profileNames(profile);
-  const vfs = new IDBBatchAtomicVFS(names.sqlite, { durability: "strict" });
-  sqlite.vfs_register(vfs, true);
-  const database = await sqlite.open_v2(names.file,
-    SQLite.SQLITE_OPEN_READWRITE | SQLite.SQLITE_OPEN_CREATE | SQLite.SQLITE_OPEN_URI);
-  await sqlite.exec(database, "PRAGMA foreign_keys=ON; PRAGMA synchronous=FULL; PRAGMA busy_timeout=5000");
-  return { sqlite, database, vfs, profile };
+  const lease = await acquireProfileLease(profile);
+  let sqlite, vfs, database;
+  try {
+    const wasmUrl = new URL("wa-sqlite/dist/wa-sqlite-async.wasm", import.meta.url).href;
+    const module = await SQLiteESMFactory({ locateFile: () => wasmUrl });
+    sqlite = SQLite.Factory(module);
+    const names = profileNames(profile);
+    vfs = new IDBBatchAtomicVFS(names.sqlite, { durability: "strict" });
+    sqlite.vfs_register(vfs, true);
+    database = await sqlite.open_v2(names.file,
+      SQLite.SQLITE_OPEN_READWRITE | SQLite.SQLITE_OPEN_CREATE | SQLite.SQLITE_OPEN_URI);
+    await sqlite.exec(database, "PRAGMA foreign_keys=ON; PRAGMA synchronous=FULL; PRAGMA busy_timeout=5000");
+    return { sqlite, database, vfs, profile, lease };
+  } catch (error) {
+    try {
+      if (database !== undefined) await sqlite.close(database);
+      if (vfs) await vfs.close();
+      await lease.release();
+    } catch {
+      // If cleanup fails, retain the lease until the caller terminates this worker.
+    }
+    throw error;
+  }
 }
 
 // Capture initialization failures and report them through the request protocol.
@@ -78,6 +92,8 @@ async function handle(message) {
     } else if (message.action === "close") {
       await sqlite.close(database);
       await initialized.value.vfs.close();
+      await initialized.value.lease.release();
+      initialized.error = new Error("Database connection closed");
     } else {
       throw new Error("Unknown database action");
     }

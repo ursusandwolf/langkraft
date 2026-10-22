@@ -1,14 +1,18 @@
-import { cloneWebProfile, exportWebProfile, importWebProfile, listWebRecoveryProfiles } from "./recovery.js";
+import { cloneWebProfile, exportWebProfile, importWebProfile, listWebRecoveryProfiles, removeWebRecoveryProfile } from "./recovery.js";
 import { selectedProfile } from "./profile.js";
 
-const buttons = [...document.querySelectorAll("button")];
+let busy = false;
+function setBusy(value) {
+  busy = value;
+  document.querySelectorAll("button").forEach(button => { button.disabled = value; });
+}
 const status = document.getElementById("status");
 const result = document.getElementById("result");
 const reportView = document.getElementById("report");
 document.getElementById("source").textContent = selectedProfile || "Основной профиль";
 
 async function run(operation) {
-  buttons.forEach(button => { button.disabled = true; });
+  setBusy(true);
   result.hidden = true;
   reportView.textContent = "";
   status.textContent = "Подготовка копии…";
@@ -25,7 +29,7 @@ async function run(operation) {
     status.textContent = `Не удалось восстановить: ${error.message}`;
   } finally {
     await refreshProfiles();
-    buttons.forEach(button => { button.disabled = false; });
+    setBusy(false);
   }
 }
 
@@ -42,10 +46,10 @@ async function refreshProfiles() {
     for (const entry of profiles) {
       const item = document.createElement("li");
       const label = document.createElement("span");
-      label.textContent = `${entry.profile}: SQLite ${entry.sqlite ? "есть" : "нет"}, аудио ${entry.audio ? "есть" : "нет"}. `;
+      label.textContent = `${entry.profile}: SQLite ${entry.sqlite ? "есть" : "нет"}, аудио ${entry.audio ? "есть" : "нет"}. ${entry.state === "deleting" ? "Удаление не завершено. " : ""}`;
       item.append(label);
       // Partial/failed targets are visible, but opening them may create missing stores.
-      if (entry.sqlite && entry.audio) {
+      if (entry.sqlite && entry.audio && ["active", "legacy"].includes(entry.state)) {
         for (const [path, text] of [["./", "Открыть профиль"], ["./recovery.html", "Восстановить из этой копии"]]) {
           const link = document.createElement("a");
           const url = new URL(path, location.href);
@@ -54,6 +58,25 @@ async function refreshProfiles() {
           link.textContent = text;
           item.append(link, document.createTextNode(" "));
         }
+      }
+      if (["active", "deleting"].includes(entry.state)) {
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.textContent = entry.state === "deleting" ? "Повторить удаление" : "Удалить копию";
+        remove.disabled = busy;
+        remove.setAttribute("aria-label", `${remove.textContent} ${entry.profile}`);
+        remove.onclick = async () => {
+          if (busy || !confirm(`Удалить библиотеку, SRS и аудио копии ${entry.profile}? Это действие необратимо. Скачайте архив заранее.`)) return;
+          setBusy(true);
+          try {
+            await removeWebRecoveryProfile(entry.profile);
+            result.hidden = true;
+            reportView.textContent = "";
+            status.textContent = `Данные копии ${entry.profile} удалены.`;
+          } catch (error) { status.textContent = `Удаление не выполнено или не завершено: ${error.message}`; }
+          finally { await refreshProfiles(); setBusy(false); }
+        };
+        item.append(remove);
       }
       list.append(item);
     }

@@ -1,8 +1,18 @@
 import { profileNames, selectedProfile } from "./profile.js";
+import { acquireProfileLease } from "./profile-lifecycle.js";
 
 const DATABASE = profileNames(selectedProfile).audio;
 const PREFIX = "indexeddb-audio:";
 let audioDatabase;
+let audioProfileLease;
+function holdAudioProfile() {
+  // Retained for the page lifetime, including cached audio and active downloads.
+  if (!audioProfileLease) audioProfileLease = acquireProfileLease(selectedProfile).catch(error => {
+    audioProfileLease = undefined;
+    throw error;
+  });
+  return audioProfileLease;
+}
 const ownerId = crypto.randomUUID();
 const activeDownloads = new Map();
 const contentDownloads = new Map();
@@ -12,6 +22,7 @@ const lockName = id => `langkraft-audio-download${lockSuffix}:${id}`;
 // Separate from the asset lock: SQL stays DOWNLOADING before the first chunk
 // and after asset publication, until the final SQL link/compensation completes.
 export async function acquireContentDownload(contentId) {
+  await holdAudioProfile();
   if (!navigator.locks?.request) return { coordinated: false, release: async () => {} };
   let granted;
   let rejected;
@@ -143,7 +154,8 @@ export function createDatabaseClient(profile = selectedProfile) {
   };
 }
 
-function openAudioDatabase() {
+async function openAudioDatabase() {
+  await holdAudioProfile();
   if (!audioDatabase) {
     audioDatabase = new Promise((resolve, reject) => {
       const request = indexedDB.open(DATABASE, 1);

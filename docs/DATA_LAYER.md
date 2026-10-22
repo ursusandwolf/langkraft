@@ -13,3 +13,5 @@ New Web/Desktop/TUI protocols now recover SQL DOWNLOADING and pending audio unde
 See README for paths, backup/restore and verification commands; INTEGRATION_RESOLUTION.md records the branch decisions.
 
 Current class relationships and contribution rules: [UML_CLASSES.md](UML_CLASSES.md), [DEVELOPER_GUIDE.md](DEVELOPER_GUIDE.md). The LK-02 query addition does not change schema v3.
+
+Recovery-v2 profiles use a separate lifecycle registry and shared Web Locks across SQL workers, audio pages and recovery. Manual removal marks deleting with strict durability before clearing existing known stores, then deleted. It is retryable across separate database transactions; stale links and partially deleted profiles cannot reopen. Empty DB containers and tombstones remain, without deleteDatabase. Default/old profiles are not removable. See [the decision](ADR_AUDIO_DOWNLOAD_RECOVERY.md).

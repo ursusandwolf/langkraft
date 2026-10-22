@@ -1,3 +1,29 @@
+# REL-09 — 2026-10-22 — lifecycle recovery-v2
+
+```text
++------------------------+  shared lease  +-----------------------------------+
+| database.worker.js     |--------------->| profile-lifecycle.js <<JS module>> |
+| SQLite connection     |                | acquire / withProfileLease        |
++------------------------+                | removeWebRecoveryProfile          |
++------------------------+  shared lease  |                                   |
+| index.js: audio page   |--------------->| Web Locks: shared / exclusive     |
++------------------------+                +-----------------+-----------------+
++------------------------+  shared lease                    | strict transactions
+| recovery.js: snapshots |----------------+                 v
+| clone / export / import|                |  +--------------------------------+
++------------------------+                |  | Profile registry <<states>>    |
+                                         |  | active -> deleting -> deleted  |
++------------------------+ exclusive     |  +----------------+---------------+
+| recovery-page.js       |---------------+                   | clear records
+| confirm / retry removal|                                   v
++------------------------+                +-----------------------------------+
+                                          | SQLite blocks + audio/chunks      |
+                                          | no deleteDatabase; containers stay|
+                                          +-----------------------------------+
+```
+
+Это модульные функции и протокол shared/exclusive lease с реестром состояний, новые GoF-классы не вводятся. Существующие VFS **Adapter** не меняются. Download/content leases сохраняют отдельные границы. Tombstone перед очисткой делает операцию повторяемой после частичного отказа; общей транзакции двух БД нет. Старые ID не удаляются, v2 отвергается прежними сборками.
+
 # REL-08 — 2026-10-22 — инвентаризация recovery-профилей
 
 ```text

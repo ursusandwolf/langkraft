@@ -1,22 +1,29 @@
 import { createDatabaseClient } from "./index.js";
-import { profileNames } from "./profile.js";
+import { isManagedProfile, profileNames } from "./profile.js";
+import { acquireProfileLease, withProfileLease, profileStates, PROFILE_REGISTRY } from "./profile-lifecycle.js";
+export { removeWebRecoveryProfile } from "./profile-lifecycle.js";
 
 const MAX_BYTES = 64 * 1024 * 1024;
 const MAX_RECORDS = 50000;
 const FORMAT = "langkraft-web-recovery-v1";
 
-// Inventory only: never open/upgrade a database or interpret presence as validity.
+// Never open profile databases or interpret presence as validity. Only registry is read.
 export async function listWebRecoveryProfiles() {
   if (typeof indexedDB.databases !== "function") {
     throw new Error("This browser cannot list IndexedDB profiles");
   }
   const profiles = new Map();
-  for (const { name } of await indexedDB.databases()) {
+  const databases = await indexedDB.databases();
+  const states = new Map(databases.some(db => db.name === PROFILE_REGISTRY)
+    ? (await profileStates()).map(record => [record.profile, record.state]) : []);
+  for (const { name } of databases) {
     const match = /^langkraft-(sqlite|audio)-(recovered-.+)$/.exec(name || "");
     if (!match) continue;
     const [, kind, profile] = match;
     try { profileNames(profile); } catch { continue; }
-    const entry = profiles.get(profile) || { profile, sqlite: false, audio: false };
+    const state = isManagedProfile(profile) ? states.get(profile) || "unknown" : "legacy";
+    if (state === "deleted") continue;
+    const entry = profiles.get(profile) || { profile, sqlite: false, audio: false, state };
     entry[kind] = true;
     profiles.set(profile, entry);
   }
@@ -132,8 +139,9 @@ async function recover(blocks, media, sourceFile = "langkraft.db") {
   }
   checkBytes(blocks.filter(row => row.data instanceof Uint8Array).map(row => row.data));
   checkBytes(media.chunks.map(row => row.bytes));
-  const profile = `recovered-${crypto.randomUUID()}`;
+  const profile = `recovered-v2-${crypto.randomUUID()}`;
   const names = profileNames(profile);
+  const lease = await acquireProfileLease(profile, { create: true });
   let client;
   try {
     const sourcePath = `/${sourceFile}`;
@@ -198,14 +206,16 @@ async function recover(blocks, media, sourceFile = "langkraft.db") {
     return { profile, content, copiedAudio: copied.size, omittedAudio: media.audio.length - copied.size };
   } catch (error) {
     throw new Error(`Recovery failed for ${profile}; no copy link published: ${error.message}`, { cause: error });
-  } finally { client?.close(); }
+  } finally { client?.close(); await lease.release(); }
 }
 
 export async function cloneWebProfile(source = "") {
   const names = profileNames(source);
-  const sql = await snapshot(names.sqlite, 5, ["blocks"]);
-  const media = await snapshot(names.audio, 1, ["audio", "chunks"], true);
-  return recover(sql.blocks, media, names.file);
+  return withProfileLease(source, async () => {
+    const sql = await snapshot(names.sqlite, 5, ["blocks"]);
+    const media = await snapshot(names.audio, 1, ["audio", "chunks"], true);
+    return recover(sql.blocks, media, names.file);
+  });
 }
 
 function encode(bytes) {
@@ -222,16 +232,18 @@ function decode(text) {
 export async function exportWebProfile(source = "") {
   // Always sanitize a NEW copy, even when exporting a previously recovered profile.
   const report = await cloneWebProfile(source);
-  const client = createDatabaseClient(report.profile);
-  let sqlite;
-  try { sqlite = (await client.request("export_recovery"))[0][0]; await client.request("close"); }
-  finally { client.close(); }
-  const media = await snapshot(profileNames(report.profile).audio, 1, ["audio", "chunks"]);
-  const archive = { format: FORMAT, sqlite: encode(sqlite), audio: media.audio,
-    chunks: media.chunks.map(part => ({ ...part, bytes: encode(part.bytes) })), report };
-  const blob = new Blob([JSON.stringify(archive)], { type: "application/json" });
-  if (blob.size > MAX_BYTES) throw new Error("Export exceeds the 64 MiB archive limit");
-  return { blob, report };
+  return withProfileLease(report.profile, async () => {
+    const client = createDatabaseClient(report.profile);
+    let sqlite;
+    try { sqlite = (await client.request("export_recovery"))[0][0]; await client.request("close"); }
+    finally { client.close(); }
+    const media = await snapshot(profileNames(report.profile).audio, 1, ["audio", "chunks"]);
+    const archive = { format: FORMAT, sqlite: encode(sqlite), audio: media.audio,
+      chunks: media.chunks.map(part => ({ ...part, bytes: encode(part.bytes) })), report };
+    const blob = new Blob([JSON.stringify(archive)], { type: "application/json" });
+    if (blob.size > MAX_BYTES) throw new Error("Export exceeds the 64 MiB archive limit");
+    return { blob, report };
+  });
 }
 
 export async function importWebProfile(blob) {
