@@ -1,5 +1,7 @@
 # План исправлений по входящему кодревью
 
+REL-13/REL-14: backend retention подключён opt-in с import/read leases и протокольными маркерами; byte-бюджет резервируется до admission и контролируется по фактическим файлам/логам/PCM с остановкой процессов. Параллельные резервы, cleanup failure, HTTP-потоки и настоящие process trees проверены. [Retention ADR](ADR_BACKEND_MEDIA_RETENTION.md), [budget ADR](ADR_BACKEND_MEDIA_BUDGET.md). Исходные предложения LK-01 ниже сохранены как обоснование; клиентские квоты/retention и строгая квота FS остаются отдельными задачами.
+
 ## Актуализация после интеграции dev/main — 22 октября 2026
 
 REL-S2 включён в dev через PR #5, REL-S3/LK-04 — через PR #6 (`63a6a94`) после успешных JVM/Web CI. LK-04 исправлен: BrowserSqlDriver публикует commit hints через profile-scoped BroadcastChannel, другая вкладка инвалидирует Query.Listener и перечитывает Flow через DatabaseAccess. Есть focus/visibility fallback, rollback/close/echo регресс, параллельные SQLite записи и два полных Compose-приложения без reload. Проверки — в REL-10/REL-11 changelog; исторические предложения LK-04 ниже не означают, что этот код ещё отсутствует.

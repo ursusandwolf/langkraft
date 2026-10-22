@@ -10,11 +10,13 @@ import kotlin.math.abs
 class WaveformExtractor(
     private val runner: ProcessRunner = ExecutableProcessRunner(System.getenv("FFMPEG_EXECUTABLE") ?: "ffmpeg", 120)
 ) {
-    suspend fun extract(audio: File, durationSeconds: Double): List<Float> = withContext(Dispatchers.IO) {
-        val pcm = Files.createTempFile("langkraft-waveform-", ".pcm").toFile()
+    suspend fun extract(audio: File, durationSeconds: Double, checkBudget: () -> Unit = {}): List<Float> = withContext(Dispatchers.IO) {
+        val directory = audio.absoluteFile.toPath().parent
+        val pcm = Files.createTempFile(directory, "langkraft-waveform-", ".pcm").toFile()
         try {
-            runner.execute(listOf("-nostdin", "-v", "error", "-y", "-i", audio.absolutePath,
-                "-t", "14400", "-ac", "1", "-ar", "4000", "-f", "s16le", pcm.absolutePath))
+            runner.executeIn(listOf("-nostdin", "-v", "error", "-y", "-i", audio.absolutePath,
+                "-t", durationSeconds.toString(), "-ac", "1", "-ar", "4000", "-f", "s16le", pcm.absolutePath),
+                directory, checkBudget)
             val buckets = IntArray(200)
             val totalSamples = (durationSeconds * 4000).toLong().coerceAtLeast(1)
             pcm.inputStream().buffered().use { input ->
@@ -34,6 +36,7 @@ class WaveformExtractor(
             val peak = buckets.maxOrNull() ?: 0
             buckets.map { if (peak == 0) 0f else it.toFloat() / peak }
         } catch (exception: CancellationException) { throw exception }
+        catch (exception: MediaLimitException) { throw exception }
         catch (exception: Exception) {
             LoggerFactory.getLogger(WaveformExtractor::class.java).warn("Waveform extraction failed", exception)
             List(200) { 0f }

@@ -6,6 +6,9 @@ import java.nio.file.Files
 import java.nio.file.LinkOption.NOFOLLOW_LINKS
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption.CREATE_NEW
+import java.nio.file.SimpleFileVisitor
+import java.nio.file.FileVisitResult
+import java.nio.file.attribute.BasicFileAttributes
 import java.util.UUID
 
 /** One backend owns a downloads directory. Imports, readers and cleanup share this monitor. */
@@ -13,6 +16,7 @@ class BackendMediaStorage(
     downloadsDir: String,
     private val retentionMs: Long = 0,
     private val now: () -> Long = System::currentTimeMillis,
+    val limits: MediaLimits = MediaLimits(),
     private val remove: (Path) -> Unit = { Files.delete(it) }
 ) {
     private val root = Path.of(downloadsDir).toAbsolutePath().normalize()
@@ -31,14 +35,26 @@ class BackendMediaStorage(
     fun beginImport(jobId: String): AutoCloseable {
         require(isJobId(jobId)) { "Invalid job ID" }
         check(imports.add(jobId)) { "Import already active" }
+        var createdDirectory: Path? = null
         try {
             Files.createDirectories(root)
             check(!Files.isSymbolicLink(root)) { "Downloads directory must not be a symlink" }
+            if (limits.enabled) {
+                if (!hasCapacity()) cleanup() // Reclaim only media already eligible for retention.
+                if (!hasCapacity()) throw MediaCapacityException()
+            }
             val directory = root.resolve(jobId)
             Files.createDirectory(directory)
+            createdDirectory = directory
             Files.writeString(directory.resolve(MARKER), "pending\n${now()}", CREATE_NEW)
+            if (limits.maxImportBytes > 0 && treeBytes(directory) > limits.maxImportBytes) throw MediaCapacityException()
             return once { synchronized(this) { imports.remove(jobId) } }
         } catch (failure: Exception) {
+            // No process has started yet. Remove only the directory/marker created by this admission.
+            createdDirectory?.let { directory ->
+                try { Files.deleteIfExists(directory.resolve(MARKER)); Files.deleteIfExists(directory) }
+                catch (cleanup: Exception) { failure.addSuppressed(cleanup) }
+            }
             imports.remove(jobId)
             throw failure
         }
@@ -47,6 +63,7 @@ class BackendMediaStorage(
     @Synchronized
     fun publish(jobId: String, commitReady: () -> Unit = {}) {
         check(jobId in imports) { "Import lease required" }
+        checkImportBudget(jobId)
         val directory = safeDirectory(jobId) ?: error("Missing import directory")
         // The marker remains on disk across restart. Unknown/damaged markers are preserved.
         Files.writeString(directory.resolve(MARKER), "ready\n${now()}")
@@ -86,6 +103,76 @@ class BackendMediaStorage(
         val directory = safeDirectory(jobId) ?: return
         check(readMarker(directory) != null) { "Unmanaged import directory" }
         deleteOwnedTree(directory)
+    }
+
+    @Synchronized
+    fun importDirectory(jobId: String): Path {
+        check(jobId in imports) { "Import lease required" }
+        return safeDirectory(jobId) ?: error("Missing import directory")
+    }
+
+    @Synchronized
+    fun checkImportBudget(jobId: String) {
+        if (!limits.enabled || jobId !in imports) return
+        val bytes = treeBytes(importDirectory(jobId))
+        if (limits.maxImportBytes > 0 && bytes > limits.maxImportBytes) throw MediaLimitException()
+        if (limits.maxTotalBytes > 0 && accountedUsage() > limits.maxTotalBytes) {
+            throw MediaLimitException("Import exceeds configured total media budget")
+        }
+    }
+
+    @Synchronized
+    fun retainAudio(jobId: String, audio: File) {
+        val directory = importDirectory(jobId)
+        val keep = audio.toPath().toAbsolutePath().normalize()
+        check(keep.parent == directory && Files.isRegularFile(keep, NOFOLLOW_LINKS)) { "Invalid published audio" }
+        val paths = Files.walk(directory).use { it.toList() }
+        check(paths.none { Files.isSymbolicLink(it) }) { "Symlink in media directory" }
+        for (path in paths.sortedByDescending { it.nameCount }) {
+            if (path != directory && path != directory.resolve(MARKER) && path != keep) remove(path)
+        }
+    }
+
+    private fun hasCapacity(): Boolean {
+        if (limits.maxTotalBytes > 0 && accountedUsage() > limits.maxTotalBytes) return false
+        val remaining = imports.fold(0L) { total, id ->
+            Math.addExact(total, (limits.maxImportBytes - treeBytes(root.resolve(id))).coerceAtLeast(0))
+        }
+        return Files.getFileStore(root).usableSpace >= remaining
+    }
+
+    /** Active directories cost at least their full reservation, never their small initial size. */
+    private fun accountedUsage(): Long {
+        var bytes = treeBytes(root, skipImports = true)
+        for (id in imports) bytes = Math.addExact(bytes, maxOf(limits.maxImportBytes, treeBytes(root.resolve(id))))
+        return bytes
+    }
+
+    private fun treeBytes(path: Path, skipImports: Boolean = false): Long {
+        if (!Files.exists(path, NOFOLLOW_LINKS)) return 0
+        var bytes = 0L
+        Files.walkFileTree(path, object : SimpleFileVisitor<Path>() {
+            override fun preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult =
+                if (skipImports && dir.parent == root && dir.fileName.toString() in imports) FileVisitResult.SKIP_SUBTREE
+                else FileVisitResult.CONTINUE
+
+            override fun visitFile(file: Path, attrs: BasicFileAttributes): FileVisitResult {
+                if (attrs.isRegularFile) bytes = Math.addExact(bytes, attrs.size())
+                return FileVisitResult.CONTINUE
+            }
+
+            override fun visitFileFailed(file: Path, exc: java.io.IOException): FileVisitResult {
+                // yt-dlp/ffmpeg rename and delete temporary files while the monitor samples them.
+                if (exc is java.nio.file.NoSuchFileException) return FileVisitResult.CONTINUE
+                throw exc
+            }
+
+            override fun postVisitDirectory(dir: Path, exc: java.io.IOException?): FileVisitResult {
+                if (exc != null && exc !is java.nio.file.NoSuchFileException) throw exc
+                return FileVisitResult.CONTINUE
+            }
+        })
+        return bytes
     }
 
     @Synchronized

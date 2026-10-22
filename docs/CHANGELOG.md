@@ -1,3 +1,11 @@
+# REL-14 — 2026-10-22 — backend media budget с резервированием
+
+- MediaLimits задаёт opt-in per-import/total byte limits, интервал монитора и максимальную длительность. Общий бюджет требует положительный per-import limit. BackendMediaStorage резервирует полный бюджет queued/active job до записи в БД; actual bytes активного каталога не считаются повторно. Legacy/unknown и файлы после неудачной очистки остаются в учёте. Нехватка даёт 503/Retry-After до persistence; слишком малый резерв откатывает созданные marker/directory.
+- CoroutineScope контролирует фактические размеры во время обработки, отменяет/reaps процессы до cleanup/release. Metadata preflight отклоняет live, неизвестную/чрезмерную длительность и известный oversized filesize/estimate. После отказа по квоте job получает ERROR, worker продолжает очередь.
+- ProcessRunner.executeIn размещает metadata/yt-dlp/ffmpeg logs в job-каталоге, проверяет callback бюджета каждые 100 мс и после exit до удаления лога. Лимит лога 2 МиБ теперь действует во время работы. Известные потомки завершаются даже после выхода родителя. PCM waveform перенесён в job-каталог, quota failure больше не превращается в нулевой waveform.
+- После разбора subtitle/waveform удаляются intermediates; остаются MP3 и ownership marker. Перед publish повторяется бюджетная проверка, резерв заменяется actual bytes. Byte-limits по умолчанию выключены; периодический монитор допускает превышение между проверками, строгая граница требует квоты FS. [ADR](ADR_BACKEND_MEDIA_BUDGET.md).
+- Проверено: 98 shared + 68 backend JVM-тестов, 0 failures; один symlink-тест пропущен на Windows без привилегии. Новые сценарии: конкурентные резервы, legacy/accounting, частичный cleanup, отказ до persistence, metadata, actual overflow/отмена/продолжение worker, waveform quota, настоящие процессы/потомки/рост логов. Реальный YouTube в этом этапе не вызывался.
+
 # REL-13 — 2026-10-22 — opt-in backend media retention
 
 - Добавлен BackendMediaStorage: import lease с момента admission/очереди, read lease на выдачу MP3 и единый monitor для публикации/cleanup. UUID-каталог получает `.langkraft-media-v1`; ready timestamp отсчитывается от публикации. Callback записи READY выполняется до открытия читателей; отказ сохраняет import lease для компенсации.

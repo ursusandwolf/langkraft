@@ -44,10 +44,12 @@ class YouTubeIngestionService(
             scope.launch {
                 for ((jobId, url, lease) in ingestionChannel) {
                     try {
-                        processIngestion(jobId, url)
+                        processWithBudget(jobId, url)
                     } catch (exception: CancellationException) {
                         failJob(jobId, "Import interrupted")
                         throw exception
+                    } catch (exception: MediaLimitException) {
+                        failJob(jobId, exception.message.orEmpty())
                     } catch (exception: Exception) {
                         logger.error("Ingestion failed for $jobId", exception)
                         failJob(jobId, "Import failed")
@@ -81,20 +83,41 @@ class YouTubeIngestionService(
 
     fun getJobStatus(jobId: String): IngestionJob? = jobRepository.get(jobId)
 
+    private suspend fun processWithBudget(jobId: String, url: String) {
+        val media = ytdlpClient.mediaStorage
+        if (!media.limits.enabled) { processIngestion(jobId, url); return }
+        coroutineScope {
+            val processing = async { processIngestion(jobId, url) }
+            while (!processing.isCompleted) {
+                media.checkImportBudget(jobId)
+                delay(media.limits.checkIntervalMs)
+            }
+            processing.await()
+        } // Scope cancellation reaps external processes before the worker removes files/releases its lease.
+    }
+
     private suspend fun processIngestion(jobId: String, url: String) {
         jobRepository.update(jobId) { it.copy(status = ContentProcessingStatus.FETCHING_METADATA) }
-        val info = ytdlpClient.getVideoInfo(url)
+        val info = ytdlpClient.getVideoInfo(url, jobId)
         val videoId = info.id?.takeIf { Regex("[A-Za-z0-9_-]+").matches(it) }
             ?: throw IngestionException("Invalid video ID")
-        val duration = info.duration?.takeIf { it.isFinite() && it > 0 && it <= 14_400 }
-            ?: throw IngestionException("Video duration must be between 0 and 4 hours")
+        val limits = ytdlpClient.mediaStorage.limits
+        if (info.isLive == true) throw IngestionException("Live streams are not supported")
+        val duration = info.duration?.takeIf { it.isFinite() && it > 0 && it <= limits.maxDurationSeconds }
+            ?: throw IngestionException("Video duration exceeds the configured limit or is unknown")
+        val estimate = listOfNotNull(info.filesize, info.estimatedFilesize).filter { it > 0 }.maxOrNull()
+        if (limits.maxImportBytes > 0 && estimate != null && estimate > limits.maxImportBytes) {
+            throw MediaLimitException("Estimated media size exceeds configured import budget")
+        }
         jobRepository.update(jobId) { it.copy(status = ContentProcessingStatus.DOWNLOADING_AUDIO) }
         val (audio, subtitlesFile) = ytdlpClient.downloadContent(url, videoId, jobId)
         jobRepository.update(jobId) { it.copy(status = ContentProcessingStatus.PARSING_SUBTITLES) }
         val subtitles = withContext(Dispatchers.Default) { SrtParser.parse(videoId, subtitlesFile.readText()) }
         jobRepository.update(jobId) { it.copy(status = ContentProcessingStatus.GENERATING_WAVEFORM) }
-        val waveform = waveformExtractor.extract(audio, duration)
+        val waveform = waveformExtractor.extract(audio, duration) { ytdlpClient.mediaStorage.checkImportBudget(jobId) }
         currentCoroutineContext().ensureActive()
+        ytdlpClient.mediaStorage.checkImportBudget(jobId)
+        ytdlpClient.mediaStorage.retainAudio(jobId, audio)
         val content = ImmersionContent(videoId, info.title ?: "Extracted Content",
             "/api/media/$jobId/$videoId.mp3", audio.absolutePath, url, duration.toLong(), subtitles, waveform)
         ytdlpClient.mediaStorage.publish(jobId) {
