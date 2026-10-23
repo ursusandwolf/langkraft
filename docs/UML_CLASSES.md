@@ -1,5 +1,7 @@
 # UML классов Langkraft
 
+Порядок запуска и сценарии выполнения с текстовыми sequence-схемами, псевдокодом и состояниями для ручной проверки: [EXECUTION_WALKTHROUGH](EXECUTION_WALKTHROUGH.md).
+
 Актуальная карта основных классов; вспомогательные UI-компоненты и все поля DTO опущены. Пунктир — использование, сплошная стрелка — удерживаемая зависимость, треугольник — наследование/реализация. `MainApp`, Koin DSL и Routing — функции, поэтому они описаны в [руководстве](DEVELOPER_GUIDE.md), а не выданы за классы. Mermaid отображается на GitHub; исходники диаграмм находятся в этом Markdown.
 
 Web lifecycle recovery-v2 реализован функциями [profile-lifecycle.js](../shared/src/jsMain/storage/profile-lifecycle.js), без новых Kotlin-классов. SQL worker, audio-страница и recovery держат shared lease; ручная очистка требует exclusive lease и проходит состояния active → deleting → deleted в отдельном реестре. Операция повторяется после частичного отказа, tombstone блокирует старые ссылки. Псевдографика модулей и существующие паттерны — REL-09 в [UML-ченджлоге](CHANGELOG_UML.md), ограничения — [LEGACY_RECOVERY](LEGACY_RECOVERY.md).

@@ -8,6 +8,8 @@
 
 После запуска: [первое занятие за шесть шагов](docs/FIRST_LESSON.md).
 
+Разобраться в выполнении программы: [UML-псевдографика, общий псевдокод и ручная трассировка занятия](docs/EXECUTION_WALKTHROUGH.md).
+
 ## Состояние проекта — 22 октября 2026
 
 Расхождение прежних историй main/dev устранено, обе истории сохранены. Выпуск REL-S2/REL-S3 включает восстановление offline-аудио и исправление LK-04: библиотека второй вкладки перечитывается после изменения в первой без reload, rollback не рассылается. В `dev` слиты [PR #5](https://github.com/ursusandwolf/langkraft/pull/5) (`384a30f`) и [PR #6](https://github.com/ursusandwolf/langkraft/pull/6) (`63a6a94`); их [JVM/Web CI](https://github.com/ursusandwolf/langkraft/actions/runs/39777909189) успешен. Выпуски проходят через проверенный PR `dev → main` обычным merge; после выпуска `dev` обновляется до merge-коммита fast-forward. Следующая разработка начинается отдельной sprint-веткой от синхронизированного `dev`.
