@@ -149,6 +149,28 @@ try {
   assert.deepEqual(await query('SELECT translation,lemma FROM Vocabulary'),[['Hello from remote AI','hallo']]);
   assert.deepEqual(await page.evaluate(()=>window.storage.listPendingAudio()),[],'Committed download must acknowledge its publication');
   assert.deepEqual(await query("SELECT key FROM SyncMetadata WHERE key LIKE 'audio_download_lock:%'"),[],'Successful download must clear its recovery marker');
+  await page.mouse.click(840,775);
+  await page.waitForTimeout(700);
+  await page.screenshot({path:path.join(artifacts,'review-question.png')});
+  await page.mouse.click(600,455);
+  await page.waitForTimeout(400);
+  await page.screenshot({path:path.join(artifacts,'review-answer.png')});
+  // Grade through the real Review screen; SQL probes only observe the result.
+  await page.mouse.click(168,495); // AGAIN
+  await waitQuery('SELECT lapseCount FROM Vocabulary',rows=>rows[0]?.[0]===1);
+  assert.deepEqual(await query('SELECT intervalDays,lapseCount,status FROM Vocabulary'),[[0,1,'LEARNING']]);
+  await page.waitForTimeout(400);
+  await page.mouse.click(600,455); // Show the answer again after re-learning.
+  await page.waitForTimeout(400);
+  const submittedAt=Date.now();
+  await page.mouse.click(744,495); // GOOD
+  const reviewSql='SELECT word,translation,contextSentence,intervalDays,lapseCount,nextReviewAt FROM Vocabulary';
+  const reviewed=await waitQuery(reviewSql,rows=>rows[0]?.[3]===1);
+  assert.deepEqual(reviewed[0].slice(0,5),['Hallo','Hello from remote AI','Hallo Welt',1,1]);
+  assert.ok(reviewed[0][5]>=submittedAt+86400000-1000 && reviewed[0][5]<=Date.now()+86400000+1000,
+    'GOOD should schedule the saved word for tomorrow');
+  await page.waitForTimeout(400);
+  await page.screenshot({path:path.join(artifacts,'review-finished.png')});
   const owner=await context.newPage();
   await owner.goto(origin+'/storage-owner');
   await owner.waitForFunction(()=>!!window.storage);
@@ -198,6 +220,9 @@ try {
   });
   const requestsBeforeReload=mediaRequests;
   await open();
+  assert.deepEqual(await query(reviewSql),reviewed,'Review progress must survive app reload and reopening SQLite');
+  assert.deepEqual(await query('SELECT word FROM Vocabulary WHERE nextReviewAt <= ?',[Date.now()]),[],
+    'The reviewed word must not be due immediately after reload');
   assert.deepEqual(await query('SELECT localAudioPath,downloadStatus FROM Content WHERE id=?',[content.id]),[[saved[0][0],'COMPLETED']]);
   assert.deepEqual(await query('SELECT id,downloadStatus FROM Content WHERE id IN (?,?,?) ORDER BY id',['stale-new','active-owner','legacy-owner']),[
     ['active-owner','DOWNLOADING'],['legacy-owner','DOWNLOADING'],['stale-new','ERROR']
@@ -314,6 +339,7 @@ try {
   assert.deepEqual(errors,[]);
   console.log('PASS: Web import error/retry, async job polling, playback, durable audio, vocabulary and offline reload');
   console.log('PASS: restored JWT session sends word/context to remote AI; backend translation and lemma reach vocabulary');
+  console.log('PASS: lesson reaches Review UI, AGAIN re-learns, GOOD schedules tomorrow and progress survives reload');
   console.log('PASS: desktop and mobile rendering without runtime errors');
   console.log('PASS: app startup removes abandoned audio while preserving saved offline playback');
   console.log('PASS: SQL recovery restores stale downloads, preserves active/legacy owners and recovers a closed owner');
