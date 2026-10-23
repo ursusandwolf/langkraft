@@ -4,6 +4,11 @@ import com.langkraft.domain.model.*
 import com.langkraft.domain.repository.VocabularyRepository
 import com.langkraft.domain.srs.SpacedRepetitionAlgorithm
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -12,17 +17,28 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class SrsTrainingViewModelTest {
     private val testDispatcher = UnconfinedTestDispatcher()
 
     private class FakeVocabularyRepository : VocabularyRepository {
         val words = MutableStateFlow<List<VocabularyWord>>(emptyList())
         val savedWords = mutableListOf<VocabularyWord>()
+        var saveAction: suspend () -> Unit = {}
+        var loadError: Exception? = null
+        var saveAttempts = 0
 
-        override fun getWordsToReview(): Flow<List<VocabularyWord>> = words
+        override fun getWordsToReview(): Flow<List<VocabularyWord>> = flow {
+            loadError?.let { throw it }
+            emitAll(words)
+        }
         override fun getReviewCount(): Flow<Int> = flowOf(words.value.size)
         override suspend fun saveWord(word: VocabularyWord) {
+            saveAttempts++
+            saveAction()
             savedWords.add(word)
         }
         override suspend fun deleteWord(id: String) {}
@@ -37,6 +53,90 @@ class SrsTrainingViewModelTest {
         override fun calculateNextReview(word: VocabularyWord, quality: ReviewQuality): VocabularyWord {
             return word.copy(intervalDays = if (quality.sm2Value >= 3) 1 else 0)
         }
+    }
+
+    @Test
+    fun keepsCardUntilSaveCompletesAndIgnoresRepeatedSubmit() = runTest {
+        val repo = FakeVocabularyRepository()
+        val word = VocabularyWord(id = "1", word = "Haus", contextSentence = "Haus")
+        repo.words.value = listOf(word)
+        val saving = CompletableDeferred<Unit>()
+        repo.saveAction = { saving.await() }
+        val viewModel = SrsTrainingViewModel(repo, FakeSrsAlgorithm(), testDispatcher)
+        try {
+            viewModel.onEvent(SrsEvent.ShowAnswer)
+            viewModel.onEvent(SrsEvent.SubmitResult(ReviewQuality.GOOD))
+            assertEquals(word, viewModel.currentState.currentWord)
+            assertFalse(viewModel.currentState.isFinished)
+            assertTrue(viewModel.currentState.isSaving)
+            viewModel.onEvent(SrsEvent.SubmitResult(ReviewQuality.EASY))
+            viewModel.onEvent(SrsEvent.Restart)
+            viewModel.onEvent(SrsEvent.LoadQueue)
+            assertEquals(1, repo.saveAttempts)
+            saving.complete(Unit)
+            assertTrue(viewModel.currentState.isFinished)
+            assertEquals(1, repo.savedWords.size)
+        } finally { saving.complete(Unit); viewModel.onCleared() }
+    }
+
+    @Test
+    fun failedSaveKeepsAnswerAndCanBeRetried() = runTest {
+        val repo = FakeVocabularyRepository()
+        val word = VocabularyWord(id = "1", word = "Haus", contextSentence = "Haus")
+        repo.words.value = listOf(word)
+        repo.saveAction = { throw IllegalStateException("Disk full") }
+        val viewModel = SrsTrainingViewModel(repo, FakeSrsAlgorithm(), testDispatcher)
+        try {
+            viewModel.onEvent(SrsEvent.ShowAnswer)
+            viewModel.onEvent(SrsEvent.SubmitResult(ReviewQuality.GOOD))
+            assertEquals(listOf(word), viewModel.currentState.queue)
+            assertEquals(word, viewModel.currentState.currentWord)
+            assertTrue(viewModel.currentState.isAnswerVisible)
+            assertFalse(viewModel.currentState.isSaving)
+            assertFalse(viewModel.currentState.isFinished)
+            assertNotNull(viewModel.currentState.error)
+            assertTrue(repo.savedWords.isEmpty())
+            repo.saveAction = {}
+            viewModel.onEvent(SrsEvent.SubmitResult(ReviewQuality.GOOD))
+            assertEquals(1, repo.savedWords.size)
+            assertTrue(viewModel.currentState.isFinished)
+            assertNull(viewModel.currentState.error)
+        } finally { viewModel.onCleared() }
+    }
+
+    @Test
+    fun loadFailureIsNotAnEmptySessionAndCanBeRetried() = runTest {
+        val repo = FakeVocabularyRepository()
+        val word = VocabularyWord(id = "1", word = "Haus", contextSentence = "Haus")
+        repo.words.value = listOf(word)
+        repo.loadError = IllegalStateException("Storage unavailable")
+        val viewModel = SrsTrainingViewModel(repo, FakeSrsAlgorithm(), testDispatcher)
+        try {
+            assertFalse(viewModel.currentState.isLoading)
+            assertFalse(viewModel.currentState.isFinished)
+            assertNotNull(viewModel.currentState.error)
+            repo.loadError = null
+            viewModel.onEvent(SrsEvent.LoadQueue)
+            assertEquals(word, viewModel.currentState.currentWord)
+            assertNull(viewModel.currentState.error)
+        } finally { viewModel.onCleared() }
+    }
+
+    @Test
+    fun cancellationDoesNotReportSuccessOrStorageFailure() = runTest {
+        val repo = FakeVocabularyRepository()
+        val word = VocabularyWord(id = "1", word = "Haus", contextSentence = "Haus")
+        repo.words.value = listOf(word)
+        repo.saveAction = { throw CancellationException("Review closed") }
+        val viewModel = SrsTrainingViewModel(repo, FakeSrsAlgorithm(), testDispatcher)
+        try {
+            viewModel.onEvent(SrsEvent.SubmitResult(ReviewQuality.GOOD))
+            assertEquals(word, viewModel.currentState.currentWord)
+            assertFalse(viewModel.currentState.isFinished)
+            assertFalse(viewModel.currentState.isSaving)
+            assertNull(viewModel.currentState.error)
+            assertTrue(repo.savedWords.isEmpty())
+        } finally { viewModel.onCleared() }
     }
 
     @Test

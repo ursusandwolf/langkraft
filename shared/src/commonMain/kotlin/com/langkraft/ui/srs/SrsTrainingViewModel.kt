@@ -4,8 +4,9 @@ import com.langkraft.domain.model.VocabularyWord
 import com.langkraft.domain.model.ReviewQuality
 import com.langkraft.domain.repository.VocabularyRepository
 import com.langkraft.domain.srs.SpacedRepetitionAlgorithm
-import com.langkraft.ui.BaseViewModel
 import com.langkraft.ui.StateViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -15,6 +16,8 @@ data class SrsTrainingState(
     val isAnswerVisible: Boolean = false,
     val remainingCount: Int = 0,
     val isLoading: Boolean = false,
+    val isSaving: Boolean = false,
+    val error: String? = null,
     val isFinished: Boolean = false
 )
 
@@ -36,6 +39,7 @@ class SrsTrainingViewModel(
     }
 
     fun onEvent(event: SrsEvent) {
+        if (currentState.isLoading || currentState.isSaving) return
         when (event) {
             SrsEvent.LoadQueue -> loadQueue()
             SrsEvent.ShowAnswer -> updateState { it.copy(isAnswerVisible = true) }
@@ -48,21 +52,25 @@ class SrsTrainingViewModel(
     }
 
     private fun loadQueue() {
+        updateState { it.copy(isLoading = true, error = null) }
         scope.launch {
-            updateState { it.copy(isLoading = true) }
             try {
                 // Take only first emission to avoid UI jumps during session
                 val words = vocabularyRepository.getWordsToReview().first()
+                ensureActive()
                 updateState { 
                     it.copy(
                         queue = words,
                         currentWord = words.firstOrNull(),
                         remainingCount = words.size,
-                        isLoading = false,
                         isFinished = words.isEmpty()
                     ) 
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
+                updateState { it.copy(error = "Could not load your reviews. Please try again.") }
+            } finally {
                 updateState { it.copy(isLoading = false) }
             }
         }
@@ -70,33 +78,31 @@ class SrsTrainingViewModel(
 
     private fun handleSubmitResult(quality: ReviewQuality) {
         val word = currentState.currentWord ?: return
-        val updatedWord = srsAlgorithm.calculateNextReview(word, quality)
-        
+        updateState { it.copy(isSaving = true, error = null) }
         scope.launch {
-            vocabularyRepository.saveWord(updatedWord)
-        }
-
-        updateState { state ->
-            val newQueue = state.queue.toMutableList()
-            
-            // Remove current word from the front
-            if (newQueue.isNotEmpty()) {
-                newQueue.removeAt(0)
+            try {
+                val updatedWord = srsAlgorithm.calculateNextReview(word, quality)
+                vocabularyRepository.saveWord(updatedWord)
+                ensureActive()
+                // Advance only after persistence; a failed save leaves the same card retryable.
+                updateState { state ->
+                    val newQueue = state.queue.drop(1) +
+                        if (quality == ReviewQuality.AGAIN) listOf(updatedWord) else emptyList()
+                    state.copy(
+                        queue = newQueue,
+                        currentWord = newQueue.firstOrNull(),
+                        remainingCount = newQueue.size,
+                        isAnswerVisible = false,
+                        isFinished = newQueue.isEmpty()
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                updateState { it.copy(error = "Could not save your review. Please choose a rating again.") }
+            } finally {
+                updateState { it.copy(isSaving = false) }
             }
-
-            // If quality is poor (AGAIN), add to the end of the queue for re-learning
-            if (quality.sm2Value < 3) { // 3 is SUCCESS_THRESHOLD in Sm2Algorithm
-                newQueue.add(updatedWord)
-            }
-
-            val nextWord = newQueue.firstOrNull()
-            state.copy(
-                queue = newQueue,
-                currentWord = nextWord,
-                remainingCount = newQueue.size,
-                isAnswerVisible = false,
-                isFinished = nextWord == null
-            )
         }
     }
 }

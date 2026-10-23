@@ -28,7 +28,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.langkraft.domain.model.VocabularyWord
 import com.langkraft.domain.model.ReviewQuality
 
 import androidx.compose.runtime.LaunchedEffect
@@ -68,8 +67,12 @@ fun SrsTrainingView(
                     modifier = Modifier.align(Alignment.Center),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text("All caught up!", style = MaterialTheme.typography.h5)
+                    Text(state.error ?: "All caught up!", style = MaterialTheme.typography.h5)
                     Spacer(modifier = Modifier.height(16.dp))
+                    if (state.error != null) {
+                        Button(onClick = { viewModel.onEvent(SrsEvent.LoadQueue) }) { Text("TRY AGAIN") }
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
                     Button(onClick = onFinish) { Text("BACK TO LIBRARY") }
                 }
             } else {
@@ -115,7 +118,10 @@ fun SrsTrainingView(
                             Text("SHOW ANSWER")
                         }
                     } else {
-                        QualityButtons(onQualitySelected = { viewModel.onEvent(SrsEvent.SubmitResult(it)) })
+                        if (state.isSaving) Text("Saving review…")
+                        state.error?.let { Text(it, color = MaterialTheme.colors.error) }
+                        QualityButtons(enabled = !state.isSaving,
+                            onQualitySelected = { viewModel.onEvent(SrsEvent.SubmitResult(it)) })
                     }
                 }
             }
@@ -124,7 +130,7 @@ fun SrsTrainingView(
 }
 
 @Composable
-fun QualityButtons(onQualitySelected: (ReviewQuality) -> Unit) {
+fun QualityButtons(enabled: Boolean = true, onQualitySelected: (ReviewQuality) -> Unit) {
     Column {
         Text(
             "How well did you know this?",
@@ -134,18 +140,19 @@ fun QualityButtons(onQualitySelected: (ReviewQuality) -> Unit) {
         )
         Spacer(modifier = Modifier.height(8.dp))
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            QualityButton("AGAIN", "Forgot", Color.Red) { onQualitySelected(ReviewQuality.AGAIN) }
-            QualityButton("HARD", "Struggled", Color(0xFFF57C00)) { onQualitySelected(ReviewQuality.HARD) }
-            QualityButton("GOOD", "Normal", Color.Green) { onQualitySelected(ReviewQuality.GOOD) }
-            QualityButton("EASY", "Perfect", MaterialTheme.colors.primary) { onQualitySelected(ReviewQuality.EASY) }
+            QualityButton("AGAIN", "Forgot", Color.Red, enabled) { onQualitySelected(ReviewQuality.AGAIN) }
+            QualityButton("HARD", "Struggled", Color(0xFFF57C00), enabled) { onQualitySelected(ReviewQuality.HARD) }
+            QualityButton("GOOD", "Normal", Color.Green, enabled) { onQualitySelected(ReviewQuality.GOOD) }
+            QualityButton("EASY", "Perfect", MaterialTheme.colors.primary, enabled) { onQualitySelected(ReviewQuality.EASY) }
         }
     }
 }
 
 @Composable
-fun RowScope.QualityButton(label: String, sublabel: String, color: Color, onClick: () -> Unit) {
+fun RowScope.QualityButton(label: String, sublabel: String, color: Color, enabled: Boolean = true, onClick: () -> Unit) {
     Button(
         onClick = onClick,
+        enabled = enabled,
         modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
         colors = ButtonDefaults.buttonColors(backgroundColor = color, contentColor = Color.White)
     ) {
