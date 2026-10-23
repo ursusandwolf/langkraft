@@ -1,3 +1,7 @@
+# MVP-04 — 2026-10-23 — граница серверного и клиентского аудио
+
+Существующий `IngestContentUseCase` нормализует клиентские offline-поля между `RemoteContentSource.fetchFromYouTube` и `LocalContentRepository.saveContent`: новая структура получает `localAudioPath=null`, `downloadStatus=IDLE`. Репозиторий сохраняет собственную ранее завершённую offline-копию. Новых классов, зависимостей и паттернов нет; [порядок выполнения](EXECUTION_WALKTHROUGH.md) отражает эту границу.
+
 # DOC-02 — 2026-10-23 — карта выполнения программы
 
 Классы и архитектура не менялись. В [EXECUTION_WALKTHROUGH](EXECUTION_WALKTHROUGH.md) добавлены текстовые component/sequence/state-схемы существующего выполнения, общий псевдокод и таблица состояний для ручной трассировки. Функции Koin, MainApp и Routing обозначены как функции/модули, без введения новых классов.

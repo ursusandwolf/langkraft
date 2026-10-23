@@ -1,6 +1,6 @@
 # Langkraft: порядок выполнения в UML-псевдографике и псевдокоде
 
-Срез реализации: `dev`, коммит `3389144`, 23 октября 2026. Это карта существующего кода для ручного чтения. Имена функций сохранены там, где они есть в исходниках; `ON`, `PARALLEL`, `TX`, `WAIT` ниже — поясняющий псевдокод.
+Основа карты: `dev`, коммит `3389144`, 23 октября 2026; описание импорта дополнено исправлением MVP-04 после повторной проверки. Это карта существующего кода для ручного чтения. Имена функций сохранены там, где они есть в исходниках; `ON`, `PARALLEL`, `TX`, `WAIT` ниже — поясняющий псевдокод.
 
 Основной маршрут — Web MVP. Backend, Desktop/TUI, восстановление и тестовый режим показаны отдельно. Каталог классов и интерфейсов: [UML_CLASSES](UML_CLASSES.md). Инструкция запуска: [RUNNING](RUNNING.md).
 
@@ -346,6 +346,7 @@ ContentSelectionViewModel.importContent(url):
                 IF job.status=ERROR -> ошибка импорта
                 IF job.status=READY AND content != null -> RETURN content
                 ELSE продолжить ожидание
+        content = copy(content, localAudioPath=null, downloadStatus=IDLE)
         LocalContentRepository.saveContent(content)
         RETURN Result.success(content)
     ошибка операции -> Result.failure -> state.error
@@ -401,9 +402,9 @@ WORKER:
 
 `job.status=READY` означает готовый результат backend. `Content.downloadStatus=COMPLETED` означает локальную offline-копию клиента. Это разные статусы.
 
-Важная деталь DTO: backend заполняет `localAudioPath` своим абсолютным путём. При начальном IDLE выбор `getPlaybackUrl()` использует `audioUrl`. Путь пригодной offline-копии браузера появляется после `AudioStorage.store()` и SQL-привязки; серверный путь не является браузерным `indexeddb-audio:` объектом.
+Важная деталь DTO: backend заполняет `localAudioPath` своим абсолютным путём. `IngestContentUseCase` сбрасывает его в null и устанавливает IDLE до записи в клиентскую БД (MVP-04). При повторном импорте repository отдельно сохраняет уже существующую COMPLETED клиентскую копию. Путь новой offline-копии браузера появляется после `AudioStorage.store()` и SQL-привязки; серверный путь не является браузерным `indexeddb-audio:` объектом.
 
-При ручной трассировке перезапуска отдельно проверьте это поле: текущий `initializeDatabase` для уже существующей схемы переводит строки с `localAudioPath != null` и `downloadStatus=IDLE` в COMPLETED. Эта SQL-ветка не проверяет существование или принадлежность файла клиенту. Схема здесь фиксирует фактическое выполнение; автоматической проверки пригодности серверного пути в браузере не следует из наличия поля.
+При ручной трассировке старых профилей отдельно проверьте это поле: `initializeDatabase` для уже существующей схемы переводит строки с `localAudioPath != null` и `downloadStatus=IDLE` в COMPLETED. Эта SQL-ветка не проверяет существование или принадлежность файла клиенту. Исправление MVP-04 предотвращает попадание серверного пути при новом импорте; автоматическую очистку прежних строк оно не выполняет, миграция legacy-профилей сохраняется.
 
 Исходники: [ContentSelectionViewModel.kt](../shared/src/commonMain/kotlin/com/langkraft/ui/content/ContentSelectionViewModel.kt), [IngestContentUseCase.kt](../shared/src/commonMain/kotlin/com/langkraft/domain/usecase/IngestContentUseCase.kt), [BackendRemoteSource.kt](../shared/src/commonMain/kotlin/com/langkraft/data/repository/BackendRemoteSource.kt), [YouTubeIngestionService.kt](../backend/src/main/kotlin/com/langkraft/backend/YouTubeIngestionService.kt), [YtdlpClient.kt](../backend/src/main/kotlin/com/langkraft/backend/YtdlpClient.kt), [SqlDelightContentRepository.kt](../shared/src/commonMain/kotlin/com/langkraft/data/repository/SqlDelightContentRepository.kt).
 
