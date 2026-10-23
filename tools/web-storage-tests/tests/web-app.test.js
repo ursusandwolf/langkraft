@@ -27,7 +27,7 @@ if(demo) {
 let imports=0, mediaRequests=0;
 const aiRequests=[];
 let holdMedia=false, releaseMedia, onMediaHeld;
-const content={id:'web-fixture',title:'Deutsch im Alltag',audioUrl:'/api/media/test.wav',localAudioPath:null,
+const content={id:'web-fixture',title:'Deutsch im Alltag',audioUrl:'/api/media/test.wav',localAudioPath:'/backend-private/downloads/web-fixture/test.wav',
   sourceUrl:'https://youtu.be/video',durationSeconds:4,subtitles:[{id:'cue',contentId:'web-fixture',startMs:0,endMs:4000,originalText:'Hallo Welt',translationText:null}]};
 const server=createServer(async(req,res)=>{
   const pathname=new URL(req.url,'http://localhost').pathname;
@@ -150,6 +150,12 @@ try {
   assert.equal(await libraryPeer.evaluate(()=>window.libraryPageId),peerPageId);
   await libraryPeer.screenshot({path:path.join(artifacts,'library-peer.png')});
   await libraryPeer.close();
+  // The real backend includes its filesystem path. Reload before any offline
+  // download must leave this browser using the remote audio URL.
+  await open();
+  assert.deepEqual(await query('SELECT localAudioPath,downloadStatus FROM Content WHERE id=?',[content.id]),[[null,'IDLE']],
+    'A backend filesystem path must not become a browser offline copy after reload');
+  await page.mouse.click(600,775);
   await page.waitForTimeout(300);
   await page.screenshot({path:path.join(artifacts,'library.png')});
   await page.mouse.click(200,380);await page.waitForTimeout(700);
@@ -362,6 +368,7 @@ try {
   await recoveryPage.screenshot({path:path.join(artifacts,'recovery.png')});
   await recoveryPage.close();
   assert.deepEqual(errors,[]);
+  console.log('PASS: backend filesystem path is ignored; reload before offline download keeps remote playback');
   console.log('PASS: Web import error/retry, async job polling, playback, durable audio, vocabulary and offline reload');
   console.log('PASS: restored JWT session sends word/context to remote AI; backend translation and lemma reach vocabulary');
   console.log('PASS: lesson reaches Review UI, AGAIN re-learns, GOOD schedules tomorrow and progress survives reload');
