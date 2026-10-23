@@ -10,12 +10,20 @@ const root = fileURLToPath(new URL('../../../', import.meta.url));
 const bundle = process.env.WEB_APP_BUNDLE || path.join(root, 'webApp/build/kotlin-webpack/js/developmentExecutable');
 const resources = path.join(root, 'webApp/build/processedResources/js/main');
 const artifacts = path.join(root, 'tools/web-storage-tests/build/app');
+const demo = process.argv.includes('--demo');
 await mkdir(artifacts, {recursive:true});
 const audio = Buffer.alloc(44 + 16000 * 2 * 4);
 audio.write('RIFF'); audio.writeUInt32LE(audio.length-8,4); audio.write('WAVEfmt ',8);
 audio.writeUInt32LE(16,16); audio.writeUInt16LE(1,20); audio.writeUInt16LE(1,22);
 audio.writeUInt32LE(16000,24); audio.writeUInt32LE(32000,28); audio.writeUInt16LE(2,32); audio.writeUInt16LE(16,34);
 audio.write('data',36); audio.writeUInt32LE(audio.length-44,40);
+if(demo) {
+  // Audible fixture, not recorded speech. A short fade avoids clicks at either end.
+  for(let sample=0;sample<16000*4;sample++) {
+    const fade=Math.min(1,sample/800,(16000*4-1-sample)/800);
+    audio.writeInt16LE(Math.round(4000*fade*Math.sin(2*Math.PI*440*sample/16000)),44+sample*2);
+  }
+}
 let imports=0, mediaRequests=0;
 const aiRequests=[];
 let holdMedia=false, releaseMedia, onMediaHeld;
@@ -39,9 +47,13 @@ const server=createServer(async(req,res)=>{
   if(pathname==='/api/ai/translate-word') {
     let body=''; for await(const chunk of req) body+=chunk;
     aiRequests.push({authorization:req.headers.authorization,body:JSON.parse(body)});
-    if(req.headers.authorization!=='Bearer web-ai-fixture') {res.writeHead(401).end('Unauthorized');return;}
+    if(!demo && req.headers.authorization!=='Bearer web-ai-fixture') {res.writeHead(401).end('Unauthorized');return;}
     res.setHeader('Content-Type','application/json');
-    res.end(JSON.stringify({translation:'Hello from remote AI',lemma:'hallo',partOfSpeech:'interjection'}));return;
+    const word=aiRequests.at(-1).body.word.toLowerCase();
+    const translation=demo ? (word==='welt' ? {translation:'Мир',lemma:'Welt',partOfSpeech:'noun'} :
+      {translation:'Привет',lemma:'hallo',partOfSpeech:'interjection'}) :
+      {translation:'Hello from remote AI',lemma:'hallo',partOfSpeech:'interjection'};
+    res.end(JSON.stringify(translation));return;
   }
   if(pathname.startsWith('/api/')) {res.writeHead(401).end('Unauthorized');return;}
   const relative=pathname==='/'?'index.html':pathname.slice(1);
@@ -53,29 +65,42 @@ const server=createServer(async(req,res)=>{
   res.writeHead(404).end();
 });
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
-const browser=await chromium.launch({headless:true,args:['--enable-unsafe-swiftshader']});
+const browser=await chromium.launch({headless:!demo,args:['--enable-unsafe-swiftshader']});
 const errors=[];
 let page;
 try {
   const context=await browser.newContext({viewport:{width:1200,height:800}});
   page=await context.newPage();
   page.on('pageerror',e=>errors.push(e.stack||e.message||e.name));
-  await page.addInitScript(()=>{
+  await page.addInitScript(demo=>{
     // Reproduce POSIX locale values from a headless Linux environment. The app
     // must normalize these before Compose constructs Intl.Locale instances.
-    Object.defineProperty(navigator,'languages',{configurable:true,value:['C','de_DE.UTF-8','en-US']});
-    Object.defineProperty(navigator,'language',{configurable:true,value:'C'});
+    if(!demo) {
+      Object.defineProperty(navigator,'languages',{configurable:true,value:['C','de_DE.UTF-8','en-US']});
+      Object.defineProperty(navigator,'language',{configurable:true,value:'C'});
+    } else {
+      document.addEventListener('DOMContentLoaded',()=>{document.title='Langkraft — тестовое занятие';});
+    }
     const original=HTMLMediaElement.prototype.load;
     HTMLMediaElement.prototype.load=function(){window.activeAudio=this;return original.call(this);};
-  });
+  },demo);
   const origin=`http://127.0.0.1:${server.address().port}`;
-  const open=async()=>{await page.goto(origin);await page.waitForFunction(()=>document.documentElement.dataset.appReady==='true',null,{timeout:60000});await page.waitForTimeout(400);await page.addScriptTag({url:origin+'/storage-probe/harness.js'});};
+  const open=async()=>{await page.goto(origin);await page.waitForFunction(()=>document.documentElement.dataset.appReady==='true',null,{timeout:60000});await page.waitForTimeout(400);if(!demo) await page.addScriptTag({url:origin+'/storage-probe/harness.js'});};
   const query=(sql,params=[])=>page.evaluate(async({sql,params})=>{const client=window.storage.createDatabaseClient();try{return await client.request('exec',sql,params);}finally{client.close();}},{sql,params});
   const waitQuery=async(sql,predicate)=>{const deadline=Date.now()+12000;while(Date.now()<deadline){const rows=await query(sql);if(predicate(rows))return rows;await page.waitForTimeout(100);}throw new Error('Timed out: '+sql);};
   await open();
-  // Restore a fixture session through the production UserSession startup path.
-  await query('INSERT OR REPLACE INTO SyncMetadata(key,value) VALUES (?,?)',['auth_token','web-ai-fixture']);
-  await open();
+  if(!demo) {
+    // Restore a fixture session through the production UserSession startup path.
+    await query('INSERT OR REPLACE INTO SyncMetadata(key,value) VALUES (?,?)',['auth_token','web-ai-fixture']);
+    await open();
+  }
+  if(demo) {
+    console.log(`Тестовое занятие открыто: ${origin}`);
+    console.log('Learn → ссылка https://youtu.be/video → IMPORT → материал → PLAY → слово Hallo → ADD TO DICTIONARY → Review.');
+    console.log('Аудио — звуковой сигнал, переводы заранее заданы. YouTube и Gemini не вызываются.');
+    console.log('Вход не требуется: переводы демонстрационные. Данные сохраняются при перезагрузке; закрытие окна завершит пробное занятие и удалит его временный профиль.');
+    await page.waitForEvent('close',{timeout:0});
+  } else {
   assert.deepEqual(await page.evaluate(()=>Array.from(navigator.languages)),['de-DE','en-US']);
   assert.equal(await page.evaluate(()=>navigator.language),'de-DE');
   await page.screenshot({path:path.join(artifacts,'stats.png')});
@@ -345,4 +370,5 @@ try {
   console.log('PASS: SQL recovery restores stale downloads, preserves active/legacy owners and recovers a closed owner');
   console.log('PASS: published pending recovery removes orphans, preserves active/legacy/foreign references and confirms bound assets');
   console.log('PASS: recovery page copies/exports/imports a real library; isolated Compose app opens linked audio and SRS without auth');
+  }
 } catch(error) {if(page) await page.screenshot({path:path.join(artifacts,'failure.png')}).catch(()=>{});console.error('Browser errors:',errors);throw error;} finally {releaseMedia?.();await browser.close();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}
