@@ -37,7 +37,8 @@ class PlayerLinguisticDelegate(
         val generation = ++selectionGeneration
         wordJob?.cancel()
         updateState { it.copy(selectedWord = word, selectedWordContext = line,
-            wordTranslation = null, wordError = null, isTranslatingWord = true) }
+            wordTranslation = null, wordError = null, isTranslatingWord = getState().aiAvailable) }
+        if (!getState().aiAvailable) return
         wordJob = scope.launch {
             try {
                 val result = linguisticAssistant.translateWord(word, line.originalText)
@@ -52,6 +53,7 @@ class PlayerLinguisticDelegate(
     }
 
     fun handleDeepAnalysis(line: SubtitleLine) {
+        if (!getState().aiAvailable) return
         updateState { it.copy(isAnalyzing = true) }
         val generation = contentGeneration
         scope.launch {
@@ -69,6 +71,7 @@ class PlayerLinguisticDelegate(
     }
 
     fun handleToggleLemmatization(line: SubtitleLine) {
+        if (!getState().aiAvailable) return
         val state = getState()
         val isAlreadyLemmatized = state.lemmatizedSentences.containsKey(line.id)
         
@@ -102,6 +105,7 @@ class PlayerLinguisticDelegate(
     }
 
     fun handleToggleTranslation(line: SubtitleLine) {
+        if (!getState().aiAvailable) return
         val state = getState()
         val isAlreadyTranslated = state.sentenceTranslations.containsKey(line.id)
 

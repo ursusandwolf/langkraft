@@ -4,9 +4,7 @@ import com.langkraft.backend.YouTubeIngestionService
 import com.langkraft.backend.BackendMediaStorage
 import com.langkraft.backend.MediaLimits
 import com.langkraft.backend.YtdlpClient
-import com.langkraft.backend.ai.GeminiLinguisticAssistant
 import com.langkraft.domain.ai.LinguisticAssistant
-import com.langkraft.domain.ai.MockLinguisticAssistant
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
@@ -58,6 +56,7 @@ val backendModule = module {
     
     single {
         HttpClient(CIO) {
+            install(io.ktor.client.plugins.HttpTimeout) { requestTimeoutMillis = 60000 }
             install(ContentNegotiation) {
                 json()
             }
@@ -66,15 +65,7 @@ val backendModule = module {
 
     single<LinguisticAssistant> {
         val config = get<io.ktor.server.config.ApplicationConfig>()
-        val apiKey = config.propertyOrNull("gemini.api_key")?.getString() 
-            ?: System.getenv("GEMINI_API_KEY") 
-            ?: "mock_key"
-            
-        val baseAssistant = if (apiKey == "mock_key") {
-            MockLinguisticAssistant()
-        } else {
-            GeminiLinguisticAssistant(apiKey, get())
-        }
-        com.langkraft.backend.ai.CachingLinguisticAssistant(baseAssistant)
+        com.langkraft.backend.ai.createLinguisticAssistant(
+            com.langkraft.backend.ai.AiSettings.load(config), get())
     }
 }

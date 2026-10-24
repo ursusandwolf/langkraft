@@ -71,11 +71,11 @@ jobs:
           echo "CHROME_BIN=$CHROME_BIN" >> "$GITHUB_ENV"
       - run: bash ./gradlew --no-daemon :shared:jsBrowserTest
       - run: bash ./gradlew --no-daemon :webApp:jsBrowserDevelopmentWebpack
-      - run: npm test && npm run test:app
+      - run: npm test && npm run test:app && npm run test:manual
         working-directory: tools/web-storage-tests
       - run: bash ./gradlew --no-daemon :webApp:jsBrowserProductionWebpack
       - name: Production browser regression
-        run: npm run test:app
+        run: npm run test:app && npm run test:manual
         working-directory: tools/web-storage-tests
         env:
           WEB_APP_BUNDLE: ${{ github.workspace }}/webApp/build/kotlin-webpack/js/productionExecutable

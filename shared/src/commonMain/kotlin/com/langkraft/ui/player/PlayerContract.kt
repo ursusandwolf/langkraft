@@ -6,6 +6,7 @@ import com.langkraft.domain.model.ImmersionContent
 import com.langkraft.domain.model.SubtitleLine
 
 data class PlayerState(
+    val aiAvailable: Boolean = true,
     val isLoading: Boolean = false,
     val content: ImmersionContent? = null,
     val currentTimeMs: Long = 0,

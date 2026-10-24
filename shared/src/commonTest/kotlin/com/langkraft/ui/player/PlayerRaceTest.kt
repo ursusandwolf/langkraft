@@ -14,6 +14,43 @@ import kotlin.test.*
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class PlayerRaceTest {
+    @Test fun disabledAiAllowsManualSaveWithoutAnyTranslationRequest() = runTest {
+        var saved: VocabularyWord? = null
+        val vm = fixture(capabilities = { AiCapabilities(false) },
+            translate = { _, _ -> error("AI must not be called") }, save = { saved = it })
+        try {
+            vm.onEvent(PlayerEvent.LoadContent("video")); runCurrent()
+            vm.onEvent(PlayerEvent.WordClicked("Tag", line)); runCurrent()
+            assertFalse(vm.currentState.aiAvailable)
+            assertFalse(vm.currentState.isTranslatingWord)
+            assertNull(vm.currentState.wordTranslation)
+            vm.saveWord(word.copy(translation = "day")); runCurrent()
+            assertEquals("day", saved?.translation)
+            assertEquals("Guten Tag", saved?.contextSentence)
+        } finally { vm.onCleared() }
+    }
+
+    @Test fun unavailableBackendCapabilitiesStillAllowsLocalPlaybackAndManualSave() = runTest {
+        val vm = fixture(capabilities = { error("Offline") })
+        try {
+            vm.onEvent(PlayerEvent.LoadContent("video")); runCurrent()
+            assertEquals("video", vm.currentState.content?.id)
+            assertFalse(vm.currentState.isLoading)
+            assertFalse(vm.currentState.aiAvailable)
+            assertNull(vm.currentState.error)
+        } finally { vm.onCleared() }
+    }
+
+    @Test fun failedAiRequestDoesNotPreventManualSave() = runTest {
+        var saved: VocabularyWord? = null
+        val vm = fixture(translate = { _, _ -> error("Provider unavailable") }, save = { saved = it })
+        try {
+            vm.onEvent(PlayerEvent.WordClicked("Tag", line)); runCurrent()
+            assertEquals("Provider unavailable", vm.currentState.wordError)
+            vm.saveWord(word.copy(translation = "day")); runCurrent()
+            assertEquals("day", saved?.translation)
+        } finally { vm.onCleared() }
+    }
     private val line = SubtitleLine("cue", "video", 0, 1000, "Guten Tag", null)
     private val content = ImmersionContent("video", "Title", "/audio.mp3", null, "https://youtu.be/video", 1)
     private val word = VocabularyWord("word", "Tag", contextSentence="Guten Tag")
@@ -99,7 +136,8 @@ class PlayerRaceTest {
         translate: suspend (String,String)->TranslationResult = { word, _ -> TranslationResult("translation",word,"noun") },
         save: suspend (VocabularyWord)->Unit = {},
         load: suspend (String)->ImmersionContent? = { content },
-        audio: FakeAudio = FakeAudio()
+        audio: FakeAudio = FakeAudio(),
+        capabilities: suspend () -> AiCapabilities = { AiCapabilities(true) }
     ): PlayerViewModel {
         val local=object:LocalContentRepository {
             override fun getAllContent()=flowOf(listOf(content))
@@ -119,6 +157,7 @@ class PlayerRaceTest {
             override suspend fun setSyncMetadata(key:String,value:String) {}
         }
         val assistant=object:LinguisticAssistant by MockLinguisticAssistant() {
+            override suspend fun capabilities() = capabilities()
             override suspend fun translateWord(word:String,context:String)=translate(word,context)
         }
         val files=object:FileSystem {

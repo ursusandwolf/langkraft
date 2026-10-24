@@ -1,27 +1,19 @@
 package com.langkraft.ui.player
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.material.Button
-import androidx.compose.material.CircularProgressIndicator
-import androidx.compose.material.IconButton
-import androidx.compose.material.MaterialTheme
-import androidx.compose.material.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.langkraft.domain.ai.TranslationResult
 import com.langkraft.domain.model.VocabularyWord
 import com.langkraft.domain.model.SubtitleLine
+import com.langkraft.ui.components.NativeTextInput
 import com.langkraft.io.randomUUID
+import kotlinx.datetime.Clock
 
 @Composable
 fun WordDetailsSheet(
@@ -31,80 +23,57 @@ fun WordDetailsSheet(
     isSaving: Boolean,
     onSave: (VocabularyWord) -> Unit,
     onDismiss: () -> Unit,
-    isTranslating: Boolean = result == null,
+    isTranslating: Boolean = false,
     error: String? = null,
-    onRetry: () -> Unit = {}
+    onRetry: () -> Unit = {},
+    aiAvailable: Boolean = false
 ) {
     val wordId = remember(word, contextLine?.id) { randomUUID() }
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(24.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(text = word, style = MaterialTheme.typography.h4)
-                if (result != null) {
-                    Text(
-                        text = "${result.lemma} (${result.partOfSpeech})",
-                        style = MaterialTheme.typography.subtitle1,
-                        color = MaterialTheme.colors.primary
-                    )
-                }
-            }
-            IconButton(onClick = onDismiss) {
-                Text("✕")
-            }
+    var translation by remember(wordId) { mutableStateOf("") }
+    var previousSuggestion by remember(wordId) { mutableStateOf("") }
+    LaunchedEffect(result) {
+        // A slow suggestion must never replace text already edited by the user.
+        result?.let {
+            if (translation == previousSuggestion) translation = it.translation
+            previousSuggestion = it.translation
         }
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        Text(text = "Context:", style = MaterialTheme.typography.overline)
-        Text(text = contextLine?.originalText ?: "", style = MaterialTheme.typography.body1)
-        
-        Spacer(modifier = Modifier.height(16.dp))
-        
-        Text(text = "Translation:", style = MaterialTheme.typography.overline)
+    }
+    Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(24.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically) {
+            Text(word, style = MaterialTheme.typography.h4)
+            IconButton(onClick = onDismiss) { Text("✕") }
+        }
+        Spacer(Modifier.height(16.dp))
+        Text("Context:", style = MaterialTheme.typography.overline)
+        Text(contextLine?.originalText.orEmpty(), style = MaterialTheme.typography.body1)
+        Spacer(Modifier.height(16.dp))
+        NativeTextInput(
+            value = translation, onValueChange = { translation = it },
+            label = "Translation", enabled = !isSaving,
+            modifier = Modifier.fillMaxWidth().height(56.dp)
+        )
         if (isTranslating) {
-            CircularProgressIndicator(modifier = Modifier.size(24.dp))
-        } else if (result != null) {
-            Text(text = result.translation, style = MaterialTheme.typography.h6)
-            if (result.explanation != null) {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(text = result.explanation, style = MaterialTheme.typography.body2)
-            }
+            Text("AI suggestion is loading. You can enter your own translation.")
+        } else if (aiAvailable) {
+            TextButton(onClick = onRetry, enabled = !isSaving) { Text("SUGGEST WITH AI") }
         }
-        
-        if (error != null) {
-            Text(error, color = MaterialTheme.colors.error)
-            if (result == null) {
-                androidx.compose.material.TextButton(onClick = onRetry) { Text("RETRY TRANSLATION") }
-            }
-        }
-        Spacer(modifier = Modifier.height(24.dp))
-        
+        result?.explanation?.let { Text(it, style = MaterialTheme.typography.body2) }
+        error?.let { Text(it, color = MaterialTheme.colors.error) }
+        Spacer(Modifier.height(24.dp))
         Button(
             onClick = {
-                if (result != null && contextLine != null) {
-                    onSave(VocabularyWord(
-                        id = wordId,
-                        word = word,
-                        lemma = result.lemma,
-                        translation = result.translation,
-                        contextSentence = contextLine.originalText,
-                        contentId = contextLine.contentId,
-                        subtitleLineId = contextLine.id
+                contextLine?.let { line ->
+                    if (translation.isNotBlank()) onSave(VocabularyWord(
+                        id = wordId, word = word, lemma = result?.lemma,
+                        translation = translation.trim(), contextSentence = line.originalText,
+                        contentId = line.contentId, subtitleLineId = line.id,
+                        addedAt = Clock.System.now().toEpochMilliseconds()
                     ))
                 }
             },
-            enabled = result != null && contextLine != null && !isSaving && !isTranslating,
+            enabled = translation.isNotBlank() && contextLine != null && !isSaving,
             modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("ADD TO DICTIONARY")
-        }
+        ) { Text(if (isSaving) "SAVING…" else "ADD TO DICTIONARY") }
     }
 }

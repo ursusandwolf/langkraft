@@ -7,6 +7,21 @@ import kotlin.test.*
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class WritingViewModelTest {
+    @Test fun disabledAiDoesNotPretendToCorrectWriting() = runTest {
+        val assistant = object : LinguisticAssistant by MockLinguisticAssistant() {
+            override suspend fun capabilities() = AiCapabilities(false)
+            override suspend fun correctText(text: String): CorrectionResult = error("Must not call AI")
+        }
+        val vm = WritingViewModel(assistant, StandardTestDispatcher(testScheduler))
+        try {
+            runCurrent()
+            vm.onTextChanged("Ich gehen")
+            vm.submitForCorrection(); runCurrent()
+            assertEquals(false, vm.currentState.aiAvailable)
+            assertNull(vm.currentState.correction)
+            assertFalse(vm.currentState.isAnalyzing)
+        } finally { vm.onCleared() }
+    }
     @Test fun editingDuringRemoteRequestDiscardsOldCorrection() = runTest {
         val response = CompletableDeferred<CorrectionResult>()
         val assistant = object : LinguisticAssistant by MockLinguisticAssistant() {

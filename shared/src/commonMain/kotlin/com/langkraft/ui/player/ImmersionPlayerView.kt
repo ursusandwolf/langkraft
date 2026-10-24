@@ -137,6 +137,7 @@ fun ImmersionPlayerView(
                                     lemmas = state.lemmatizedSentences[line.id],
                                     isTranslating = state.analyzingSentenceId == line.id,
                                     isLemmatizing = state.lemmatizingSentenceId == line.id,
+                                    aiAvailable = state.aiAvailable,
                                     onClick = { viewModel.onEvent(PlayerEvent.SeekTo(line.startMs)) },
                                     onWordClick = { viewModel.onEvent(PlayerEvent.WordClicked(it, line)) },
                                     onTranslateClick = { viewModel.onEvent(PlayerEvent.ToggleTranslation(line)) },
@@ -166,6 +167,7 @@ fun ImmersionPlayerView(
                                 contextLine = state.selectedWordContext,
                                 result = state.wordTranslation,
                                 isSaving = state.isSavingWord,
+                                aiAvailable = state.aiAvailable,
                                 isTranslating = state.isTranslatingWord,
                                 error = state.wordError,
                                 onRetry = viewModel::retryTranslation,
@@ -231,7 +233,8 @@ fun SubtitleRow(
     onTranslateClick: () -> Unit,
     onLemmatizeClick: () -> Unit,
     onAnalysisClick: () -> Unit,
-    onMemorizationClick: () -> Unit
+    onMemorizationClick: () -> Unit,
+    aiAvailable: Boolean = true
 ) {
     val backgroundColor by animateColorAsState(
         if (isCurrent) MaterialTheme.colors.primary.copy(alpha = 0.15f)
@@ -274,20 +277,22 @@ fun SubtitleRow(
             }
 
             Row {
-                IconButton(onClick = onTranslateClick, modifier = Modifier.size(24.dp)) {
-                    if (isTranslating) CircularProgressIndicator(modifier = Modifier.size(16.dp))
-                    else Text("文", style = MaterialTheme.typography.body2) 
+                if (aiAvailable) {
+                    IconButton(onClick = onTranslateClick, modifier = Modifier.size(24.dp)) {
+                        if (isTranslating) CircularProgressIndicator(modifier = Modifier.size(16.dp))
+                        else Text("文", style = MaterialTheme.typography.body2)
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    IconButton(onClick = onLemmatizeClick, modifier = Modifier.size(24.dp)) {
+                        if (isLemmatizing) CircularProgressIndicator(modifier = Modifier.size(16.dp))
+                        else Text("L", style = MaterialTheme.typography.body2, fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    IconButton(onClick = onAnalysisClick, modifier = Modifier.size(24.dp)) {
+                        Text("⚙", style = MaterialTheme.typography.body2)
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
                 }
-                Spacer(modifier = Modifier.width(8.dp))
-                IconButton(onClick = onLemmatizeClick, modifier = Modifier.size(24.dp)) {
-                    if (isLemmatizing) CircularProgressIndicator(modifier = Modifier.size(16.dp))
-                    else Text("L", style = MaterialTheme.typography.body2, fontWeight = FontWeight.Bold) 
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-                IconButton(onClick = onAnalysisClick, modifier = Modifier.size(24.dp)) {
-                    Text("⚙", style = MaterialTheme.typography.body2) 
-                }
-                Spacer(modifier = Modifier.width(8.dp))
                 IconButton(onClick = onMemorizationClick, modifier = Modifier.size(24.dp)) {
                     Text("🧠", style = MaterialTheme.typography.body2) 
                 }

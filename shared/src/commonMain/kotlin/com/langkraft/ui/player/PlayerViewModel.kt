@@ -28,7 +28,7 @@ class PlayerViewModel(
     private val contentRepository: LocalContentRepository,
     private val audioDownloader: AudioDownloader,
     private val vocabularyRepository: VocabularyRepository,
-    linguisticAssistant: LinguisticAssistant,
+    private val linguisticAssistant: LinguisticAssistant,
     private val audioPlayer: AudioPlayer,
     private val fileSystem: FileSystem,
     private val appConfig: AppConfig,
@@ -147,6 +147,7 @@ class PlayerViewModel(
     }
 
     fun retryTranslation() {
+        if (!currentState.aiAvailable) return
         val word = currentState.selectedWord ?: return
         val line = currentState.selectedWordContext ?: return
         linguisticDelegate.handleWordClicked(word, line)
@@ -188,7 +189,12 @@ class PlayerViewModel(
                     updateState { it.copy(isLoading = false, error = "Content not found") }
                     return@launch
                 }
-                updateState { it.copy(isLoading = false, content = content) }
+                val aiAvailable = try { linguisticAssistant.capabilities().enabled }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { false }
+                ensureActive()
+                if (generation != loadGeneration) return@launch
+                updateState { it.copy(isLoading = false, content = content, aiAvailable = aiAvailable) }
                 audioPlayer.load(content.getPlaybackUrl(appConfig.backendUrl), audioRequest)
             } catch (exception: CancellationException) {
                 throw exception

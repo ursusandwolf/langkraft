@@ -6,6 +6,8 @@ class IngestionException(message: String, cause: Throwable? = null) : LangkraftE
 
 class AiException(message: String, cause: Throwable? = null) : LangkraftException(message, cause)
 
+class AiUnavailableException : LangkraftException("AI is disabled; enter translations manually")
+
 class IngestionBusyException : LangkraftException("Import capacity reached; try again later")
 
 class MediaCapacityException : LangkraftException("Media storage capacity reached; try again later")

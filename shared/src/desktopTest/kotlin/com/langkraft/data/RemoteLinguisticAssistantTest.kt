@@ -16,6 +16,14 @@ import kotlinx.serialization.json.Json
 import kotlin.test.*
 
 class RemoteLinguisticAssistantTest {
+    @Test fun slowCapabilityProbeFallsBackToManualMode() = runTest {
+        val client = HttpClient(MockEngine { awaitCancellation() }) {
+            install(ContentNegotiation) { json() }
+        }
+        try {
+            assertFalse(RemoteLinguisticAssistant(client, Url("https://example.test")).capabilities().enabled)
+        } finally { client.close() }
+    }
     @Test fun sendsAllOperationsWithCurrentSessionAndPreservesBasePath() = runTest {
         var token: String? = "first"
         val paths = mutableListOf<String>()

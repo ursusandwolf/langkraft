@@ -1,5 +1,10 @@
 # Langkraft: порядок выполнения в UML-псевдографике и псевдокоде
 
+> Обновление: AI теперь необязателен. Без провайдера карточка заполняется вручную;
+> mock используется только в тестах. Новая схема Strategy и конфигурация описаны в
+> [AI](AI.md). Ниже схема запроса перевода описывает режим включённого провайдера.
+
+
 Основа карты: `dev`, коммит `3389144`, 23 октября 2026; описание импорта дополнено исправлением MVP-04 после повторной проверки. Это карта существующего кода для ручного чтения. Имена функций сохранены там, где они есть в исходниках; `ON`, `PARALLEL`, `TX`, `WAIT` ниже — поясняющий псевдокод.
 
 Основной маршрут — Web MVP. Backend, Desktop/TUI, восстановление и тестовый режим показаны отдельно. Каталог классов и интерфейсов: [UML_CLASSES](UML_CLASSES.md). Инструкция запуска: [RUNNING](RUNNING.md).
@@ -138,7 +143,7 @@ SQLite клиента и SQLite backend — разные базы. SQLite кли
         IMPORT           -> POST job -> polling -> сохранить Content/Subtitles
         выбрать материал -> прочитать SQL -> загрузить аудиоисточник
         PLAY/PAUSE/SEEK   -> AudioPlayer; события времени -> индекс реплики
-        нажать слово     -> запрос перевода -> WordDetailsSheet
+        нажать слово     -> WordDetailsSheet -> ручной ввод / AI-подсказка
         сохранить слово -> TX Vocabulary + PendingSyncChange -> закрыть sheet
         открыть Review  -> snapshot очереди наступивших повторений
         оценить карточку -> SM-2 -> TX сохранения -> следующая карточка
@@ -495,16 +500,19 @@ UI/слово -> PlayerVM -> PlayerLinguisticDelegate -> RemoteLinguisticAssista
 
 ```text
 WordClicked(word, line):
-    запомнить слово и контекст; показать ожидание
+    запомнить слово и контекст; открыть ручной ввод перевода
+    IF AI недоступен -> RETURN (карточка остаётся доступной)
+    показать ожидание подсказки; ручной ввод и сохранение доступны
     result = await assistant.translateWord(word, line.originalText)
     IF запрос отменён / выбран другой word / другой материал -> не применять
-    ELSE показать translation, lemma, partOfSpeech
+    ELSE предложить перевод, только если пользователь ещё не изменил поле
     HTTP/AI error -> wordError + возможность повторить
 
 WordDetailsSheet:
     wordId = remember(word, line.id) { UUID }
     ON ADD TO DICTIONARY:
-        создать VocabularyWord с word, lemma, translation,
+        IF translation пустой OR isSaving -> RETURN
+        создать VocabularyWord с word, необязательной lemma, ручным/AI translation,
             contextSentence, contentId, subtitleLineId
         PlayerVM.saveWord(word)
 
@@ -528,9 +536,9 @@ repository.saveWord(word):
 
 Сначала локальный COMMIT. Успешный перевод сам по себе слово не сохраняет, а успешное локальное сохранение не означает выполненный sync.
 
-Начальные поля новой модели: NEW, intervalDays=0, lapseCount=0, nextReviewMs=0. В текущем WordDetailsSheet `addedAt` явно не передаётся и остаётся значением модели по умолчанию 0; repository назначает собственную ревизию `lastUpdated`.
+Начальные поля новой модели: NEW, intervalDays=0, lapseCount=0, nextReviewMs=0. WordDetailsSheet задаёт `addedAt=now`; repository назначает собственную ревизию `lastUpdated`.
 
-На настоящем backend все четыре AI-операции защищены JWT. Backend DI оборачивает Gemini/Mock в CachingLinguisticAssistant. Значение `mock_key` выбирает Mock; это fallback конфигурации при отсутствии ключа. Ключ Gemini остаётся на сервере.
+На настоящем backend все четыре AI-операции защищены JWT. Без провайдера backend возвращает capabilities.enabled=false, AI-операции отвечают 503. При включённом AI DI создаёт CachingLinguisticAssistant → StrategyLinguisticAssistant → Gemini/Claude/OpenAI-совместимую стратегию. Ключ остаётся на сервере; mock доступен только в тестах.
 
 Исходники: [PlayerLinguisticDelegate.kt](../shared/src/commonMain/kotlin/com/langkraft/ui/player/PlayerLinguisticDelegate.kt), [WordDetailsSheet.kt](../shared/src/commonMain/kotlin/com/langkraft/ui/player/WordDetailsSheet.kt), [RemoteLinguisticAssistant.kt](../shared/src/commonMain/kotlin/com/langkraft/data/ai/RemoteLinguisticAssistant.kt), [SqlDelightVocabularyRepository.kt](../shared/src/commonMain/kotlin/com/langkraft/data/repository/SqlDelightVocabularyRepository.kt).
 

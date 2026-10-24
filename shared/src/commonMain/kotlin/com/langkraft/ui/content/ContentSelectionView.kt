@@ -1,5 +1,6 @@
 package com.langkraft.ui.content
 
+import com.langkraft.ui.components.NativeTextInput
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -49,7 +50,7 @@ fun ContentSelectionView(
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text("Import from YouTube", style = MaterialTheme.typography.h6)
                     Spacer(modifier = Modifier.height(8.dp))
-                    NativeUrlInput(
+                    NativeTextInput(label = "YouTube URL", isUrl = true,
                         value = urlInput,
                         onValueChange = { urlInput = it },
                         enabled = !state.isImporting,

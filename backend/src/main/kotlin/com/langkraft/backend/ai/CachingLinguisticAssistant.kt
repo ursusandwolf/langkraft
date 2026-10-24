@@ -8,6 +8,7 @@ class CachingLinguisticAssistant(
     private val delegate: LinguisticAssistant,
     private val maxCacheSize: Int = 1000
 ) : LinguisticAssistant {
+    override suspend fun capabilities(): AiCapabilities = delegate.capabilities()
 
     private fun <K, V> createLruCache(maxSize: Int): MutableMap<K, V> {
         return Collections.synchronizedMap(object : LinkedHashMap<K, V>(maxSize, 0.75f, true) {

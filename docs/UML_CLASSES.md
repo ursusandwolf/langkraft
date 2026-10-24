@@ -323,9 +323,16 @@ classDiagram
         +analyzeSentence(text) DeepAnalysisResult
         +correctText(text) CorrectionResult
     }
-    class MockLinguisticAssistant
+    class DisabledLinguisticAssistant
     class RemoteLinguisticAssistant
-    class GeminiLinguisticAssistant
+    class StrategyLinguisticAssistant
+    class TextGenerationStrategy {
+        <<interface>>
+        +generate(prompt) String
+    }
+    class GeminiTextGenerationStrategy
+    class ClaudeTextGenerationStrategy
+    class OpenAiTextGenerationStrategy
     class CachingLinguisticAssistant
     YouTubeIngestionService --> YtdlpClient
     YouTubeIngestionService --> IngestionJobRepository
@@ -343,10 +350,14 @@ classDiagram
     SyncService --> BackendUserRepository
     SyncService --> VocabularySyncRepository
     VocabularySyncRepository <|.. BackendVocabularyRepository
-    LinguisticAssistant <|.. MockLinguisticAssistant
+    LinguisticAssistant <|.. DisabledLinguisticAssistant
     LinguisticAssistant <|.. RemoteLinguisticAssistant
     RemoteLinguisticAssistant --> HttpClient : JWT backend API
-    LinguisticAssistant <|.. GeminiLinguisticAssistant
+    LinguisticAssistant <|.. StrategyLinguisticAssistant
+    StrategyLinguisticAssistant --> TextGenerationStrategy
+    TextGenerationStrategy <|.. GeminiTextGenerationStrategy
+    TextGenerationStrategy <|.. ClaudeTextGenerationStrategy
+    TextGenerationStrategy <|.. OpenAiTextGenerationStrategy
     LinguisticAssistant <|.. CachingLinguisticAssistant
     CachingLinguisticAssistant --> LinguisticAssistant : delegate
 ```

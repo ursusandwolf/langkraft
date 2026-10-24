@@ -48,6 +48,7 @@ dependencies {
     testImplementation(kotlin("test"))
     testImplementation("org.junit.jupiter:junit-jupiter:5.9.2")
     testImplementation("io.ktor:ktor-server-test-host:2.3.5")
+    testImplementation("io.ktor:ktor-client-mock:2.3.5")
     testImplementation("app.cash.sqldelight:sqlite-driver:2.0.0")
 }
 

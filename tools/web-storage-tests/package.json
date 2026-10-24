@@ -8,6 +8,8 @@
     "test": "npm run build:test && node tests/browser.test.js && node tests/recovery.test.js",
     "test:app": "npm run build:test && node tests/web-app.test.js",
     "demo": "node tests/web-app.test.js --demo",
+    "test:demo": "node tests/web-app.test.js --demo-smoke",
+    "test:manual": "npm run build:test && node tests/web-app.test.js --manual && node tests/web-app.test.js --ai-error && node tests/web-app.test.js --ai-delayed",
     "test:youtube": "node tests/youtube-live.test.js"
   },
   "dependencies": { "wa-sqlite": "1.0.0" },

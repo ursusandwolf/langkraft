@@ -1,3 +1,13 @@
+# MVP-05 — 2026-10-24 — Strategy для необязательного AI
+
+`LinguisticAssistant` сохраняет границу UI/backend. В режиме none работает
+`DisabledLinguisticAssistant`; при включённом AI `StrategyLinguisticAssistant`
+содержит общие языковые задачи и использует `TextGenerationStrategy`.
+Конкретные стратегии — `GeminiTextGenerationStrategy`,
+`ClaudeTextGenerationStrategy`, `OpenAiTextGenerationStrategy`.
+Выбор один раз выполняет backend composition root; кэш остаётся декоратором.
+Полная схема и псевдографика: [AI](AI.md#strategy), [классы](UML_CLASSES.md).
+
 # MVP-04 — 2026-10-23 — граница серверного и клиентского аудио
 
 Существующий `IngestContentUseCase` нормализует клиентские offline-поля между `RemoteContentSource.fetchFromYouTube` и `LocalContentRepository.saveContent`: новая структура получает `localAudioPath=null`, `downloadStatus=IDLE`. Репозиторий сохраняет собственную ранее завершённую offline-копию. Новых классов, зависимостей и паттернов нет; [порядок выполнения](EXECUTION_WALKTHROUGH.md) отражает эту границу.

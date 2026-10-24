@@ -10,7 +10,13 @@ const root = fileURLToPath(new URL('../../../', import.meta.url));
 const bundle = process.env.WEB_APP_BUNDLE || path.join(root, 'webApp/build/kotlin-webpack/js/developmentExecutable');
 const resources = path.join(root, 'webApp/build/processedResources/js/main');
 const artifacts = path.join(root, 'tools/web-storage-tests/build/app');
-const demo = process.argv.includes('--demo');
+const demoSmoke = process.argv.includes('--demo-smoke');
+const demo = process.argv.includes('--demo') || demoSmoke;
+const noAi = process.argv.includes('--manual');
+const aiError = process.argv.includes('--ai-error');
+const aiDelayed = process.argv.includes('--ai-delayed');
+const manual = noAi || aiError || aiDelayed;
+const expectedTranslation = manual ? 'Привет вручную' : 'Hello from remote AI';
 await mkdir(artifacts, {recursive:true});
 const audio = Buffer.alloc(44 + 16000 * 2 * 4);
 audio.write('RIFF'); audio.writeUInt32LE(audio.length-8,4); audio.write('WAVEfmt ',8);
@@ -31,6 +37,9 @@ const content={id:'web-fixture',title:'Deutsch im Alltag',audioUrl:'/api/media/t
   sourceUrl:'https://youtu.be/video',durationSeconds:4,subtitles:[{id:'cue',contentId:'web-fixture',startMs:0,endMs:4000,originalText:'Hallo Welt',translationText:null}]};
 const server=createServer(async(req,res)=>{
   const pathname=new URL(req.url,'http://localhost').pathname;
+  if(pathname==='/api/ai/capabilities') {
+    res.setHeader('Content-Type','application/json');res.end(JSON.stringify({enabled:!noAi,provider:noAi?null:'fixture'}));return;
+  }
   if(pathname==='/storage-owner') {res.setHeader('Content-Type','text/html');res.end('<!doctype html><script src="/storage-probe/harness.js"></script>');return;}
   if(pathname==='/api/ingest') {
     let body=''; for await(const chunk of req) body+=chunk;
@@ -47,6 +56,8 @@ const server=createServer(async(req,res)=>{
   if(pathname==='/api/ai/translate-word') {
     let body=''; for await(const chunk of req) body+=chunk;
     aiRequests.push({authorization:req.headers.authorization,body:JSON.parse(body)});
+    if(aiError) {res.writeHead(503).end('Provider unavailable');return;}
+    if(aiDelayed) await new Promise(resolve=>setTimeout(resolve,2500));
     if(!demo && req.headers.authorization!=='Bearer web-ai-fixture') {res.writeHead(401).end('Unauthorized');return;}
     res.setHeader('Content-Type','application/json');
     const word=aiRequests.at(-1).body.word.toLowerCase();
@@ -65,11 +76,13 @@ const server=createServer(async(req,res)=>{
   res.writeHead(404).end();
 });
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
-const browser=await chromium.launch({headless:!demo,args:['--enable-unsafe-swiftshader']});
+const browser=await chromium.launch({headless:!demo,args:['--enable-unsafe-swiftshader',...(demo ? ['--start-maximized'] : [])]});
 const errors=[];
 let page;
 try {
-  const context=await browser.newContext({viewport:{width:1200,height:800}});
+  // Manual sessions must follow the real window size, including after resize.
+  // A fixed test viewport can place the bottom navigation below the screen.
+  const context=await browser.newContext({viewport:demo ? null : {width:1200,height:800}});
   page=await context.newPage();
   page.on('pageerror',e=>errors.push(e.stack||e.message||e.name));
   await page.addInitScript(demo=>{
@@ -89,17 +102,35 @@ try {
   const query=(sql,params=[])=>page.evaluate(async({sql,params})=>{const client=window.storage.createDatabaseClient();try{return await client.request('exec',sql,params);}finally{client.close();}},{sql,params});
   const waitQuery=async(sql,predicate)=>{const deadline=Date.now()+12000;while(Date.now()<deadline){const rows=await query(sql);if(predicate(rows))return rows;await page.waitForTimeout(100);}throw new Error('Timed out: '+sql);};
   await open();
-  if(!demo) {
+  if(!demo && !noAi) {
     // Restore a fixture session through the production UserSession startup path.
     await query('INSERT OR REPLACE INTO SyncMetadata(key,value) VALUES (?,?)',['auth_token','web-ai-fixture']);
     await open();
   }
   if(demo) {
+    if(demoSmoke) {
+      const cdp=await context.newCDPSession(page);
+      const {windowId}=await cdp.send('Browser.getWindowForTarget');
+      for(const bounds of [{width:1000,height:650},{width:800,height:600}]) {
+        await cdp.send('Browser.setWindowBounds',{windowId,bounds:{windowState:'normal'}});
+        await cdp.send('Browser.setWindowBounds',{windowId,bounds});
+        await page.waitForTimeout(700);
+        const size=await page.evaluate(()=>({width:innerWidth,height:innerHeight,outerHeight}));
+        assert.ok(size.height<size.outerHeight,'Demo viewport must fit inside the real browser window');
+        await page.mouse.click(size.width*0.3,size.height-25); // Stats
+        await page.waitForTimeout(300);
+        await page.mouse.click(size.width*0.5,size.height-25); // Learn
+        await page.getByRole('textbox',{name:'YouTube URL'}).waitFor({state:'visible'});
+      }
+      assert.deepEqual(errors,[]);
+      console.log('PASS: headed demo follows window resize and visible Learn navigation responds to clicks');
+    } else {
     console.log(`Тестовое занятие открыто: ${origin}`);
     console.log('Learn → ссылка https://youtu.be/video → IMPORT → материал → PLAY → слово Hallo → ADD TO DICTIONARY → Review.');
     console.log('Аудио — звуковой сигнал, переводы заранее заданы. YouTube и Gemini не вызываются.');
     console.log('Вход не требуется: переводы демонстрационные. Данные сохраняются при перезагрузке; закрытие окна завершит пробное занятие и удалит его временный профиль.');
     await page.waitForEvent('close',{timeout:0});
+    }
   } else {
   assert.deepEqual(await page.evaluate(()=>Array.from(navigator.languages)),['de-DE','en-US']);
   assert.equal(await page.evaluate(()=>navigator.language),'de-DE');
@@ -170,14 +201,27 @@ try {
   holdMedia=false;releaseMedia();releaseMedia=undefined;
   const saved=await waitQuery('SELECT localAudioPath,downloadStatus FROM Content',rows=>rows[0]?.[1]==='COMPLETED');
   assert.match(saved[0][0],/^indexeddb-audio:/);
-  const wordResponse=page.waitForResponse(response=>response.url().endsWith('/api/ai/translate-word'));
+  const wordResponse=noAi ? null : page.waitForResponse(response=>response.url().endsWith('/api/ai/translate-word'));
   await page.mouse.click(40,165);await page.waitForTimeout(1000);
-  assert.equal((await wordResponse).status(),200);
-  assert.deepEqual(aiRequests[0],{authorization:'Bearer web-ai-fixture',body:{word:'Hallo',context:'Hallo Welt'}});
+  const translationInput=page.getByRole('textbox',{name:'Translation',exact:true});
+  if(noAi) {
+    await page.mouse.click(600,615);
+    assert.deepEqual(await query('SELECT word FROM Vocabulary'),[],'An empty translation must not create a card');
+  }
+  if(aiDelayed) await translationInput.fill(expectedTranslation);
+  if(noAi) assert.equal(aiRequests.length,0,'Manual mode must not send AI requests or require sign-in');
+  else {
+    assert.equal((await wordResponse).status(),aiError?503:200);
+    assert.deepEqual(aiRequests[0],{authorization:'Bearer web-ai-fixture',body:{word:'Hallo',context:'Hallo Welt'}});
+  }
+  if(manual && !aiDelayed) await translationInput.fill(expectedTranslation);
+  else await translationInput.waitFor({state:'visible'});
+  await page.waitForTimeout(300);
+  assert.equal(await translationInput.inputValue(),expectedTranslation,'Late AI response must preserve a manual draft');
   await page.screenshot({path:path.join(artifacts,'word.png')});
   await page.mouse.click(600,615);
   await waitQuery('SELECT word FROM Vocabulary',rows=>rows.length===1);
-  assert.deepEqual(await query('SELECT translation,lemma FROM Vocabulary'),[['Hello from remote AI','hallo']]);
+  assert.deepEqual(await query('SELECT translation,lemma FROM Vocabulary'),[[expectedTranslation,noAi||aiError?null:'hallo']]);
   assert.deepEqual(await page.evaluate(()=>window.storage.listPendingAudio()),[],'Committed download must acknowledge its publication');
   assert.deepEqual(await query("SELECT key FROM SyncMetadata WHERE key LIKE 'audio_download_lock:%'"),[],'Successful download must clear its recovery marker');
   await page.mouse.click(840,775);
@@ -197,7 +241,7 @@ try {
   await page.mouse.click(744,495); // GOOD
   const reviewSql='SELECT word,translation,contextSentence,intervalDays,lapseCount,nextReviewAt FROM Vocabulary';
   const reviewed=await waitQuery(reviewSql,rows=>rows[0]?.[3]===1);
-  assert.deepEqual(reviewed[0].slice(0,5),['Hallo','Hello from remote AI','Hallo Welt',1,1]);
+  assert.deepEqual(reviewed[0].slice(0,5),['Hallo',expectedTranslation,'Hallo Welt',1,1]);
   assert.ok(reviewed[0][5]>=submittedAt+86400000-1000 && reviewed[0][5]<=Date.now()+86400000+1000,
     'GOOD should schedule the saved word for tomorrow');
   await page.waitForTimeout(400);
@@ -370,7 +414,7 @@ try {
   assert.deepEqual(errors,[]);
   console.log('PASS: backend filesystem path is ignored; reload before offline download keeps remote playback');
   console.log('PASS: Web import error/retry, async job polling, playback, durable audio, vocabulary and offline reload');
-  console.log('PASS: restored JWT session sends word/context to remote AI; backend translation and lemma reach vocabulary');
+  console.log(manual ? 'PASS: manual translation reaches vocabulary and Review without a successful AI request' : 'PASS: restored JWT session sends word/context to remote AI; backend translation and lemma reach vocabulary');
   console.log('PASS: lesson reaches Review UI, AGAIN re-learns, GOOD schedules tomorrow and progress survives reload');
   console.log('PASS: desktop and mobile rendering without runtime errors');
   console.log('PASS: app startup removes abandoned audio while preserving saved offline playback');

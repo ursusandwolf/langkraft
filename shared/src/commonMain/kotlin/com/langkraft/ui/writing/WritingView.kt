@@ -57,7 +57,9 @@ fun WritingView(
                     .padding(16.dp)
                     .fillMaxSize()
             ) {
-                if (state.correction == null) {
+                if (state.aiAvailable != true) {
+                    Text(if (state.aiAvailable == null) "Checking AI availability…" else "Writing feedback is available when an AI provider is configured. Listening, vocabulary and Review work without AI.")
+                } else if (state.correction == null) {
                     WritingInputView(
                         text = state.inputText,
                         onTextChanged = { viewModel.onTextChanged(it) },

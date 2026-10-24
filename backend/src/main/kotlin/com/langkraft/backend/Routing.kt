@@ -61,6 +61,7 @@ fun Route.apiRoutes() {
 
     // PUBLIC API ROUTES
     route("/api") {
+        get("/ai/capabilities") { call.respond(aiAssistant.capabilities()) }
         post("/ingest") {
             val request = call.receive<IngestRequest>()
             val jobId = ingestionService.startIngestion(request.url)
@@ -121,6 +122,9 @@ fun Route.apiRoutes() {
 }
 
 fun StatusPagesConfig.configureBackendExceptions() {
+    exception<AiUnavailableException> { call, cause ->
+        call.respondText(cause.message.orEmpty(), status = HttpStatusCode.ServiceUnavailable)
+    }
     exception<MediaCapacityException> { call, cause ->
         call.response.headers.append("Retry-After", "5")
         call.respondText(cause.message.orEmpty(), status = HttpStatusCode.ServiceUnavailable)

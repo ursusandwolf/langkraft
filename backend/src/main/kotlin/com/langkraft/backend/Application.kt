@@ -37,6 +37,9 @@ fun Application.module() {
         modules(backendModule, org.koin.dsl.module { single { environment.config } })
     }
 
+    // Validate optional provider settings before accepting any requests.
+    get<com.langkraft.domain.ai.LinguisticAssistant>()
+
     // Maintenance must run even when this process only serves previously imported media.
     val ingestionService = get<YouTubeIngestionService>()
     environment.monitor.subscribe(ApplicationStopping) { ingestionService.close() }

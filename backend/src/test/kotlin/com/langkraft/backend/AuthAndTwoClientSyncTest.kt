@@ -32,7 +32,7 @@ class AuthAndTwoClientSyncTest {
             "jwt.issuer" to "langkraft-tests", "jwt.audience" to "langkraft-tests", "jwt.realm" to "test", "jwt.validity_ms" to "86400000",
             "storage.data_dir" to directory.resolve("backend").toString(), "storage.downloads_dir" to directory.resolve("downloads").toString(),
             "ingestion.cleanup_interval_ms" to "3600000", "ingestion.job_expiry_ms" to "86400000", "ingestion.worker_count" to "1",
-            "gemini.api_key" to "mock_key"
+            "ai.provider" to "none"
         ) }
         application { module() }
         val auth = createClient { install(ContentNegotiation) { json() } }
@@ -64,10 +64,11 @@ class AuthAndTwoClientSyncTest {
             }.status)
         }
         val ai = RemoteLinguisticAssistant(firstClient, Url("http://localhost"))
-        assertEquals(TranslationResult("Translation of 'Haus'", "Haus", "Noun"), ai.translateWord("Haus", "Das Haus"))
-        assertEquals("Translated: Das Haus", ai.translateSentence("Das Haus"))
-        assertEquals(DeepAnalysisResult(emptyList(), "This is a mock analysis."), ai.analyzeSentence("Das Haus"))
-        assertEquals(CorrectionResult("Das Haus", "Das Haus", emptyList()), ai.correctText("Das Haus"))
+        assertFalse(ai.capabilities().enabled)
+        assertFailsWith<IllegalStateException> { ai.translateWord("Haus", "Das Haus") }
+        assertFailsWith<IllegalStateException> { ai.translateSentence("Das Haus") }
+        assertFailsWith<IllegalStateException> { ai.analyzeSentence("Das Haus") }
+        assertFailsWith<IllegalStateException> { ai.correctText("Das Haus") }
         val first = createJvmDatabase(directory.resolve("first.db").toFile())
         val second = createJvmDatabase(directory.resolve("second.db").toFile())
         try {
