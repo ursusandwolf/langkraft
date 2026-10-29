@@ -92,8 +92,6 @@ class SqlDelightVocabularyRepository(
 
     override suspend fun sync(lastSyncTimestamp: Long): Long {
         val pendingChanges = access.run(dispatcher) { db.appDatabaseQueries.getAllPendingChanges().awaitAsList() }
-        val processedIds = pendingChanges
-
         if (pendingChanges.isEmpty()) {
             return fetchServerChanges(lastSyncTimestamp, emptyList(), emptyList())
         }
@@ -128,7 +126,36 @@ class SqlDelightVocabularyRepository(
             }
         }
 
-        return fetchServerChanges(lastSyncTimestamp, clientEntries, processedIds)
+        val pendingById = pendingChanges.associateBy { it.wordId }
+        var cursor = lastSyncTimestamp
+        for (batch in partitionSyncChanges(clientEntries, lastSyncTimestamp)) {
+            // Keep the original cursor for every batch: remote conflicts for a still-pending
+            // word may have been skipped in an earlier response and must be fetched again.
+            cursor = fetchServerChanges(lastSyncTimestamp, batch, batch.map { pendingById.getValue(it.word.id) })
+        }
+        return cursor
+    }
+
+    private fun partitionSyncChanges(entries: List<SyncEntry>, cursor: Long): List<List<SyncEntry>> {
+        val overhead = json.encodeToString(SyncRequest(cursor, emptyList())).encodeToByteArray().size
+        val batches = mutableListOf<List<SyncEntry>>()
+        var batch = mutableListOf<SyncEntry>()
+        var bytes = overhead
+        for (entry in entries) {
+            val size = json.encodeToString(entry).encodeToByteArray().size
+            check(overhead + size <= SyncLimits.MAX_BODY_BYTES) { "A vocabulary entry is too large to synchronize." }
+            if (batch.isNotEmpty() && (batch.size == SyncLimits.MAX_BATCH_SIZE ||
+                bytes + 1 + size > SyncLimits.MAX_BODY_BYTES)) {
+                batches += batch
+                batch = mutableListOf()
+                bytes = overhead
+            }
+            bytes += size + if (batch.isEmpty()) 0 else 1
+            batch += entry
+        }
+        if (batch.isNotEmpty()) batches += batch
+        // Fetch remote changes even when a concurrent local deletion removed every upsert body.
+        return batches.ifEmpty { listOf(emptyList()) }
     }
 
     private suspend fun fetchServerChanges(
@@ -140,7 +167,8 @@ class SqlDelightVocabularyRepository(
             val httpResponse = httpClient.post(baseUrl) {
                 url { appendEncodedPathSegments("api", "sync") }
                 contentType(ContentType.Application.Json)
-                setBody(SyncRequest(lastSyncTimestamp, clientChanges))
+                // Use the same serializer as the byte budget; other client JSON settings must not enlarge it.
+                setBody(json.encodeToString(SyncRequest(lastSyncTimestamp, clientChanges)))
             }
             check(httpResponse.status.isSuccess()) {
                 if (httpResponse.status == HttpStatusCode.Unauthorized) "Sign in to synchronize this library."

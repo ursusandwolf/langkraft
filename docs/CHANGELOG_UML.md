@@ -1,3 +1,17 @@
+# NEXT-1 — 2026-10-29 — HTTP-входы и ограниченные sync-пакеты
+
+```text
+HTTP POST -> receiveLimitedJson (header + actual bytes) -> JSON decode
+          -> explicit request validation -> auth / AI / ingest / sync
+offline queue -> partition by SyncLimits (count + UTF-8 JSON bytes)
+              -> sequential HTTP batches with original cursor
+              -> revision-aware acknowledgement per batch
+```
+
+ApiLimits и ошибки запросов принадлежат backend; SyncLimits находится в contracts.
+Существующий SqlDelightVocabularyRepository сохраняет владение очередью и подтверждениями.
+Форматы DTO не изменены, новые repository-интерфейсы не добавлены. [Детали](API_LIMITS.md).
+
 # NEXT-3a — 2026-10-29 — независимые запросы реплик
 
 `PlayerState.translatingSentenceIds` и `lemmatizingSentenceIds` заменяют одиночные loading ID.

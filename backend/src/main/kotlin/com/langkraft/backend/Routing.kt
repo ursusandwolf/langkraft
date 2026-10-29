@@ -7,7 +7,6 @@ import com.langkraft.domain.ai.SentenceTranslationResult
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.call
 import io.ktor.server.plugins.statuspages.StatusPagesConfig
-import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.Route
@@ -32,7 +31,7 @@ fun Route.authRoutes() {
 
     route("/api/auth") {
         post("/register") {
-            val request = call.receive<RegisterRequest>()
+            val request = call.receiveLimitedJson<RegisterRequest>(ApiLimits.AUTH_BODY_BYTES)
             val response = authService.register(request)
             if (response == null) {
                 call.respond(HttpStatusCode.Conflict, "User already exists")
@@ -42,7 +41,7 @@ fun Route.authRoutes() {
         }
 
         post("/login") {
-            val request = call.receive<AuthRequest>()
+            val request = call.receiveLimitedJson<AuthRequest>(ApiLimits.AUTH_BODY_BYTES)
             val response = authService.login(request)
             if (response == null) {
                 call.respond(HttpStatusCode.Unauthorized, "Invalid credentials")
@@ -63,7 +62,8 @@ fun Route.apiRoutes() {
     route("/api") {
         get("/ai/capabilities") { call.respond(aiAssistant.capabilities()) }
         post("/ingest") {
-            val request = call.receive<IngestRequest>()
+            val request = call.receiveLimitedJson<IngestRequest>(ApiLimits.INGEST_BODY_BYTES)
+            validateRequest(request.url.length <= 2048)
             val jobId = ingestionService.startIngestion(request.url)
             call.respond(IngestResponse(jobId))
         }
@@ -90,22 +90,27 @@ fun Route.apiRoutes() {
         route("/api") {
             route("/ai") {
                 post("/translate-word") {
-                    val request = call.receive<TranslateRequest>()
+                    val request = call.receiveLimitedJson<TranslateRequest>(ApiLimits.AI_BODY_BYTES)
+                    validateRequest(request.word.isNotBlank() && request.word.length <= ApiLimits.AI_WORD_CHARS)
+                    validateAiText(request.context)
                     call.respond(aiAssistant.translateWord(request.word, request.context))
                 }
 
                 post("/translate-sentence") {
-                    val request = call.receive<TextRequest>()
+                    val request = call.receiveLimitedJson<TextRequest>(ApiLimits.AI_BODY_BYTES)
+                    validateAiText(request.text)
                     call.respond(SentenceTranslationResult(aiAssistant.translateSentence(request.text)))
                 }
 
                 post("/analyze-sentence") {
-                    val request = call.receive<TextRequest>()
+                    val request = call.receiveLimitedJson<TextRequest>(ApiLimits.AI_BODY_BYTES)
+                    validateAiText(request.text)
                     call.respond(aiAssistant.analyzeSentence(request.text))
                 }
 
                 post("/correct-text") {
-                    val request = call.receive<TextRequest>()
+                    val request = call.receiveLimitedJson<TextRequest>(ApiLimits.AI_BODY_BYTES)
+                    validateAiText(request.text)
                     call.respond(aiAssistant.correctText(request.text))
                 }
             }
@@ -113,7 +118,7 @@ fun Route.apiRoutes() {
             post("/sync") {
                 val principal = call.principal<JWTPrincipal>()
                 val accountId = principal?.payload?.subject ?: throw UnauthorizedException()
-                val request = call.receive<SyncRequest>()
+                val request = call.receiveLimitedJson<SyncRequest>(ApiLimits.SYNC_BODY_BYTES)
                 val response = syncService.performSync(accountId, request)
                 call.respond(response)
             }
@@ -135,8 +140,17 @@ fun StatusPagesConfig.configureBackendExceptions() {
     exception<io.ktor.server.plugins.BadRequestException> { call, _ ->
         call.respondText("Invalid request body", status = HttpStatusCode.BadRequest)
     }
-    exception<IllegalArgumentException> { call, _ ->
+    exception<RequestValidationException> { call, _ ->
         call.respondText("Invalid request parameters", status = HttpStatusCode.BadRequest)
+    }
+    exception<InvalidRequestBodyException> { call, _ ->
+        call.respondText("Invalid request body", status = HttpStatusCode.BadRequest)
+    }
+    exception<RequestBodyTooLargeException> { call, _ ->
+        call.respondText("Request body exceeds the allowed limit", status = HttpStatusCode.PayloadTooLarge)
+    }
+    exception<UnsupportedRequestTypeException> { call, _ ->
+        call.respondText("Use application/json with UTF-8 encoding", status = HttpStatusCode.UnsupportedMediaType)
     }
     exception<AiUnavailableException> { call, cause ->
         call.respondText(cause.message.orEmpty(), status = HttpStatusCode.ServiceUnavailable)

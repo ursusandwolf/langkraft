@@ -27,7 +27,8 @@ class IngestionHttpErrorsTest {
             install(StatusPages) { configureBackendExceptions() }
             routing {
                 post("/body") { call.receive<RegisterRequest>() }
-                get("/parameter") { require(false) { "private validation detail" } }
+                get("/parameter") { validateRequest(false) }
+                get("/internal-argument") { throw IllegalArgumentException("private implementation detail") }
                 get("/failure") { error("private database path or token") }
             }
         }
@@ -38,6 +39,9 @@ class IngestionHttpErrorsTest {
         val failure = client.get("/failure")
         assertEquals(HttpStatusCode.InternalServerError, failure.status)
         assertFalse(failure.bodyAsText().contains("private"))
+        val internalArgument = client.get("/internal-argument")
+        assertEquals(HttpStatusCode.InternalServerError, internalArgument.status)
+        assertFalse(internalArgument.bodyAsText().contains("private"))
     }
     @Test fun overloadReturns503WithRetryAfterAndInvalidUrlReturns400() = testApplication {
         environment { config = MapApplicationConfig() }

@@ -13,7 +13,7 @@ class AuthService(
 ) {
     fun register(request: RegisterRequest): AuthResponse? {
         validateCredentials(request.email, request.password)
-        require(request.displayName.isNotBlank() && request.displayName.length <= 255) { "Invalid display name" }
+        validateRequest(request.displayName.isNotBlank() && request.displayName.length <= 255)
         if (userRepository.findByEmail(request.email) != null) return null
 
         val passwordHash = BCrypt.withDefaults().hashToString(12, request.password.toCharArray())
@@ -39,7 +39,7 @@ class AuthService(
     }
 
     private fun validateCredentials(email: String, password: String) {
-        require(email.length <= 255 && Regex("[^\\s@]+@[^\\s@]+\\.[^\\s@]+").matches(email)) { "Invalid email" }
-        require(password.isNotBlank() && password.toByteArray(Charsets.UTF_8).size <= 72) { "Invalid password length" }
+        validateRequest(email.length <= 255 && Regex("[^\\s@]+@[^\\s@]+\\.[^\\s@]+").matches(email))
+        validateRequest(password.isNotBlank() && password.toByteArray(Charsets.UTF_8).size <= 72)
     }
 }

@@ -1,5 +1,7 @@
 package com.langkraft.backend.db
 
+import com.langkraft.backend.validateRequest
+
 import com.langkraft.domain.model.SyncEntry
 import com.langkraft.domain.model.VocabularyWord
 import com.langkraft.domain.model.WordStatus
@@ -64,9 +66,9 @@ class BackendVocabularyRepository(private val db: Database? = null) : Vocabulary
         var cursor = VocabularySync.slice(maximum).select { VocabularySync.userId eq userId }.single()[maximum] ?: 0L
         val applied = mutableSetOf<String>()
         for (entry in clientChanges) {
-            require(entry.changeType in setOf("UPSERT", "DELETE")) { "Unsupported sync change" }
+            validateRequest(entry.changeType in setOf("UPSERT", "DELETE"))
             val existing = VocabularySync.select { VocabularySync.id eq entry.word.id }.singleOrNull()
-            require(existing == null || existing[VocabularySync.userId] == userId) { "Word belongs to another account" }
+            validateRequest(existing == null || existing[VocabularySync.userId] == userId)
             if (existing == null || entry.word.lastUpdated > existing[VocabularySync.lastUpdated] ||
                 (entry.changeType == "DELETE" && entry.word.lastUpdated == existing[VocabularySync.lastUpdated])) {
                 cursor = maxOf(System.currentTimeMillis(), cursor + 1)
