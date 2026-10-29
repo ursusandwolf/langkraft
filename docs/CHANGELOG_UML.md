@@ -1,3 +1,17 @@
+# NEXT-2 — 2026-10-29 — общие диспетчеры backend
+
+```text
+HTTP auth -> AuthService (suspend)
+  -> BackendWork.jdbc -> user repository -> whole Exposed transaction
+  -> BackendWork.password -> BCrypt hash/verify (shared limited CPU view)
+HTTP sync -> SyncService -> BackendWork.jdbc -> whole sync transaction
+HTTP JWT / ingestion admission+polling -> BackendWork.jdbc
+```
+
+BackendWork — один singleton в composition root. Репозитории остаются синхронными;
+новые интерфейсы на каждый адаптер не добавлены. Dispatcher view не владеет executor.
+Семантика отмены и уже зафиксированной записи: [BACKEND_DISPATCHERS](BACKEND_DISPATCHERS.md).
+
 # NEXT-1 — 2026-10-29 — HTTP-входы и ограниченные sync-пакеты
 
 ```text

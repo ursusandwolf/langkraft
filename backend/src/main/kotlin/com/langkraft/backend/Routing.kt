@@ -53,6 +53,7 @@ fun Route.authRoutes() {
 }
 
 fun Route.apiRoutes() {
+    val work by inject<BackendWork>()
     val ingestionService by inject<YouTubeIngestionService>()
     val aiAssistant by inject<LinguisticAssistant>()
     val syncService by inject<SyncService>()
@@ -64,7 +65,7 @@ fun Route.apiRoutes() {
         post("/ingest") {
             val request = call.receiveLimitedJson<IngestRequest>(ApiLimits.INGEST_BODY_BYTES)
             validateRequest(request.url.length <= 2048)
-            val jobId = ingestionService.startIngestion(request.url)
+            val jobId = work.jdbc { ingestionService.startIngestion(request.url) }
             call.respond(IngestResponse(jobId))
         }
         
@@ -74,7 +75,7 @@ fun Route.apiRoutes() {
                 call.respond(HttpStatusCode.BadRequest, "Missing jobId")
                 return@get
             }
-            val job = ingestionService.getJobStatus(jobId)
+            val job = work.jdbc { ingestionService.getJobStatus(jobId) }
             if (job == null) {
                 call.respond(HttpStatusCode.NotFound, "Job not found")
                 return@get

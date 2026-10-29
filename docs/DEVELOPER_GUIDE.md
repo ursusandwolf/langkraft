@@ -8,6 +8,10 @@ HTTP JSON-входы ограничены до десериализации че
 проверяются явной валидацией, а sync-клиент разбивает очередь по общим `SyncLimits`.
 Пределы, статусы ошибок и семантика подтверждений — в [API_LIMITS](API_LIMITS.md).
 
+BackendWork переносит JDBC auth/JWT/sync/HTTP ingestion на IO и ограничивает BCrypt
+hash/verify общим CPU dispatcher view (по умолчанию 2). Транзакции остаются синхронными;
+настройки и гарантии отмены — в [BACKEND_DISPATCHERS](BACKEND_DISPATCHERS.md).
+
 В [settings.gradle.kts](../settings.gradle.kts) подключены четыре Gradle-модуля:
 
 | Модуль | Ответственность | Точки входа / конфигурация |

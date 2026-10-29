@@ -15,6 +15,7 @@ import com.langkraft.backend.db.*
 import java.io.File
 
 val backendModule = module {
+    single { com.langkraft.backend.BackendWork.from(get()) }
     single { 
         val config = get<io.ktor.server.config.ApplicationConfig>()
         val directory = File(config.propertyOrNull("storage.data_dir")?.getString() ?: "data").apply { mkdirs() }
@@ -25,8 +26,8 @@ val backendModule = module {
     single { BackendUserRepository(get()) }
     single<VocabularySyncRepository> { BackendVocabularyRepository(get()) }
     single { com.langkraft.backend.JwtService(get()) }
-    single { com.langkraft.backend.AuthService(get(), get()) }
-    single { com.langkraft.backend.SyncService(get(), get()) }
+    single { com.langkraft.backend.AuthService(get(), get(), get()) }
+    single { com.langkraft.backend.SyncService(get(), get(), get()) }
 
     single {
         val config = get<io.ktor.server.config.ApplicationConfig>()

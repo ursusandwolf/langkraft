@@ -39,6 +39,7 @@ fun Application.module() {
     }
 
     // Finish database preflight/migrations before allocating HTTP clients or background workers.
+    val backendWork = get<BackendWork>()
     get<org.jetbrains.exposed.sql.Database>()
 
     // Validate optional provider settings before accepting any requests.
@@ -70,7 +71,7 @@ fun Application.module() {
             validate { credential ->
                 val userId = credential.payload.subject?.takeIf { it.isNotBlank() }
                 if (credential.payload.audience.contains(jwtAudience) && userId != null &&
-                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    backendWork.jdbc {
                         get<com.langkraft.backend.db.BackendUserRepository>().findById(userId) != null
                     }) {
                     JWTPrincipal(credential.payload)

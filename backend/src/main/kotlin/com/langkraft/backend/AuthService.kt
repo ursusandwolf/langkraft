@@ -9,15 +9,16 @@ import com.langkraft.domain.model.UserInfo
 
 class AuthService(
     private val userRepository: BackendUserRepository,
-    private val jwtService: JwtService
+    private val jwtService: JwtService,
+    private val work: BackendWork
 ) {
-    fun register(request: RegisterRequest): AuthResponse? {
+    suspend fun register(request: RegisterRequest): AuthResponse? {
         validateCredentials(request.email, request.password)
         validateRequest(request.displayName.isNotBlank() && request.displayName.length <= 255)
-        if (userRepository.findByEmail(request.email) != null) return null
+        if (work.jdbc { userRepository.findByEmail(request.email) } != null) return null
 
-        val passwordHash = BCrypt.withDefaults().hashToString(12, request.password.toCharArray())
-        val userId = userRepository.createUser(request.email, passwordHash, request.displayName) ?: return null
+        val passwordHash = work.password { BCrypt.withDefaults().hashToString(12, request.password.toCharArray()) }
+        val userId = work.jdbc { userRepository.createUser(request.email, passwordHash, request.displayName) } ?: return null
         
         return AuthResponse(
             token = jwtService.generateToken(request.email, userId),
@@ -25,11 +26,11 @@ class AuthService(
         )
     }
 
-    fun login(request: AuthRequest): AuthResponse? {
+    suspend fun login(request: AuthRequest): AuthResponse? {
         validateCredentials(request.email, request.password)
-        val user = userRepository.findByEmail(request.email) ?: return null
+        val user = work.jdbc { userRepository.findByEmail(request.email) } ?: return null
         
-        val result = BCrypt.verifyer().verify(request.password.toCharArray(), user.passwordHash)
+        val result = work.password { BCrypt.verifyer().verify(request.password.toCharArray(), user.passwordHash) }
         if (!result.verified) return null
         
         return AuthResponse(
