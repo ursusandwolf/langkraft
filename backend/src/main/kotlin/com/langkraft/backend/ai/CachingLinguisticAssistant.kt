@@ -18,13 +18,13 @@ class CachingLinguisticAssistant(
         })
     }
 
-    private val wordCache = createLruCache<String, TranslationResult>(maxCacheSize)
+    private val wordCache = createLruCache<Pair<String, String>, TranslationResult>(maxCacheSize)
     private val sentenceCache = createLruCache<String, String>(maxCacheSize)
     private val analysisCache = createLruCache<String, DeepAnalysisResult>(maxCacheSize)
     private val correctionCache = createLruCache<String, CorrectionResult>(maxCacheSize)
 
     override suspend fun translateWord(word: String, context: String): TranslationResult {
-        val key = "$word|$context"
+        val key = word to context
         return wordCache.getOrPut(key) { delegate.translateWord(word, context) }
     }
 

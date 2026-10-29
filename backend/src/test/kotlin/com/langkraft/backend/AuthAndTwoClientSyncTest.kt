@@ -47,6 +47,19 @@ class AuthAndTwoClientSyncTest {
         }
         assertEquals(HttpStatusCode.OK, register.status)
         val token = register.body<AuthResponse>().token
+        for (invalid in listOf(
+            RegisterRequest("", "password", "Test"),
+            RegisterRequest("invalid@example.com", "", "Test"),
+            RegisterRequest("invalid@example.com", "я".repeat(37), "Test"),
+            RegisterRequest("invalid@example.com", "password", "")
+        )) {
+            assertEquals(HttpStatusCode.BadRequest, auth.post("/api/auth/register") {
+                contentType(ContentType.Application.Json); setBody(invalid)
+            }.status)
+        }
+        assertEquals(HttpStatusCode.Conflict, auth.post("/api/auth/register") {
+            contentType(ContentType.Application.Json); setBody(RegisterRequest("test@example.com", "password-for-test", "Test"))
+        }.status)
         assertEquals(HttpStatusCode.Unauthorized, auth.post("/api/auth/login") {
             contentType(ContentType.Application.Json); setBody(AuthRequest("test@example.com", "wrong"))
         }.status)

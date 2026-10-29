@@ -122,6 +122,12 @@ fun Route.apiRoutes() {
 }
 
 fun StatusPagesConfig.configureBackendExceptions() {
+    exception<io.ktor.server.plugins.BadRequestException> { call, _ ->
+        call.respondText("Invalid request body", status = HttpStatusCode.BadRequest)
+    }
+    exception<IllegalArgumentException> { call, _ ->
+        call.respondText("Invalid request parameters", status = HttpStatusCode.BadRequest)
+    }
     exception<AiUnavailableException> { call, cause ->
         call.respondText(cause.message.orEmpty(), status = HttpStatusCode.ServiceUnavailable)
     }
@@ -144,6 +150,7 @@ fun StatusPagesConfig.configureBackendExceptions() {
     }
     exception<Exception> { call, cause ->
         if (cause is kotlinx.coroutines.CancellationException) throw cause
-        call.respondText("Internal Error: ${cause.message}", status = HttpStatusCode.InternalServerError)
+        call.application.environment.log.error("Unhandled request failure", cause)
+        call.respondText("Internal server error", status = HttpStatusCode.InternalServerError)
     }
 }

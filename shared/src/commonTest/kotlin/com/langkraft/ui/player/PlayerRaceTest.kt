@@ -14,6 +14,28 @@ import kotlin.test.*
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class PlayerRaceTest {
+    @Test fun latestDeepAnalysisWinsAndDismissalIgnoresLateResponse() = runTest {
+        val old = CompletableDeferred<DeepAnalysisResult>()
+        val pending = CompletableDeferred<DeepAnalysisResult>()
+        val vm = fixture(analyze = { text ->
+            when (text) {
+                "old" -> withContext(NonCancellable) { old.await() }
+                "pending" -> withContext(NonCancellable) { pending.await() }
+                else -> DeepAnalysisResult(emptyList(), "new")
+            }
+        })
+        try {
+            vm.onEvent(PlayerEvent.DeepAnalysisClicked(line.copy(originalText = "old"))); runCurrent()
+            vm.onEvent(PlayerEvent.DeepAnalysisClicked(line.copy(originalText = "new"))); runCurrent()
+            old.complete(DeepAnalysisResult(emptyList(), "old")); runCurrent()
+            assertEquals("new", vm.currentState.deepAnalysis?.syntaxExplanation)
+            vm.onEvent(PlayerEvent.DeepAnalysisClicked(line.copy(originalText = "pending"))); runCurrent()
+            vm.onEvent(PlayerEvent.DismissDeepAnalysis)
+            pending.complete(DeepAnalysisResult(emptyList(), "pending")); runCurrent()
+            assertNull(vm.currentState.deepAnalysis)
+            assertFalse(vm.currentState.isAnalyzing)
+        } finally { vm.onCleared() }
+    }
     @Test fun disabledAiAllowsManualSaveWithoutAnyTranslationRequest() = runTest {
         var saved: VocabularyWord? = null
         val vm = fixture(capabilities = { AiCapabilities(false) },
@@ -137,6 +159,7 @@ class PlayerRaceTest {
         save: suspend (VocabularyWord)->Unit = {},
         load: suspend (String)->ImmersionContent? = { content },
         audio: FakeAudio = FakeAudio(),
+        analyze: suspend (String) -> DeepAnalysisResult = { DeepAnalysisResult(emptyList(), "analysis") },
         capabilities: suspend () -> AiCapabilities = { AiCapabilities(true) }
     ): PlayerViewModel {
         val local=object:LocalContentRepository {
@@ -159,6 +182,7 @@ class PlayerRaceTest {
         val assistant=object:LinguisticAssistant by MockLinguisticAssistant() {
             override suspend fun capabilities() = capabilities()
             override suspend fun translateWord(word:String,context:String)=translate(word,context)
+            override suspend fun analyzeSentence(text: String) = analyze(text)
         }
         val files=object:FileSystem {
             override fun getAppDataDir()=""

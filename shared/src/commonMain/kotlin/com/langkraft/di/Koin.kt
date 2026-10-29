@@ -25,10 +25,9 @@ import com.langkraft.domain.srs.SpacedRepetitionAlgorithm
 import com.langkraft.domain.srs.Sm2Algorithm
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.client.plugins.defaultRequest
 import io.ktor.client.plugins.HttpTimeout
-import io.ktor.client.request.bearerAuth
 import com.langkraft.data.sync.UserSession
+import com.langkraft.data.sync.backendAuthorization
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 import io.ktor.http.*
@@ -57,7 +56,7 @@ val commonModule = module {
         val owner = this
         HttpClient {
             install(HttpTimeout) { requestTimeoutMillis=30_000; connectTimeoutMillis=10_000 }
-            defaultRequest { owner.get<UserSession>().token.value?.let { bearerAuth(it) } }
+            backendAuthorization(owner.get<AppConfig>().backendUrl) { owner.get<UserSession>().token.value }
             install(ContentNegotiation) {
                 json(Json { ignoreUnknownKeys = true })
             }

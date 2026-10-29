@@ -130,7 +130,7 @@ class PlayerViewModel(
                 linguisticDelegate.dismissWord()
             }
             is PlayerEvent.DismissDeepAnalysis -> {
-                updateState { it.copy(deepAnalysis = null) }
+                linguisticDelegate.dismissAnalysis()
             }
             is PlayerEvent.PlayOnline -> {
                 currentState.content?.let { content ->

@@ -17,6 +17,8 @@ class PlayerLinguisticDelegate(
     var selectionGeneration = 0L
         private set
     private var wordJob: Job? = null
+    private var analysisJob: Job? = null
+    private var analysisGeneration = 0L
     private var contentGeneration = 0L
     private val requests = mutableMapOf<String, Long>()
 
@@ -31,6 +33,13 @@ class PlayerLinguisticDelegate(
         contentGeneration++
         requests.clear()
         dismissWord()
+        dismissAnalysis()
+    }
+
+    fun dismissAnalysis() {
+        analysisGeneration++
+        analysisJob?.cancel()
+        updateState { it.copy(deepAnalysis = null, isAnalyzing = false) }
     }
 
     fun handleWordClicked(word: String, line: SubtitleLine) {
@@ -54,17 +63,19 @@ class PlayerLinguisticDelegate(
 
     fun handleDeepAnalysis(line: SubtitleLine) {
         if (!getState().aiAvailable) return
-        updateState { it.copy(isAnalyzing = true) }
+        dismissAnalysis()
+        val request = analysisGeneration
+        updateState { it.copy(isAnalyzing = true, error = null) }
         val generation = contentGeneration
-        scope.launch {
+        analysisJob = scope.launch {
             try {
                 val result = linguisticAssistant.analyzeSentence(line.originalText)
                 ensureActive()
-                if (generation != contentGeneration) return@launch
+                if (generation != contentGeneration || request != analysisGeneration) return@launch
                 updateState { it.copy(deepAnalysis = result, isAnalyzing = false) }
             } catch (e: CancellationException) { throw e
             } catch (e: Exception) {
-                if (generation != contentGeneration) return@launch
+                if (generation != contentGeneration || request != analysisGeneration) return@launch
                 updateState { it.copy(isAnalyzing = false, error = e.message) }
             }
         }

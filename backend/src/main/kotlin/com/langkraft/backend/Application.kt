@@ -6,6 +6,7 @@ import io.ktor.server.application.Application
 import io.ktor.server.application.call
 import io.ktor.server.application.install
 import io.ktor.server.application.ApplicationStopping
+import io.ktor.server.application.ApplicationStopped
 import org.koin.ktor.ext.get
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.netty.Netty
@@ -39,6 +40,8 @@ fun Application.module() {
 
     // Validate optional provider settings before accepting any requests.
     get<com.langkraft.domain.ai.LinguisticAssistant>()
+    val aiHttpClient = get<io.ktor.client.HttpClient>()
+    environment.monitor.subscribe(ApplicationStopped) { aiHttpClient.close() }
 
     // Maintenance must run even when this process only serves previously imported media.
     val ingestionService = get<YouTubeIngestionService>()

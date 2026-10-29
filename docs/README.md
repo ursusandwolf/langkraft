@@ -15,6 +15,7 @@
 | Проверить контракт субтитров | [SUBTITLES](SUBTITLES.md) |
 | Узнать изменения и тестовые результаты | [CHANGELOG](CHANGELOG.md), [UML-журнал](CHANGELOG_UML.md) |
 | Выбрать следующую задачу | [todo](todo.md), [план кодревью](CODE_REVIEW_FIX_PLAN.md) |
+| Ревью 29 октября и следующий этап с локальной Ollama | [Результаты и исправления](CODE_REVIEW_2026-10-29.md), [план архитектуры и AI Strategy](ARCHITECTURE_PLAN_2026-10-29.md) |
 | Передать исходники на независимое ревью | [AI_CODE_REVIEW](AI_CODE_REVIEW.md), `python tools/review/Create-ReviewArchive.py` |
 | Проверить историю интеграции dev/main | [INTEGRATION_COMPLETION](INTEGRATION_COMPLETION.md), [решения конфликтов](INTEGRATION_RESOLUTION.md) |
 
