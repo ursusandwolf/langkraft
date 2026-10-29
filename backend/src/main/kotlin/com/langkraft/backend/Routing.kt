@@ -122,6 +122,16 @@ fun Route.apiRoutes() {
 }
 
 fun StatusPagesConfig.configureBackendExceptions() {
+    exception<AiProviderUnavailableException> { call, cause ->
+        call.respondText(cause.message.orEmpty(), status = HttpStatusCode.ServiceUnavailable)
+    }
+    exception<AiTimeoutException> { call, cause ->
+        call.respondText(cause.message.orEmpty(), status = HttpStatusCode.GatewayTimeout)
+    }
+    exception<AiBusyException> { call, cause ->
+        call.response.headers.append("Retry-After", "2")
+        call.respondText(cause.message.orEmpty(), status = HttpStatusCode.ServiceUnavailable)
+    }
     exception<io.ktor.server.plugins.BadRequestException> { call, _ ->
         call.respondText("Invalid request body", status = HttpStatusCode.BadRequest)
     }
@@ -146,7 +156,7 @@ fun StatusPagesConfig.configureBackendExceptions() {
         call.respondText("Ingestion Error: ${cause.message}", status = HttpStatusCode.BadRequest)
     }
     exception<AiException> { call, cause ->
-        call.respondText("AI Error: ${cause.message}", status = HttpStatusCode.InternalServerError)
+        call.respondText("AI Error: ${cause.message}", status = HttpStatusCode.BadGateway)
     }
     exception<Exception> { call, cause ->
         if (cause is kotlinx.coroutines.CancellationException) throw cause

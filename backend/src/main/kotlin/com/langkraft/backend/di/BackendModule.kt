@@ -56,7 +56,11 @@ val backendModule = module {
     
     single {
         HttpClient(CIO) {
-            install(io.ktor.client.plugins.HttpTimeout) { requestTimeoutMillis = 60000 }
+            followRedirects = false
+            install(io.ktor.client.plugins.HttpTimeout) {
+                requestTimeoutMillis = 120_000
+                connectTimeoutMillis = 5_000
+            }
             install(ContentNegotiation) {
                 json()
             }

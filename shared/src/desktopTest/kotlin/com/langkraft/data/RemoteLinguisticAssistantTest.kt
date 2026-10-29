@@ -6,6 +6,8 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.*
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.plugins.defaultRequest
+import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.request.bearerAuth
 import io.ktor.http.*
 import io.ktor.http.content.TextContent
@@ -16,6 +18,26 @@ import kotlinx.serialization.json.Json
 import kotlin.test.*
 
 class RemoteLinguisticAssistantTest {
+    @Test fun aiOverridesGenericTimeoutButHonorsItsOwnBudget(): Unit = runBlocking {
+        var calls = 0
+        val client = HttpClient(MockEngine) {
+            engine {
+                addHandler { request ->
+                    if (calls++ == 0) assertEquals(150_000, request.getCapabilityOrNull(HttpTimeout)?.requestTimeoutMillis)
+                    else awaitCancellation()
+                    respond("""{"translation":"Hello"}""", headers = headersOf(HttpHeaders.ContentType, "application/json"))
+                }
+            }
+            install(HttpTimeout) { requestTimeoutMillis = 30_000 }
+            install(ContentNegotiation) { json() }
+        }
+        try {
+            assertEquals("Hello", RemoteLinguisticAssistant(client, Url("https://example.test")).translateSentence("Hallo"))
+            assertFailsWith<HttpRequestTimeoutException> {
+                RemoteLinguisticAssistant(client, Url("https://example.test"), requestTimeoutMs = 25).translateSentence("Hallo")
+            }
+        } finally { client.close() }
+    }
     @Test fun slowCapabilityProbeFallsBackToManualMode() = runTest {
         val client = HttpClient(MockEngine { awaitCancellation() }) {
             install(ContentNegotiation) { json() }

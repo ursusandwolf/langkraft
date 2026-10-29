@@ -96,14 +96,14 @@ SqlDelightVocabularyRepository отправляет pending UPSERT/DELETE, пр�
 
 ### AI
 
-В commonModule выбран RemoteLinguisticAssistant: клиентские ViewModel используют общий HttpClient с актуальным JWT и AppConfig.backendUrl. Четыре POST-маршрута `/api/ai/translate-word`, `translate-sentence`, `analyze-sentence`, `correct-text` используют общие сериализуемые DTO; перевод реплики возвращается как SentenceTranslationResult. BackendModule выбирает GeminiLinguisticAssistant или mock и оборачивает его CachingLinguisticAssistant. Все AI-маршруты требуют JWT; 401 предлагает войти через Account. HTTP-ошибки проверяются до декодирования, отмена и ошибки сети пробрасываются без локального mock-fallback. Ключ Gemini остаётся на backend. WritingViewModel отменяет коррекцию при редактировании/повторе и игнорирует устаревшие результаты.
+В commonModule выбран RemoteLinguisticAssistant: ViewModel используют общий HttpClient с JWT, ограниченным origin из AppConfig.backendUrl. Четыре POST-маршрута `/api/ai/translate-word`, `translate-sentence`, `analyze-sentence`, `correct-text` используют общие сериализуемые DTO; перевод реплики возвращается как SentenceTranslationResult. BackendModule выбирает DisabledLinguisticAssistant либо CachingLinguisticAssistant → StrategyLinguisticAssistant → TextGenerationStrategy. Локальная Ollama подключена отдельной стратегией; Gemini/Claude/OpenAI необязательны, автоматического fallback нет. GenerationRequest несёт промпт и схему результата, UI не знает протокол провайдера. AI-маршруты требуют JWT, capabilities публичный. HTTP-ошибки проверяются до декодирования; отмена сохраняется. Кэш имеет TTL/LRU, бюджет payload и объединяет одинаковые запросы. WritingViewModel отменяет коррекцию при редактировании/повторе, Player игнорирует устаревшие ответы. Настройки и лимиты — в [AI](AI.md).
 
 ## Используемые паттерны и механизмы
 
 | Паттерн / приём | Конкретные участники | Задача |
 | --- | --- | --- |
 | Repository | LocalContentRepository → SqlDelightContentRepository; VocabularyRepository → SqlDelightVocabularyRepository; VocabularySyncRepository → BackendVocabularyRepository | Отделить работу UI/use case от SQL/Exposed и сетевого sync |
-| Strategy | SpacedRepetitionAlgorithm → Sm2Algorithm; LinguisticAssistant → Mock/Gemini | Подменять алгоритм/провайдера через контракт |
+| Strategy | SpacedRepetitionAlgorithm → Sm2Algorithm; TextGenerationStrategy → Ollama/Gemini/Claude/OpenAI | Подменять алгоритм/провайдера через контракт |
 | Decorator | backend CachingLinguisticAssistant оборачивает LinguisticAssistant | Добавлять кэш без изменения контракта AI |
 | Decorator / recovery adapter | JournaledFileAudioStorage оборачивает FileAudioStorage | Сохранять потоковую запись и дополнять её pending-журналом/сверкой без включения Android |
 | Adapter / platform port | BackendRemoteSource, ExecutableProcessRunner, AudioStorage и AudioPlayer реализации | Адаптировать HTTP, ProcessBuilder, файловую систему/IndexedDB и аудиодвижки |

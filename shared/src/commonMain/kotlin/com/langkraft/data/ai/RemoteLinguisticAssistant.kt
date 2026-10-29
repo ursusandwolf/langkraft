@@ -6,13 +6,17 @@ import io.ktor.client.call.body
 import io.ktor.client.request.post
 import io.ktor.client.request.get
 import io.ktor.client.request.setBody
+import io.ktor.client.plugins.timeout
+import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.plugins.pluginOrNull
 import io.ktor.http.*
 import kotlinx.coroutines.withTimeoutOrNull
 
 /** Uses the shared client's current session; provider credentials stay on the backend. */
 class RemoteLinguisticAssistant(
     private val client: HttpClient,
-    private val baseUrl: Url
+    private val baseUrl: Url,
+    private val requestTimeoutMs: Long = 150_000
 ) : LinguisticAssistant {
     override suspend fun capabilities(): AiCapabilities = withTimeoutOrNull(3000) {
         val response = client.get(baseUrl) { url { appendEncodedPathSegments("api", "ai", "capabilities") } }
@@ -35,6 +39,7 @@ class RemoteLinguisticAssistant(
         operation: String, payload: Request
     ): Response {
         val response = client.post(baseUrl) {
+            if (client.pluginOrNull(HttpTimeout) != null) timeout { requestTimeoutMillis = requestTimeoutMs }
             url { appendEncodedPathSegments("api", "ai", operation) }
             contentType(ContentType.Application.Json)
             setBody(payload)
@@ -44,6 +49,7 @@ class RemoteLinguisticAssistant(
                 HttpStatusCode.Unauthorized -> "Please sign in through Account to use the AI assistant (HTTP 401)."
                 HttpStatusCode.Forbidden -> "Access to the AI assistant was denied (HTTP 403)."
                 HttpStatusCode.ServiceUnavailable -> "AI is unavailable. You can enter a translation manually."
+                HttpStatusCode.GatewayTimeout -> "AI request timed out. Please try again or enter a translation manually."
                 else -> "AI service returned HTTP ${response.status.value}. Please try again."
             }
         }

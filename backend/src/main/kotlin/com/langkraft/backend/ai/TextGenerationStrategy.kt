@@ -9,8 +9,10 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.*
 
 /** Strategy: each implementation owns its provider's wire protocol. */
+data class GenerationRequest(val prompt: String, val outputSchema: JsonObject? = null)
+
 fun interface TextGenerationStrategy {
-    suspend fun generate(prompt: String): String
+    suspend fun generate(request: GenerationRequest): String
 }
 
 abstract class HttpTextGenerationStrategy(protected val settings: AiSettings, private val client: HttpClient) : TextGenerationStrategy {
@@ -38,7 +40,8 @@ abstract class HttpTextGenerationStrategy(protected val settings: AiSettings, pr
 }
 
 class GeminiTextGenerationStrategy(settings: AiSettings, client: HttpClient) : HttpTextGenerationStrategy(settings, client) {
-    override suspend fun generate(prompt: String): String {
+    override suspend fun generate(request: GenerationRequest): String {
+        val prompt = request.prompt
         val response = request("models/${settings.model}:generateContent", buildJsonObject {
             putJsonArray("contents") { addJsonObject { putJsonArray("parts") { addJsonObject { put("text", prompt) } } } }
         }) { header("x-goog-api-key", settings.apiKey) }
@@ -49,7 +52,8 @@ class GeminiTextGenerationStrategy(settings: AiSettings, client: HttpClient) : H
 }
 
 class ClaudeTextGenerationStrategy(settings: AiSettings, client: HttpClient) : HttpTextGenerationStrategy(settings, client) {
-    override suspend fun generate(prompt: String): String {
+    override suspend fun generate(request: GenerationRequest): String {
+        val prompt = request.prompt
         val response = request("messages", buildJsonObject {
             put("model", settings.model)
             put("max_tokens", 4096)
@@ -63,7 +67,8 @@ class ClaudeTextGenerationStrategy(settings: AiSettings, client: HttpClient) : H
 }
 
 class OpenAiTextGenerationStrategy(settings: AiSettings, client: HttpClient) : HttpTextGenerationStrategy(settings, client) {
-    override suspend fun generate(prompt: String): String {
+    override suspend fun generate(request: GenerationRequest): String {
+        val prompt = request.prompt
         val response = request("chat/completions", buildJsonObject {
             put("model", settings.model)
             putJsonArray("messages") { addJsonObject { put("role", "user"); put("content", prompt) } }

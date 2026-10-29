@@ -47,6 +47,10 @@ class IngestionHttpErrorsTest {
                 get("/busy") { throw IngestionBusyException() }
                 get("/media-full") { throw MediaCapacityException() }
                 get("/invalid") { SourceUrlValidator.validate("https://example.com/video") }
+                get("/ai-timeout") { throw AiTimeoutException() }
+                get("/ai-unavailable") { throw AiProviderUnavailableException() }
+                get("/ai-busy") { throw AiBusyException() }
+                get("/ai-invalid") { throw AiException("Invalid AI output") }
             }
         }
         val busy = client.get("/busy")
@@ -56,5 +60,11 @@ class IngestionHttpErrorsTest {
         assertEquals(HttpStatusCode.ServiceUnavailable, full.status)
         assertEquals("5", full.headers[HttpHeaders.RetryAfter])
         assertEquals(HttpStatusCode.BadRequest, client.get("/invalid").status)
+        assertEquals(HttpStatusCode.GatewayTimeout, client.get("/ai-timeout").status)
+        assertEquals(HttpStatusCode.ServiceUnavailable, client.get("/ai-unavailable").status)
+        val aiBusy = client.get("/ai-busy")
+        assertEquals(HttpStatusCode.ServiceUnavailable, aiBusy.status)
+        assertEquals("2", aiBusy.headers[HttpHeaders.RetryAfter])
+        assertEquals(HttpStatusCode.BadGateway, client.get("/ai-invalid").status)
     }
 }

@@ -8,6 +8,10 @@ class AiException(message: String, cause: Throwable? = null) : LangkraftExceptio
 
 class AiUnavailableException : LangkraftException("AI is disabled; enter translations manually")
 
+class AiProviderUnavailableException : LangkraftException("Local AI is unavailable; check Ollama and the configured model")
+class AiTimeoutException : LangkraftException("AI request timed out; please try again")
+class AiBusyException : LangkraftException("AI capacity reached; try again later")
+
 class IngestionBusyException : LangkraftException("Import capacity reached; try again later")
 
 class MediaCapacityException : LangkraftException("Media storage capacity reached; try again later")
