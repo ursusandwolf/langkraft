@@ -18,6 +18,56 @@ import java.util.Base64
 import kotlin.test.*
 
 class UserSessionTest {
+    @Test fun guestBindingRequiresConsentRequeuesAllWordsAndRejectsUnknownSyncHistory(): Unit = runBlocking {
+        val directory = Files.createTempDirectory("langkraft-guest-binding-").toFile()
+        val handle = createJvmDatabase(directory.resolve("app.db"))
+        var calls = 0
+        val client = HttpClient(MockEngine {
+            calls++
+            respond(Json.encodeToString(AuthResponse("token", UserInfo("account-id", "first@example.com", "First"))),
+                headers = headersOf(HttpHeaders.ContentType, "application/json"))
+        }) { install(ContentNegotiation) { json() } }
+        try {
+            val repo = SqlDelightVocabularyRepository(handle.access, client, Url("http://localhost"))
+            repo.saveWord(VocabularyWord("word", "Haus", contextSentence = "Das Haus"))
+            handle.database.appDatabaseQueries.clearAllPendingChanges()
+            val session = UserSession(handle.access, Url("http://localhost")) { client }
+            assertEquals(1, session.guestBindingPreview()?.wordCount)
+            assertFailsWith<IllegalStateException> { session.signIn("first@example.com", "password") }
+            assertEquals(0, calls)
+            repo.setSyncMetadata("last_sync_timestamp", "123")
+            assertNull(session.guestBindingPreview())
+            assertFailsWith<IllegalStateException> { session.signIn("first@example.com", "password", bindGuestWords = true) }
+            assertEquals(0, calls)
+            handle.database.appDatabaseQueries.deleteSyncMetadata("last_sync_timestamp")
+            session.signIn("first@example.com", "password", bindGuestWords = true)
+            assertEquals(1, calls)
+            assertEquals("token", session.token.value)
+            assertEquals("word", handle.database.appDatabaseQueries.getAllPendingChanges().awaitAsList().single().wordId)
+            assertEquals("Haus", handle.database.appDatabaseQueries.selectWordById("word").awaitAsOne().word)
+            assertNotNull(handle.database.appDatabaseQueries.getSyncMetadata("auth_account_id").awaitAsOneOrNull())
+            assertNull(session.guestBindingPreview())
+        } finally { client.close(); handle.close(); check(directory.deleteRecursively()) }
+    }
+
+    @Test fun recreatedServerAccountWithTheSameEmailCannotAdoptAnExistingProfile(): Unit = runBlocking {
+        val directory = Files.createTempDirectory("langkraft-account-identity-").toFile()
+        val handle = createJvmDatabase(directory.resolve("app.db"))
+        var id = "original"
+        val client = HttpClient(MockEngine {
+            respond(Json.encodeToString(AuthResponse("token:$id", UserInfo(id, "first@example.com", "First"))),
+                headers = headersOf(HttpHeaders.ContentType, "application/json"))
+        }) { install(ContentNegotiation) { json() } }
+        try {
+            val session = UserSession(handle.access, Url("http://localhost")) { client }
+            session.signIn("first@example.com", "password")
+            session.signOut()
+            id = "recreated"
+            assertFailsWith<IllegalStateException> { session.signIn("first@example.com", "password") }
+            assertNull(session.token.value)
+            assertEquals("", handle.database.appDatabaseQueries.getSyncMetadata("auth_token").awaitAsOne())
+        } finally { client.close(); handle.close(); check(directory.deleteRecursively()) }
+    }
     @Test fun profileOwnershipSurvivesLogoutAndPreventsAccountMixing() = runBlocking {
         val directory = Files.createTempDirectory("langkraft-session-").toFile()
         val handle = createJvmDatabase(directory.resolve("app.db"))

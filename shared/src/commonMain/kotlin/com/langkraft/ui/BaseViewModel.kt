@@ -16,11 +16,18 @@ import kotlin.coroutines.CoroutineContext
 abstract class BaseViewModel(
     baseContext: CoroutineContext = Dispatchers.Main
 ) {
-    protected val scope = CoroutineScope(baseContext + SupervisorJob())
+    protected val scope = CoroutineScope(baseContext + SupervisorJob(baseContext[kotlinx.coroutines.Job]))
+    private var cleared = false
+    internal var onClearedCallback: (() -> Unit)? = null
 
-    open fun onCleared() {
-        scope.cancel()
+    fun onCleared() {
+        if (cleared) return
+        cleared = true
+        try { disposeResources() }
+        finally { scope.cancel(); onClearedCallback?.invoke(); onClearedCallback = null }
     }
+
+    protected open fun disposeResources() {}
 }
 
 /**

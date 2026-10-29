@@ -20,7 +20,7 @@ class AuthService(
         val userId = userRepository.createUser(request.email, passwordHash, request.displayName) ?: return null
         
         return AuthResponse(
-            token = jwtService.generateToken(request.email),
+            token = jwtService.generateToken(request.email, userId),
             user = UserInfo(userId, request.email, request.displayName)
         )
     }
@@ -33,7 +33,7 @@ class AuthService(
         if (!result.verified) return null
         
         return AuthResponse(
-            token = jwtService.generateToken(request.email),
+            token = jwtService.generateToken(user.email, user.id),
             user = UserInfo(user.id, user.email, user.displayName)
         )
     }

@@ -25,13 +25,18 @@ import com.langkraft.di.createDesktopModule
 import com.langkraft.ui.theme.LangkraftTheme
 import com.langkraft.ui.BaseViewModel
 import org.koin.core.parameter.ParametersDefinition
+import com.langkraft.data.profile.*
+import com.langkraft.di.ClientRuntime
+import com.langkraft.di.commonModule
+import com.langkraft.ui.ProfilesPanel
+import kotlinx.coroutines.launch
+import org.koin.dsl.koinApplication
+import org.koin.dsl.module
+import androidx.compose.ui.unit.dp
 
 fun main(args: Array<String>) {
-    initKoin {
-        modules(createDesktopModule(isTui = false))
-    }
-
     if ("--smoke" in args) {
+        initKoin { modules(createDesktopModule(isTui = false)) }
         val koin = org.koin.mp.KoinPlatform.getKoin()
         val handle = koin.get<com.langkraft.data.database.DatabaseHandle>()
         val player = koin.get<com.langkraft.audio.AudioPlayer>()
@@ -43,9 +48,33 @@ fun main(args: Array<String>) {
     }
 
     application {
-        Window(onCloseRequest = ::exitApplication, title = "Langkraft - German Immersion") {
+        val scope = rememberCoroutineScope()
+        val store = remember { JvmLocalProfileStore(desktopDataRoot()) }
+        var runtime by remember { mutableStateOf<ClientRuntime?>(null) }
+        val profiles = remember {
+            lateinit var controller: ProfileController
+            controller = ProfileController(store, scope) { profile ->
+                val previous = runtime
+                runtime = null
+                previous?.close()
+                val app = koinApplication {
+                    modules(commonModule, createDesktopModule(dataDirectory = store.directory(profile.id)), module { single { controller } })
+                }
+                val opened = try { ClientRuntime(app) } catch (failure: Throwable) { app.close(); throw failure }
+                try { opened.restore(); runtime = opened }
+                catch (failure: Throwable) { opened.close(); throw failure }
+            }
+            controller
+        }
+        LaunchedEffect(Unit) { profiles.start() }
+        Window(onCloseRequest = { scope.launch { runtime?.close(); exitApplication() } }, title = "Langkraft - German Immersion") {
             LangkraftTheme {
-                MainApp()
+                val active = runtime
+                if (active != null) key(active) { MainApp(active.koin) }
+                else Column(Modifier.fillMaxSize().padding(16.dp)) {
+                    Text("Open a local library")
+                    ProfilesPanel(profiles)
+                }
             }
         }
     }

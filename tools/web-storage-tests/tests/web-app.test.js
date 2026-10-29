@@ -16,6 +16,7 @@ const noAi = process.argv.includes('--manual');
 const aiError = process.argv.includes('--ai-error');
 const aiDelayed = process.argv.includes('--ai-delayed');
 const manual = noAi || aiError || aiDelayed;
+const profileTest = process.argv.includes('--profiles');
 const expectedTranslation = manual ? 'Привет вручную' : 'Hello from remote AI';
 await mkdir(artifacts, {recursive:true});
 const audio = Buffer.alloc(44 + 16000 * 2 * 4);
@@ -32,6 +33,8 @@ if(demo) {
 }
 let imports=0, mediaRequests=0;
 const aiRequests=[];
+const accountRequests=[];
+const syncRequests=[];
 let holdMedia=false, releaseMedia, onMediaHeld;
 const content={id:'web-fixture',title:'Deutsch im Alltag',audioUrl:'/api/media/test.wav',localAudioPath:'/backend-private/downloads/web-fixture/test.wav',
   sourceUrl:'https://youtu.be/video',durationSeconds:4,subtitles:[{id:'cue',contentId:'web-fixture',startMs:0,endMs:4000,originalText:'Hallo Welt',translationText:null}]};
@@ -39,6 +42,18 @@ const server=createServer(async(req,res)=>{
   const pathname=new URL(req.url,'http://localhost').pathname;
   if(pathname==='/api/ai/capabilities') {
     res.setHeader('Content-Type','application/json');res.end(JSON.stringify({enabled:!noAi,provider:noAi?null:'fixture'}));return;
+  }
+  if(profileTest && pathname.startsWith('/api/auth/')) {
+    let body='';for await(const chunk of req) body+=chunk;
+    const account=JSON.parse(body);accountRequests.push(account.email);
+    res.setHeader('Content-Type','application/json');
+    res.end(JSON.stringify({token:'profile-token',user:{id:'profile-account',email:account.email,displayName:'Alice'}}));return;
+  }
+  if(profileTest && pathname==='/api/sync') {
+    if(req.headers.authorization!=='Bearer profile-token') {res.writeHead(401).end('Unauthorized');return;}
+    let body='';for await(const chunk of req) body+=chunk;
+    syncRequests.push(JSON.parse(body));
+    res.setHeader('Content-Type','application/json');res.end(JSON.stringify({serverTimestamp:123,serverChanges:[]}));return;
   }
   if(pathname==='/storage-owner') {res.setHeader('Content-Type','text/html');res.end('<!doctype html><script src="/storage-probe/harness.js"></script>');return;}
   if(pathname==='/api/ingest') {
@@ -102,6 +117,61 @@ try {
   const query=(sql,params=[])=>page.evaluate(async({sql,params})=>{const client=window.storage.createDatabaseClient();try{return await client.request('exec',sql,params);}finally{client.close();}},{sql,params});
   const waitQuery=async(sql,predicate)=>{const deadline=Date.now()+12000;while(Date.now()<deadline){const rows=await query(sql);if(predicate(rows))return rows;await page.waitForTimeout(100);}throw new Error('Timed out: '+sql);};
   await open();
+  if (profileTest) {
+    await page.mouse.click(120,775); // Account
+    const picker = page.getByRole('combobox',{name:'Libraries'});
+    await picker.waitFor({state:'visible'});
+    assert.equal(await picker.inputValue(), '');
+    await page.getByRole('textbox',{name:'New library name',exact:true}).fill('Alice');
+    const field = await page.getByRole('textbox',{name:'New library name',exact:true}).boundingBox();
+    await page.mouse.click(1110,field.y+20); // Create library
+    await page.waitForURL(url=>url.searchParams.get('profile')?.startsWith('local-'));
+    await page.waitForFunction(()=>document.documentElement.dataset.appReady==='true');
+    const aliceId = new URL(page.url()).searchParams.get('profile');
+    await page.addScriptTag({url:origin+'/storage-probe/harness.js'});
+    await query("INSERT INTO SyncMetadata(key,value) VALUES ('profile-probe','alice')");
+    await page.mouse.click(120,775);
+    await picker.waitFor({state:'visible'});
+    await page.getByRole('textbox',{name:'New library name',exact:true}).fill('Bob');
+    const nextField = await page.getByRole('textbox',{name:'New library name',exact:true}).boundingBox();
+    await page.mouse.click(1110,nextField.y+20);
+    await page.waitForURL(url=>url.searchParams.get('profile') && url.searchParams.get('profile')!==aliceId);
+    await page.waitForFunction(()=>document.documentElement.dataset.appReady==='true');
+    await page.addScriptTag({url:origin+'/storage-probe/harness.js'});
+    assert.deepEqual(await query("SELECT value FROM SyncMetadata WHERE key='profile-probe'"),[]);
+    await page.mouse.click(120,775);
+    await picker.waitFor({state:'visible'});
+    await picker.selectOption(aliceId);
+    await page.waitForURL(url=>url.searchParams.get('profile')===aliceId);
+    await page.waitForFunction(()=>document.documentElement.dataset.appReady==='true');
+    await page.addScriptTag({url:origin+'/storage-probe/harness.js'});
+    assert.deepEqual(await query("SELECT value FROM SyncMetadata WHERE key='profile-probe'"),[['alice']]);
+    await query("INSERT INTO Vocabulary(id,word,contextSentence,addedAt,lastUpdated) VALUES ('guest-word','Haus','Das Haus',1,1)");
+    await page.mouse.click(120,775);
+    await page.getByRole('textbox',{name:'Email',exact:true}).fill('alice@example.com');
+    await page.getByLabel('Password',{exact:true}).fill('password');
+    const display = await page.getByRole('textbox',{name:'Display name (registration)',exact:true}).boundingBox();
+    await page.mouse.click(60,display.y+display.height+28); // Sign in
+    await page.getByRole('textbox',{name:'Email',exact:true}).waitFor({state:'detached'});
+    assert.deepEqual(accountRequests,[],'Guest data must not be linked before confirmation');
+    await page.screenshot({path:path.join(artifacts,'guest-binding.png')});
+    await page.keyboard.press('Escape');
+    await page.getByRole('textbox',{name:'Email',exact:true}).waitFor({state:'visible'});
+    assert.deepEqual(accountRequests,[],'Cancelling guest linking must not call auth');
+    const again = await page.getByRole('textbox',{name:'Display name (registration)',exact:true}).boundingBox();
+    await page.mouse.click(60,again.y+again.height+28);
+    await page.getByRole('textbox',{name:'Email',exact:true}).waitFor({state:'detached'});
+    await page.mouse.click(810,477); // Link and sign in in the confirmation dialog
+    await waitQuery("SELECT value FROM SyncMetadata WHERE key='auth_token'", rows=>rows[0]?.[0]==='profile-token');
+    await waitQuery("SELECT COUNT(*) FROM PendingSyncChange", rows=>rows[0]?.[0]===0);
+    assert.deepEqual(accountRequests,['alice@example.com']);
+    assert.equal(syncRequests.at(-1).clientChanges[0].word.id,'guest-word');
+    assert.deepEqual(await query("SELECT word FROM Vocabulary WHERE id='guest-word'"),[['Haus']]);
+    assert.deepEqual(errors,[]);
+    console.log('PASS: Account creates named libraries and switches A → B → A without moving local data');
+    await page.screenshot({path:path.join(artifacts,'profiles.png')});
+    process.exitCode=0;
+  } else {
   if(!demo && !noAi) {
     // Restore a fixture session through the production UserSession startup path.
     await query('INSERT OR REPLACE INTO SyncMetadata(key,value) VALUES (?,?)',['auth_token','web-ai-fixture']);
@@ -421,5 +491,6 @@ try {
   console.log('PASS: SQL recovery restores stale downloads, preserves active/legacy owners and recovers a closed owner');
   console.log('PASS: published pending recovery removes orphans, preserves active/legacy/foreign references and confirms bound assets');
   console.log('PASS: recovery page copies/exports/imports a real library; isolated Compose app opens linked audio and SRS without auth');
+  }
   }
 } catch(error) {if(page) await page.screenshot({path:path.join(artifacts,'failure.png')}).catch(()=>{});console.error('Browser errors:',errors);throw error;} finally {releaseMedia?.();await browser.close();server.closeAllConnections();await new Promise(resolve=>server.close(resolve));}

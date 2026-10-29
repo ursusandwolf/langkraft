@@ -1,6 +1,8 @@
 import { profileNames, selectedProfile } from "./profile.js";
 import { acquireProfileLease } from "./profile-lifecycle.js";
 import { databaseEvents } from "./database-events.js";
+export { createLocalProfile, listLocalProfiles, localProfileUrl } from "./profile-lifecycle.js";
+export { selectedProfile } from "./profile.js";
 
 const DATABASE = profileNames(selectedProfile).audio;
 const PREFIX = "indexeddb-audio:";

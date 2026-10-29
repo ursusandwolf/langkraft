@@ -267,6 +267,49 @@ try {
   await peer.close();
   await page.evaluate(async()=>{await window.eventsClient.request('close');window.eventsClient.close();});
   console.log('PASS: profile-scoped invalidation has no echo, concurrent SQLite writes persist, and focus fallback detaches on close');
+  const localProfiles = await page.evaluate(async () => {
+    const one = await window.storage.createLocalProfile('Alice');
+    const two = await window.storage.createLocalProfile('Bob');
+    const available = await window.storage.listLocalProfiles();
+    if (!available.some(item => item.id === one.id && item.name === 'Alice')) throw new Error('Missing named profile');
+    return { one, two, url: await window.storage.localProfileUrl(two.id) };
+  });
+  assert.equal(new URL(localProfiles.url).searchParams.get('profile'), localProfiles.two.id);
+  const alice = await context.newPage();
+  await alice.goto(`http://127.0.0.1:${server.address().port}/?profile=${localProfiles.one.id}`);
+  await alice.waitForFunction(() => !!window.storage);
+  const privateAudio = await alice.evaluate(async () => {
+    const sql = window.storage.createDatabaseClient();
+    await sql.request('exec', 'CREATE TABLE ProfileProbe (key TEXT PRIMARY KEY,value TEXT)', []);
+    await sql.request('exec', 'INSERT INTO ProfileProbe VALUES (?,?)', ['auth_token','alice-token']);
+    await sql.request('exec', 'INSERT INTO ProfileProbe VALUES (?,?)', ['cursor','123']);
+    sql.close();
+    const audio = await window.storage.beginAudio('same-content');
+    await window.storage.appendAudio(audio, new Uint8Array([1,2,3]));
+    return window.storage.commitAudio(audio, 3);
+  });
+  const bob = await context.newPage();
+  await bob.goto(`http://127.0.0.1:${server.address().port}/?profile=${localProfiles.two.id}`);
+  await bob.waitForFunction(() => !!window.storage);
+  const separate = await bob.evaluate(async location => {
+    const sql = window.storage.createDatabaseClient();
+    const tables = await sql.request('exec', "SELECT name FROM sqlite_master WHERE name='ProfileProbe'", []);
+    sql.close();
+    let missingAudio = false;
+    try { await window.storage.readAudioBlob(location); } catch { missingAudio = true; }
+    return { tables, missingAudio };
+  }, privateAudio);
+  assert.deepEqual(separate, { tables:[], missingAudio:true });
+  await alice.reload(); await alice.waitForFunction(() => !!window.storage);
+  const restoredLocalProfile = await alice.evaluate(async location => {
+    const sql = window.storage.createDatabaseClient();
+    const data = await sql.request('exec', 'SELECT key,value FROM ProfileProbe ORDER BY key', []);
+    sql.close();
+    return { data, size:(await window.storage.readAudioBlob(location)).size };
+  }, privateAudio);
+  assert.deepEqual(restoredLocalProfile, { data:[['auth_token','alice-token'],['cursor','123']], size:3 });
+  await alice.close(); await bob.close();
+  console.log('PASS: named local profiles preserve independent SQL/session/cursor/audio through tab switching and reload');
   assert.deepEqual(errors, []);
 } finally {
   await browser.close();

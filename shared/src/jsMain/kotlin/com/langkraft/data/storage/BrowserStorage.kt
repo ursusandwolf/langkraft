@@ -8,6 +8,14 @@ import org.w3c.files.Blob
 import kotlin.js.Promise
 
 external fun createDatabaseWorker(): Worker
+external val selectedProfile: String
+external interface BrowserLocalProfile {
+    val id: String
+    val name: String
+}
+external fun listLocalProfiles(): Promise<Array<BrowserLocalProfile>>
+external fun createLocalProfile(name: String): Promise<BrowserLocalProfile>
+external fun localProfileUrl(profile: String): Promise<String>
 external interface DatabaseClient {
     fun request(action: String, sql: String?, params: Array<Any?>): Promise<dynamic>
     fun close()

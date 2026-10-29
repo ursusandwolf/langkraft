@@ -204,9 +204,8 @@ class PlayerViewModel(
         }
     }
 
-    override fun onCleared() {
+    override fun disposeResources() {
         audioPlayer.release()
-        super.onCleared()
     }
     
     private fun handleTimeUpdate(timeMs: Long) {

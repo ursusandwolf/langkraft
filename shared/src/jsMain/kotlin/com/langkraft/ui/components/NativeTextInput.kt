@@ -12,14 +12,14 @@ import org.w3c.dom.events.Event
 
 /** Native input supplies paste, keyboard and browser accessibility on Canvas-based Compose. */
 @Composable
-actual fun NativeTextInput(value: String, onValueChange: (String) -> Unit, enabled: Boolean, modifier: Modifier, label: String, isUrl: Boolean) {
+actual fun NativeTextInput(value: String, onValueChange: (String) -> Unit, enabled: Boolean, modifier: Modifier, label: String, isUrl: Boolean, isPassword: Boolean) {
     val onChange by rememberUpdatedState(onValueChange)
-    val input = remember(label, isUrl) {
+    val input = remember(label, isUrl, isPassword) {
         (document.createElement("input") as HTMLInputElement).apply {
-            type = if (isUrl) "url" else "text"
+            type = if (isPassword) "password" else if (isUrl) "url" else "text"
             placeholder = label
             setAttribute("aria-label", label)
-            setAttribute("autocomplete", if (isUrl) "url" else "off")
+            setAttribute("autocomplete", if (isPassword) "current-password" else if (isUrl) "url" else "off")
             style.cssText = "position:fixed;box-sizing:border-box;border:1px solid #718078;border-radius:4px;" +
                 "padding:12px 16px;font:16px system-ui,sans-serif;color:#20372c;background:#f5f7f4;z-index:1;"
         }

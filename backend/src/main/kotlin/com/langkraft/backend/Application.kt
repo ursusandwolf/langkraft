@@ -65,7 +65,11 @@ fun Application.module() {
                     .build()
             )
             validate { credential ->
-                if (credential.payload.audience.contains(jwtAudience)) {
+                val userId = credential.payload.subject?.takeIf { it.isNotBlank() }
+                if (credential.payload.audience.contains(jwtAudience) && userId != null &&
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        get<com.langkraft.backend.db.BackendUserRepository>().findById(userId) != null
+                    }) {
                     JWTPrincipal(credential.payload)
                 } else null
             }

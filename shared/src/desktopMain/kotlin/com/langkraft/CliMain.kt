@@ -272,6 +272,20 @@ class TuiApp : KoinComponent {
 }
 
 fun main(args: Array<String>) {
+    val profiles = com.langkraft.data.profile.JvmLocalProfileStore(com.langkraft.data.profile.desktopDataRoot())
+    if ("--list-profiles" in args) {
+        kotlinx.coroutines.runBlocking { profiles.list().forEach { println("${it.id.value.ifEmpty { "default" }}\t${it.name}") } }
+        return
+    }
+    args.firstOrNull { it.startsWith("--create-profile=") }?.let { argument ->
+        val created = kotlinx.coroutines.runBlocking { profiles.create(argument.substringAfter('=')) }
+        println(created.id.value)
+        return
+    }
+    args.firstOrNull { it.startsWith("--profile=") }?.let { argument ->
+        val value = argument.substringAfter('=').let { if (it == "default") "" else it }
+        kotlinx.coroutines.runBlocking { profiles.select(com.langkraft.domain.model.ProfileId(value)) }
+    }
     initKoin {
         modules(createDesktopModule(isTui = true))
     }

@@ -54,4 +54,5 @@ dependencies {
 
 tasks.test {
     useJUnitPlatform()
+    inputs.property("ollamaLiveModel", providers.environmentVariable("LANGKRAFT_OLLAMA_LIVE_MODEL").orElse(""))
 }

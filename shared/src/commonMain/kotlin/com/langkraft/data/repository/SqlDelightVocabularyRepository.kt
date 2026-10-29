@@ -137,11 +137,18 @@ class SqlDelightVocabularyRepository(
         processedIds: List<com.langkraft.db.PendingSyncChange>
     ): Long {
         return try {
-            val response: SyncResponse = httpClient.post(baseUrl) {
+            val httpResponse = httpClient.post(baseUrl) {
                 url { appendEncodedPathSegments("api", "sync") }
                 contentType(ContentType.Application.Json)
                 setBody(SyncRequest(lastSyncTimestamp, clientChanges))
-            }.body()
+            }
+            check(httpResponse.status.isSuccess()) {
+                if (httpResponse.status == HttpStatusCode.Unauthorized) "Sign in to synchronize this library."
+                else "Synchronization failed (HTTP ${httpResponse.status.value}). Please try again."
+            }
+            val response = try { httpResponse.body<SyncResponse>() }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (failure: Exception) { throw IllegalStateException("The server returned an invalid synchronization response.", failure) }
 
             access.run(dispatcher) { db.transaction {
                 response.serverChanges.forEach { entry ->

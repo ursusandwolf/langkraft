@@ -21,13 +21,18 @@ import com.langkraft.ui.Screen
 import com.langkraft.ui.theme.LangkraftTheme
 import com.langkraft.ui.BaseViewModel
 import org.koin.core.parameter.ParametersDefinition
+import org.koin.core.Koin
+import com.langkraft.di.ClientLifetime
+import com.langkraft.data.profile.ProfileController
+
+val LocalClientKoin = staticCompositionLocalOf<Koin?> { null }
 
 @Composable
 inline fun <reified T : BaseViewModel> rememberViewModel(
     key: Any? = null,
     noinline parameters: ParametersDefinition? = null
 ): T {
-    val koin = org.koin.mp.KoinPlatform.getKoin()
+    val koin = LocalClientKoin.current ?: org.koin.mp.KoinPlatform.getKoin()
     val viewModel = remember(key) { koin.get<T>(parameters = parameters) }
     DisposableEffect(viewModel) {
         onDispose {
@@ -38,10 +43,13 @@ inline fun <reified T : BaseViewModel> rememberViewModel(
 }
 
 @Composable
-fun MainApp() {
-    val koin = org.koin.mp.KoinPlatform.getKoin()
+fun MainApp(koin: Koin = org.koin.mp.KoinPlatform.getKoin()) {
+    CompositionLocalProvider(LocalClientKoin provides koin) { MainAppContent(koin) }
+}
+
+@Composable
+private fun MainAppContent(koin: Koin) {
     val session = remember { koin.get<com.langkraft.data.sync.UserSession>() }
-    LaunchedEffect(session) { session.restore() }
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Dashboard) }
 
     val scaffoldState = rememberScaffoldState()
@@ -81,7 +89,7 @@ fun MainApp() {
     ) { padding ->
         Box(modifier = Modifier.padding(padding).fillMaxSize()) {
             when (val screen = currentScreen) {
-                is Screen.Account -> com.langkraft.ui.AccountView(session, koin.get())
+                is Screen.Account -> com.langkraft.ui.AccountView(session, koin.get(), koin.get<ClientLifetime>(), koin.getOrNull<ProfileController>())
                 is Screen.Dashboard -> {
                     DashboardView(rememberViewModel())
                 }

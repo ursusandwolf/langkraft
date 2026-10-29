@@ -10,6 +10,7 @@ import com.langkraft.data.database.DatabaseHandle
 import org.koin.dsl.module
 
 fun createWebModule(handle: DatabaseHandle) = module {
+    single { handle }
     single { handle.access }
     single<AudioStorage> { IndexedDbAudioStorage() }
     single<AudioDownloadCoordinator> { WebAudioDownloadCoordinator() }

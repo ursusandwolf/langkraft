@@ -84,7 +84,7 @@ LK-04 (REL-S3): BrowserSqlDriver расширяет SQLDelight Observer чере
 
 ### UI и воспроизведение
 
-MainApp выбирает Screen и получает ViewModel через Koin. `rememberViewModel` вызывает `onCleared` при удалении VM из композиции. BaseViewModel владеет CoroutineScope с SupervisorJob, StateViewModel публикует StateFlow. PlayerViewModel управляет загрузкой/проигрыванием, а linguistic/offline работу делегирует двум классам.
+MainApp выбирает Screen и получает ViewModel через Koin текущей библиотеки из CompositionLocal. `rememberViewModel` вызывает идемпотентный `onCleared` при удалении VM из композиции. BaseViewModel владеет SupervisorJob, привязанным к ClientLifetime; StateViewModel публикует StateFlow. Desktop/Web создают отдельный KoinApplication на библиотеку и ждут старые jobs/компенсацию загрузок до закрытия SQL. PlayerViewModel освобождает audio resources через disposeResources. Выбор библиотек, гостевое связывание и пути: [LOCAL_PROFILES](LOCAL_PROFILES.md).
 
 Новый контент/выбор слова меняет поколение запроса. Поздние результаты не должны обновлять другой экран/слово. Ошибки AudioPlayer имеют requestId и тип причины. При подтверждённом отсутствии локального объекта UI предлагает Play online; обычная ошибка storage/autoplay не означает, что файл надо удалить. Web использует свежий HTMLAudioElement на источник и освобождает Blob URL. Desktop получает VLC, при недоступности — ffplay; TUI — ffplay.
 
@@ -154,4 +154,4 @@ SqlDelightVocabularyRepository отправляет pending UPSERT/DELETE, пр�
 
 [DATA_LAYER](DATA_LAYER.md) — схема/владение; [WEB_APP](WEB_APP.md) — Web; [SUBTITLES](SUBTITLES.md) — парсер; [CODE_REVIEW_FIX_PLAN](CODE_REVIEW_FIX_PLAN.md) — находки и оставшаяся работа; [todo](todo.md) — текущий план. В `docs/archive` лежат исторические реализации и отчёты; они не описывают текущие API и не компилируются.
 
-Открыто: квоты/retention клиентских копий, дальнейшая multi-tab coordination, профили аккаунтов, Android, проверка платного Gemini и физического Desktop/TUI звука. Backend retention подключён opt-in в REL-13, byte-бюджет с резервированием — в REL-14; строгая квота FS требует настройки окружения. Перед публичным размещением отдельно проектируются аутентификация/rate limit публичного импорта и эксплуатация.
+Открыто: квоты/retention клиентских копий, дальнейшая multi-tab coordination, Android, проверка платного Gemini и физического Desktop/TUI звука. Профили и гостевое связывание реализованы в PROFILE-01. Backend retention подключён opt-in в REL-13, byte-бюджет с резервированием — в REL-14; строгая квота FS требует настройки окружения. Перед публичным размещением отдельно проектируются аутентификация/rate limit публичного импорта и эксплуатация.

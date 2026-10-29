@@ -9,8 +9,8 @@ class SyncService(
     private val userRepository: BackendUserRepository,
     private val vocabRepo: VocabularySyncRepository
 ) {
-    suspend fun performSync(userEmail: String, request: SyncRequest): SyncResponse {
-        val user = userRepository.findByEmail(userEmail) ?: throw UnauthorizedException("User not found")
+    suspend fun performSync(userId: String, request: SyncRequest): SyncResponse {
+        val user = userRepository.findById(userId) ?: throw UnauthorizedException("User not found")
         return vocabRepo.synchronize(user.id, request.clientChanges, request.lastSyncTimestamp)
     }
 }

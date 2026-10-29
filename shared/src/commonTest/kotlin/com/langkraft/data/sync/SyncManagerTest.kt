@@ -42,6 +42,17 @@ open class FakeVocabularyRepository : VocabularyRepository {
 }
 
 class SyncManagerTest {
+    @Test fun anonymousLibraryDoesNotSendSyncOrConsumeTheAuthenticatedThrottleWindow() = runTest {
+        val repository = FakeVocabularyRepository()
+        var signedIn = false
+        val manager = SyncManager(repository) { signedIn }
+        manager.sync(force = true)
+        assertEquals(0, repository.syncCallCount)
+        assertNull(manager.syncError.value)
+        signedIn = true
+        manager.sync()
+        assertEquals(1, repository.syncCallCount)
+    }
 
     @Test fun cancellationPropagatesAndClearsBusyState() = runTest {
         val repository = object : FakeVocabularyRepository() {

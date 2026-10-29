@@ -50,6 +50,7 @@ data class AppConfig(
 
 val commonModule = module {
     single { AppConfig() }
+    single { ClientLifetime() }
 
     // Network
     single {
@@ -72,7 +73,7 @@ val commonModule = module {
         getOrNull<AudioDownloadCoordinator>() ?: UncoordinatedAudioDownloads) }
     single<VocabularyRepository> { SqlDelightVocabularyRepository(get(), get(), get<AppConfig>().backendUrl) }
     // Sync
-    single<ISyncManager> { SyncManager(get()) }
+    single<ISyncManager> { val session = get<UserSession>(); SyncManager(get()) { session.token.value != null } }
 
     // IO & Hardware
     single<FileSystem> { FileSystemImpl() }
@@ -89,9 +90,9 @@ val commonModule = module {
     single<SpacedRepetitionAlgorithm> { Sm2Algorithm() }
 
     // ViewModels
-    factory { ContentSelectionViewModel(get(), get()) }
-    factory { PlayerViewModel(get(), get(), get(), get(), get(), get(), get()) }
-    factory { SrsTrainingViewModel(get(), get()) }
-    factory { WritingViewModel(get()) }
-    factory { DashboardViewModel(get(), get(), get()) }
+    factory { get<ClientLifetime>().let { it.track(ContentSelectionViewModel(get(), get(), it.context)) } }
+    factory { get<ClientLifetime>().let { it.track(PlayerViewModel(get(), get(), get(), get(), get(), get(), get(), it.context)) } }
+    factory { get<ClientLifetime>().let { it.track(SrsTrainingViewModel(get(), get(), it.context)) } }
+    factory { get<ClientLifetime>().let { it.track(WritingViewModel(get(), it.context)) } }
+    factory { get<ClientLifetime>().let { it.track(DashboardViewModel(get(), get(), get(), it.context)) } }
 }

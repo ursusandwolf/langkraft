@@ -11,7 +11,8 @@ class JwtService(config: ApplicationConfig) {
     private val audience = config.property("jwt.audience").getString()
     private val validityMs = config.property("jwt.validity_ms").getString().toLong()
 
-    fun generateToken(email: String): String = JWT.create()
+    fun generateToken(email: String, userId: String): String = JWT.create()
+        .withSubject(userId)
         .withAudience(audience)
         .withIssuer(issuer)
         .withClaim("email", email)

@@ -119,7 +119,7 @@ Ollama, выполняет все четыре задачи через JWT-за�
 
 ```powershell
 $env:LANGKRAFT_OLLAMA_LIVE_MODEL = 'qwen3.5:2b'
-./gradlew.bat :backend:test --tests '*OllamaLiveTest'
+./gradlew.bat :backend:test --tests '*OllamaLiveTest' --rerun
 Remove-Item Env:LANGKRAFT_OLLAMA_LIVE_MODEL
 ```
 

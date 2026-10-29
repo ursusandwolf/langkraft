@@ -112,9 +112,9 @@ fun Route.apiRoutes() {
             
             post("/sync") {
                 val principal = call.principal<JWTPrincipal>()
-                val email = principal?.getClaim("email", String::class) ?: throw UnauthorizedException()
+                val accountId = principal?.payload?.subject ?: throw UnauthorizedException()
                 val request = call.receive<SyncRequest>()
-                val response = syncService.performSync(email, request)
+                val response = syncService.performSync(accountId, request)
                 call.respond(response)
             }
         }

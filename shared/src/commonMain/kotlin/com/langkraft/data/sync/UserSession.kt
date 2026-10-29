@@ -19,6 +19,8 @@ import io.ktor.util.decodeBase64String
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
 
+data class GuestBindingPreview(val wordCount: Int, val pendingChangeCount: Int)
+
 class UserSession(private val access: DatabaseAccess, private val baseUrl: Url, private val client: () -> HttpClient) {
     private val mutex = Mutex()
     private val current = MutableStateFlow<String?>(null)
@@ -30,9 +32,19 @@ class UserSession(private val access: DatabaseAccess, private val baseUrl: Url, 
             current.value = saved
         }
     }
-    suspend fun signIn(email: String, password: String, displayName: String? = null) = mutex.withLock {
+    suspend fun guestBindingPreview(): GuestBindingPreview? = mutex.withLock {
+        access.run(ioDispatcher) {
+            preserveLegacyOwner(appDatabaseQueries.getSyncMetadata("auth_token").awaitAsOneOrNull())
+            if (!canBindGuest()) return@run null
+            val preview = GuestBindingPreview(appDatabaseQueries.selectAllVocabulary().awaitAsList().size,
+                appDatabaseQueries.getAllPendingChanges().awaitAsList().size)
+            preview.takeIf { it.wordCount > 0 || it.pendingChangeCount > 0 }
+        }
+    }
+
+    suspend fun signIn(email: String, password: String, displayName: String? = null, bindGuestWords: Boolean = false) = mutex.withLock {
         // Reject an incompatible profile before registration can create a remote account.
-        access.run(ioDispatcher) { transaction { ensureProfileOwner(email) } }
+        access.run(ioDispatcher) { transaction { ensureProfileOwner(email, bindGuestWords) } }
         val result = client().post(URLBuilder(baseUrl).apply { appendPathSegments("api", "auth", if (displayName == null) "login" else "register") }.build()) {
             contentType(ContentType.Application.Json)
             if (displayName == null) setBody(AuthRequest(email, password))
@@ -43,9 +55,18 @@ class UserSession(private val access: DatabaseAccess, private val baseUrl: Url, 
         withContext(NonCancellable) {
             access.run(ioDispatcher) {
                 transaction {
-                    ensureProfileOwner(response.user.email)
+                    ensureProfileOwner(response.user.email, bindGuestWords)
+                    val accountKey = Json.encodeToString(listOf(baseUrl.toString(), AccountId(response.user.id).value))
+                    val previousAccount = appDatabaseQueries.getSyncMetadata("auth_account_id").awaitAsOneOrNull()
+                    check(previousAccount == null || previousAccount == accountKey) { "This profile belongs to another account. Open a separate profile." }
+                    if (bindGuestWords && canBindGuest()) {
+                        appDatabaseQueries.selectAllVocabulary().awaitAsList().forEach { word ->
+                            appDatabaseQueries.insertPendingChange(word.id, "UPSERT", word.lastUpdated)
+                        }
+                    }
                     val requestedOwner = ownerKey(response.user.email)
                     appDatabaseQueries.setSyncMetadata("auth_profile_owner", requestedOwner)
+                    appDatabaseQueries.setSyncMetadata("auth_account_id", accountKey)
                     appDatabaseQueries.setSyncMetadata("auth_token", response.token)
                 }
                 current.value = response.token
@@ -64,14 +85,20 @@ class UserSession(private val access: DatabaseAccess, private val baseUrl: Url, 
 
     private fun ownerKey(email: String) = Json.encodeToString(listOf(baseUrl.toString(), email))
 
-    private suspend fun com.langkraft.db.AppDatabase.ensureProfileOwner(email: String) {
+    private suspend fun com.langkraft.db.AppDatabase.canBindGuest(): Boolean =
+        appDatabaseQueries.getSyncMetadata("auth_profile_owner").awaitAsOneOrNull() == null &&
+            appDatabaseQueries.getSyncMetadata("auth_account_id").awaitAsOneOrNull() == null &&
+            appDatabaseQueries.getSyncMetadata("auth_token").awaitAsOneOrNull().isNullOrBlank() &&
+            appDatabaseQueries.getSyncMetadata("last_sync_timestamp").awaitAsOneOrNull() == null
+
+    private suspend fun com.langkraft.db.AppDatabase.ensureProfileOwner(email: String, bindGuestWords: Boolean) {
         preserveLegacyOwner(appDatabaseQueries.getSyncMetadata("auth_token").awaitAsOneOrNull())
         val owner = appDatabaseQueries.getSyncMetadata("auth_profile_owner").awaitAsOneOrNull()
-        check(owner == ownerKey(email) || (owner == null &&
+        check(owner == ownerKey(email) || (bindGuestWords && canBindGuest()) || (owner == null &&
             appDatabaseQueries.countWordsByStatus().awaitAsList().isEmpty() &&
             appDatabaseQueries.getAllPendingChanges().awaitAsList().isEmpty() &&
             appDatabaseQueries.getSyncMetadata("last_sync_timestamp").awaitAsOneOrNull() == null)) {
-            "This local profile contains another account's data or has unknown ownership. Use a separate local profile."
+            "This library is bound to another account or needs guest binding confirmation. Open a separate profile or confirm guest binding."
         }
     }
 

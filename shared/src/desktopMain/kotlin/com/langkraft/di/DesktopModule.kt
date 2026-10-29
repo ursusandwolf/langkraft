@@ -13,9 +13,12 @@ import com.langkraft.data.audio.AudioDownloadCoordinator
 import com.langkraft.data.audio.FileAudioDownloadCoordinator
 import kotlinx.coroutines.runBlocking
 import org.koin.core.module.Module
+import com.langkraft.data.profile.JvmLocalProfileStore
+import com.langkraft.data.profile.desktopDataRoot
 
-fun createDesktopModule(isTui: Boolean = false): Module {
-    val dataDirectory = File(System.getenv("LANGKRAFT_DATA_DIR") ?: File(System.getProperty("user.home"), ".langkraft").path)
+fun createDesktopModule(isTui: Boolean = false, dataDirectory: File = runBlocking {
+    JvmLocalProfileStore(desktopDataRoot()).let { it.directory(it.selected()) }
+}): Module {
     return module {
         single { FileAudioDownloadCoordinator(File(dataDirectory, "download-locks")) }
         single<AudioDownloadCoordinator> { get<FileAudioDownloadCoordinator>() }

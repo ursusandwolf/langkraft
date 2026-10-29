@@ -6,6 +6,11 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import java.util.*
 
 class BackendUserRepository(private val db: org.jetbrains.exposed.sql.Database) {
+    fun findById(id: String) = transaction(db) {
+        Users.select { Users.id eq id }.map { row ->
+            UserRow(row[Users.id], row[Users.email], row[Users.passwordHash], row[Users.displayName])
+        }.singleOrNull()
+    }
 
     fun createUser(email: String, passwordHash: String, displayName: String): String? = transaction(db) {
         val userId = UUID.randomUUID().toString()

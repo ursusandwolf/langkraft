@@ -20,8 +20,9 @@ data class ContentSelectionState(
 
 class ContentSelectionViewModel(
     private val contentRepository: LocalContentRepository,
-    private val ingestContentUseCase: IngestContentUseCase
-) : StateViewModel<ContentSelectionState>(ContentSelectionState()) {
+    private val ingestContentUseCase: IngestContentUseCase,
+    baseContext: kotlin.coroutines.CoroutineContext = kotlinx.coroutines.Dispatchers.Main
+) : StateViewModel<ContentSelectionState>(ContentSelectionState(), baseContext) {
 
     init {
         loadLibrary()

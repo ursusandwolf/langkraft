@@ -119,6 +119,9 @@ SELECT * FROM Vocabulary WHERE id IN ?;
 selectWordsUpdatedAfter:
 SELECT * FROM Vocabulary WHERE lastUpdated > ?;
 
+selectAllVocabulary:
+SELECT * FROM Vocabulary;
+
 selectVocabularyToReview:
 SELECT * FROM Vocabulary WHERE nextReviewAt <= ? OR nextReviewAt IS NULL ORDER BY nextReviewAt ASC;
 

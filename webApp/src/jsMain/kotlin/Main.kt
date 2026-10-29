@@ -17,6 +17,16 @@ import io.ktor.http.Url
 import kotlinx.browser.window
 import kotlinx.browser.document
 import org.jetbrains.skiko.wasm.onWasmReady
+import com.langkraft.data.profile.ProfileController
+import com.langkraft.data.profile.WebLocalProfileStore
+import com.langkraft.data.storage.selectedProfile
+import com.langkraft.data.storage.localProfileUrl
+import com.langkraft.di.ClientRuntime
+import com.langkraft.di.commonModule
+import com.langkraft.ui.ProfilesPanel
+import kotlinx.coroutines.await
+import org.koin.dsl.koinApplication
+import org.koin.dsl.module
 
 @OptIn(ExperimentalComposeUiApi::class)
 fun main() {
@@ -24,24 +34,35 @@ fun main() {
         document.getElementById("startup")?.remove()
         CanvasBasedWindow(canvasElementId = "ComposeTarget") {
             LangkraftTheme {
-                var handle by remember { mutableStateOf<DatabaseHandle?>(null) }
-                var error by remember { mutableStateOf<String?>(null) }
-                var attempt by remember { mutableStateOf(0) }
-                LaunchedEffect(attempt) {
-                    error = null
-                    try {
+                val scope = rememberCoroutineScope()
+                var runtime by remember { mutableStateOf<ClientRuntime?>(null) }
+                val profiles = remember {
+                    lateinit var controller: ProfileController
+                    controller = ProfileController(WebLocalProfileStore(), scope) { profile ->
+                        if (runtime != null || profile.id.value != selectedProfile) {
+                            val target = localProfileUrl(profile.id.value).await()
+                            runtime?.close()
+                            runtime = null
+                            window.location.assign(target)
+                            return@ProfileController
+                        }
                         val opened = createWebDatabase()
+                        var active: ClientRuntime? = null
                         try {
-                            initKoin { modules(createWebModule(opened), org.koin.dsl.module {
-                                single { AppConfig(Url(window.location.origin)) }
+                            val app = koinApplication { modules(commonModule, createWebModule(opened), module {
+                                single { AppConfig(Url(window.location.origin)) }; single { controller }
                             }) }
-                            handle = opened
-                        } catch (failure: Throwable) { opened.close(); throw failure }
-                    } catch (failure: kotlinx.coroutines.CancellationException) { throw failure }
-                    catch (failure: Throwable) { error = failure.message ?: "Cannot open local storage" }
+                            active = ClientRuntime(app)
+                            active.restore()
+                            runtime = active
+                        } catch (failure: Throwable) { if (active != null) active.close() else opened.close(); throw failure }
+                    }
+                    controller
                 }
-                if (handle != null) {
-                    MainApp()
+                LaunchedEffect(Unit) { profiles.start() }
+                val active = runtime
+                if (active != null) {
+                    key(active) { MainApp(active.koin) }
                     LaunchedEffect(Unit) {
                         withFrameNanos { }
                         withFrameNanos { }
@@ -49,11 +70,8 @@ fun main() {
                     }
                 }
                 else Column {
-                    if (error == null) Text("Opening local library?")
-                    else {
-                        Text(error.orEmpty())
-                        Button(onClick = { attempt++ }) { Text("Retry") }
-                    }
+                    Text("Opening local library")
+                    ProfilesPanel(profiles)
                 }
             }
         }

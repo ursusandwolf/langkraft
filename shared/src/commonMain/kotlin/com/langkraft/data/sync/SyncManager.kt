@@ -17,7 +17,8 @@ interface ISyncManager {
 }
 
 class SyncManager(
-    private val vocabularyRepository: VocabularyRepository
+    private val vocabularyRepository: VocabularyRepository,
+    private val canSync: () -> Boolean = { true }
 ) : ISyncManager {
     private val mutex = Mutex()
     
@@ -35,6 +36,7 @@ class SyncManager(
     private var lastAttemptTimestamp: Long = 0
 
     override suspend fun sync(force: Boolean) {
+        if (!canSync()) { _syncError.value = null; return }
         val now = Clock.System.now().toEpochMilliseconds()
         if (!force && now - lastAttemptTimestamp < MIN_SYNC_INTERVAL_MS) return
         

@@ -27,8 +27,37 @@ export async function profileStates() {
   return registry(store => store.getAll());
 }
 
+export async function createLocalProfile(name) {
+  const label = name.trim();
+  if (!label || label.length > 60 || /[\x00-\x1f]/.test(label)) throw new Error("Profile name must contain 1 to 60 printable characters");
+  const profiles = await profileStates();
+  if (profiles.filter(record => record.state === "active").length >= 100) throw new Error("At most 100 local profiles are supported");
+  const profile = `local-${crypto.randomUUID()}`;
+  const lease = await acquireProfileLease(profile, { create: true, label });
+  await lease.release();
+  return { id: profile, name: label };
+}
+
+export async function listLocalProfiles() {
+  const records = await profileStates();
+  return [{ id: "", name: "Default library" }, ...records.filter(record => record.state === "active")
+    .map(record => { profileNames(record.profile); return { id: record.profile, name: record.label || record.profile }; })];
+}
+
+export async function localProfileUrl(profile) {
+  profileNames(profile);
+  if (profile && isManagedProfile(profile)) {
+    const record = await registry(store => store.get(profile));
+    if (record?.state !== "active") throw new Error("Profile is unavailable or removed");
+  }
+  const url = new URL(globalThis.location.href);
+  if (profile) url.searchParams.set("profile", profile);
+  else url.searchParams.delete("profile");
+  return url.href;
+}
+
 // Worker lifetime, audio-page lifetime and recovery operations all share this lease.
-export async function acquireProfileLease(profile, { create = false } = {}) {
+export async function acquireProfileLease(profile, { create = false, label } = {}) {
   if (!isManagedProfile(profile)) {
     if (create) throw new Error("New recovery profiles require the v2 lifecycle protocol");
     return { release: async () => {} };
@@ -39,7 +68,7 @@ export async function acquireProfileLease(profile, { create = false } = {}) {
   const finished = navigator.locks.request(lockName(profile), { mode: "shared", ifAvailable: true }, async lock => {
     if (!lock) throw new Error("Profile is busy being removed; retry later");
     if (create) {
-      try { await registry(store => store.add({ profile, state: "active" }), "readwrite"); }
+      try { await registry(store => store.add({ profile, state: "active", ...(label === undefined ? {} : { label }) }), "readwrite"); }
       catch (error) {
         if (error.name === "ConstraintError") throw new Error("Recovery destination already exists");
         throw error;
