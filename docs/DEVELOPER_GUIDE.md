@@ -4,11 +4,12 @@
 
 ## Модули и точки входа
 
-В [settings.gradle.kts](../settings.gradle.kts) подключены три Gradle-модуля:
+В [settings.gradle.kts](../settings.gradle.kts) подключены четыре Gradle-модуля:
 
 | Модуль | Ответственность | Точки входа / конфигурация |
 | --- | --- | --- |
-| `:shared` | Модели, SRS, UI, use case, repository, sync, платформенные адаптеры; JVM Desktop/TUI и JS target | [Koin.kt](../shared/src/commonMain/kotlin/com/langkraft/di/Koin.kt), [main.kt](../shared/src/desktopMain/kotlin/com/langkraft/main.kt), [CliMain.kt](../shared/src/desktopMain/kotlin/com/langkraft/CliMain.kt) |
+| `:contracts` | HTTP-модели auth/sync/ingestion/AI и общий порт LinguisticAssistant; JVM/JS без UI, Ktor и БД | [build.gradle.kts](../contracts/build.gradle.kts), [Models.kt](../contracts/src/commonMain/kotlin/com/langkraft/domain/model/Models.kt) |
+| `:shared` | Локальные модели, SRS, UI, use case, repository, sync, платформенные адаптеры; JVM Desktop/TUI и JS target | [Koin.kt](../shared/src/commonMain/kotlin/com/langkraft/di/Koin.kt), [main.kt](../shared/src/desktopMain/kotlin/com/langkraft/main.kt), [CliMain.kt](../shared/src/desktopMain/kotlin/com/langkraft/CliMain.kt) |
 | `:backend` | Ktor HTTP API, auth/JWT, Exposed/SQLite, задания импорта, yt-dlp/ffmpeg, AI API | [Application.kt](../backend/src/main/kotlin/com/langkraft/backend/Application.kt), [Routing.kt](../backend/src/main/kotlin/com/langkraft/backend/Routing.kt), [BackendModule.kt](../backend/src/main/kotlin/com/langkraft/backend/di/BackendModule.kt) |
 | `:webApp` | Browser bootstrap, CanvasBasedWindow, HTML, ресурсы, dev proxy; использует общий UI | [Main.kt](../webApp/src/jsMain/kotlin/Main.kt), [index.html](../webApp/src/jsMain/resources/index.html), [dev-server.js](../webApp/webpack.config.d/dev-server.js) |
 
@@ -17,17 +18,22 @@ flowchart LR
     Desktop["Desktop entry · shared/desktopMain"] --> Common["shared/commonMain · UI/domain/data"]
     TUI["TUI entry · shared/desktopMain"] --> Common
     Web[":webApp · browser bootstrap"] --> Common
-    Backend[":backend · Ktor"] --> Shared[":shared · общие модели и контракты"]
+    Backend[":backend · Ktor"] --> Contracts[":contracts · HTTP модели / AI порт"]
+    Common --> Contracts
     Common --> Platform["JVM / JS адаптеры"]
     Common -->|HTTP| Backend
     Backend --> Media["yt-dlp / ffmpeg / SQLite"]
 ```
 
-Зависимость Gradle backend → shared не создаёт HTTP-цикл: runtime-клиенты обращаются к backend по сети, backend использует общие типы. Сейчас shared также содержит UI, поэтому backend получает больше зависимостей, чем чистый отдельный domain-модуль.
+Backend зависит от `:contracts`; Compose, VLCJ, Lanterna и клиентский SQLDelight отсутствуют в его runtime. `:shared` экспортирует контракты через `api`, сохраняя прежние импорты клиентов. Только backend-интеграционные тесты зависят от `:shared`, чтобы проверять настоящие клиентские БД и HTTP-адаптеры. `getPlaybackUrl` — клиентское extension в `shared/domain/model/PlaybackUrl.kt`; SRS ReviewQuality и LocalProfile остаются в `:shared`. Пакеты, поля JSON и значения по умолчанию контрактов сохранены.
 
 Desktop и TUI — два main в `shared`, а не отдельные Gradle-модули. `androidApp` и `shared/src/androidMain` сохранены как исходники, но Android target отключён и androidApp не включён в settings. Флаги из исторических документов не включают Android автоматически.
 
 ## Source sets и слои shared
+
+Backend bootstrap вынесен в `BackendDatabase`: нумерованные SQL-миграции, checksum-история,
+проверка известной схемы, backup и атомарный upgrade. Выполняется до HTTP-клиентов/workers;
+SQLDelight клиента не затрагивается. [Версии, backup и rollback](BACKEND_MIGRATIONS.md).
 
 | Каталог | Содержимое и границы |
 | --- | --- |

@@ -16,6 +16,7 @@ import com.langkraft.ui.StateViewModel
 
 import com.langkraft.domain.repository.VocabularyRepository
 import com.langkraft.domain.ai.LinguisticAssistant
+import com.langkraft.domain.model.getPlaybackUrl
 import com.langkraft.domain.model.DownloadStatus
 import com.langkraft.domain.model.VocabularyWord
 import com.langkraft.domain.model.SubtitleLine

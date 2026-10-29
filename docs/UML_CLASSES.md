@@ -10,6 +10,10 @@ LK-04 расширяет существующие **Observer** (`Query.Listener`
 
 ## Модели и SRS
 
+NEXT-3a: PlayerState хранит `translatingSentenceIds` и `lemmatizingSentenceIds` как наборы
+активных реплик. PlayerLinguisticDelegate снимает только собственный индикатор в finally;
+поколение контента защищает новые запросы от завершения старых. Контракт HTTP не меняется.
+
 ```mermaid
 classDiagram
     class ImmersionContent {
@@ -19,7 +23,6 @@ classDiagram
         +DownloadStatus downloadStatus
         +List subtitles
         +List waveform
-        +getPlaybackUrl(baseUrl) String
     }
     class SubtitleLine {
         +String id
@@ -62,7 +65,7 @@ classDiagram
 
 Ссылки VocabularyWord nullable. На устройстве без соответствующего видео оригинальные source IDs хранятся в metadata до импорта. Коллекция subtitles принадлежит content; удаление SQL cue обнуляет его ссылку в словаре. **Strategy** — SpacedRepetitionAlgorithm/Sm2Algorithm.
 
-Исходники: [Models.kt](../shared/src/commonMain/kotlin/com/langkraft/domain/model/Models.kt), [SrsEngine.kt](../shared/src/commonMain/kotlin/com/langkraft/domain/srs/SrsEngine.kt).
+Модели API находятся в `:contracts`; `getPlaybackUrl` — клиентское extension в `:shared`, а не метод DTO. Исходники: [Models.kt](../contracts/src/commonMain/kotlin/com/langkraft/domain/model/Models.kt), [ReviewQuality](../shared/src/commonMain/kotlin/com/langkraft/domain/model/Models.kt), [SrsEngine.kt](../shared/src/commonMain/kotlin/com/langkraft/domain/srs/SrsEngine.kt).
 
 ## Клиент: use case, repositories и БД
 

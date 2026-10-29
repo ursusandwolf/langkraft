@@ -32,6 +32,7 @@ class PlayerLinguisticDelegate(
     fun reset() {
         contentGeneration++
         requests.clear()
+        updateState { it.copy(translatingSentenceIds = emptySet(), lemmatizingSentenceIds = emptySet()) }
         dismissWord()
         dismissAnalysis()
     }
@@ -84,12 +85,13 @@ class PlayerLinguisticDelegate(
     fun handleToggleLemmatization(line: SubtitleLine) {
         if (!getState().aiAvailable) return
         val state = getState()
+        if (line.id in state.lemmatizingSentenceIds) return
         val isAlreadyLemmatized = state.lemmatizedSentences.containsKey(line.id)
         
         if (isAlreadyLemmatized) {
             updateState { it.copy(lemmatizedSentences = it.lemmatizedSentences - line.id) }
         } else {
-            updateState { it.copy(lemmatizingSentenceId = line.id) }
+            updateState { it.copy(lemmatizingSentenceIds = it.lemmatizingSentenceIds + line.id) }
             val generation = contentGeneration
             val key = "lemma:${line.id}"
             val request = (requests[key] ?: 0L) + 1
@@ -102,14 +104,17 @@ class PlayerLinguisticDelegate(
                     val lemmas = result.words.associate { it.original to it.lemma }
                     updateState { 
                         it.copy(
-                            lemmatizedSentences = it.lemmatizedSentences + (line.id to lemmas),
-                            lemmatizingSentenceId = null
+                            lemmatizedSentences = it.lemmatizedSentences + (line.id to lemmas)
                         ) 
                     }
                 } catch (e: CancellationException) { throw e
                 } catch (e: Exception) {
                     if (generation != contentGeneration || requests[key] != request) return@launch
-                    updateState { it.copy(lemmatizingSentenceId = null, error = e.message) }
+                    updateState { it.copy(error = e.message) }
+                } finally {
+                    if (generation == contentGeneration && requests[key] == request) {
+                        updateState { it.copy(lemmatizingSentenceIds = it.lemmatizingSentenceIds - line.id) }
+                    }
                 }
             }
         }
@@ -118,12 +123,13 @@ class PlayerLinguisticDelegate(
     fun handleToggleTranslation(line: SubtitleLine) {
         if (!getState().aiAvailable) return
         val state = getState()
+        if (line.id in state.translatingSentenceIds) return
         val isAlreadyTranslated = state.sentenceTranslations.containsKey(line.id)
 
         if (isAlreadyTranslated) {
             updateState { it.copy(sentenceTranslations = it.sentenceTranslations - line.id) }
         } else {
-            updateState { it.copy(analyzingSentenceId = line.id) }
+            updateState { it.copy(translatingSentenceIds = it.translatingSentenceIds + line.id) }
             val generation = contentGeneration
             val key = "translation:${line.id}"
             val request = (requests[key] ?: 0L) + 1
@@ -135,14 +141,17 @@ class PlayerLinguisticDelegate(
                     if (generation != contentGeneration || requests[key] != request) return@launch
                     updateState { 
                         it.copy(
-                            sentenceTranslations = it.sentenceTranslations + (line.id to translation),
-                            analyzingSentenceId = null
+                            sentenceTranslations = it.sentenceTranslations + (line.id to translation)
                         ) 
                     }
                 } catch (e: CancellationException) { throw e
                 } catch (e: Exception) {
                     if (generation != contentGeneration || requests[key] != request) return@launch
-                    updateState { it.copy(analyzingSentenceId = null, error = e.message) }
+                    updateState { it.copy(error = e.message) }
+                } finally {
+                    if (generation == contentGeneration && requests[key] == request) {
+                        updateState { it.copy(translatingSentenceIds = it.translatingSentenceIds - line.id) }
+                    }
                 }
             }
         }

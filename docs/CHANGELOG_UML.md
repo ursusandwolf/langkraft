@@ -1,3 +1,42 @@
+# NEXT-3a — 2026-10-29 — независимые запросы реплик
+
+`PlayerState.translatingSentenceIds` и `lemmatizingSentenceIds` заменяют одиночные loading ID.
+`SubtitleRow` проверяет принадлежность своей реплики набору. `PlayerLinguisticDelegate`
+не запускает повторный запрос занятой строки; finally снимает только собственный индикатор,
+если поколение контента и запроса ещё актуально. Reset очищает наборы. Существующее
+разделение ViewModel/Delegate сохранено, новых классов в production не добавлено.
+
+# DB-01 — 2026-10-29 — SQLite bootstrap вне DI
+
+```text
+Application.module
+  -> Koin: Database
+     -> BackendDatabase.open
+        -> migration lock / schema + history preflight
+        -> VACUUM INTO backup (existing DB + pending upgrade)
+        -> BEGIN IMMEDIATE / V1–V3 / history / validation / COMMIT
+        -> Exposed Database.connect
+  -> HTTP client / AI / ingestion workers
+```
+
+BackendDatabase — единая точка bootstrap без новых repository-интерфейсов.
+Ошибка upgrade откатывает DDL, данные и историю; backup сохраняется.
+SQLDelight-клиент и HTTP-контракты не меняются. [Подробности](BACKEND_MIGRATIONS.md).
+
+# CONTRACTS-01 — 2026-10-29 — отдельный модуль контрактов
+
+```text
+webApp -> shared (Desktop/TUI, UI, локальные данные) -> contracts
+backend (Ktor, Exposed, AI-адаптеры)                -> contracts
+backend tests                                    -> shared
+contracts: auth/sync/ingestion/AI модели + LinguisticAssistant, JVM/JS
+```
+
+Общий порт AI сохраняет Strategy/Decorator; новые интерфейсы и транспортные слои не добавлены.
+ImmersionContent теперь содержит только данные; `getPlaybackUrl` — extension в клиентском
+shared. ReviewQuality и LocalProfile остаются в shared. Runtime backend не содержит
+клиентские UI/audio/SQLDelight зависимости. [Границы модулей](DEVELOPER_GUIDE.md).
+
 # MVP-05 — 2026-10-24 — Strategy для необязательного AI
 
 `LinguisticAssistant` сохраняет границу UI/backend. В режиме none работает

@@ -28,7 +28,7 @@ jobs:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
       - name: Legacy profile recovery tests
         run: python3 -W error::ResourceWarning -m unittest discover -s tools/recovery/tests -v
-      - run: bash ./gradlew --no-daemon :shared:desktopTest :backend:test
+      - run: bash ./gradlew --no-daemon :contracts:jvmTest :shared:desktopTest :backend:test
       - name: Desktop and TUI wiring
         env:
           LANGKRAFT_DATA_DIR: ${{ runner.temp }}/langkraft-smoke
@@ -41,6 +41,7 @@ jobs:
           retention-days: 14
           name: jvm-reports
           path: |
+            contracts/build/reports/tests/
             shared/build/reports/tests/
             backend/build/reports/tests/
   web:
@@ -69,7 +70,7 @@ jobs:
         run: |
           CHROME_BIN="$(node --input-type=module -e 'import { chromium } from "playwright"; console.log(chromium.executablePath())')"
           echo "CHROME_BIN=$CHROME_BIN" >> "$GITHUB_ENV"
-      - run: bash ./gradlew --no-daemon :shared:jsBrowserTest
+      - run: bash ./gradlew --no-daemon :contracts:jsBrowserTest :shared:jsBrowserTest
       - run: bash ./gradlew --no-daemon :webApp:jsBrowserDevelopmentWebpack
       - run: npm test && npm run test:app && npm run test:manual
         working-directory: tools/web-storage-tests
@@ -86,5 +87,6 @@ jobs:
           name: browser-reports
           path: |
             tools/web-storage-tests/build/app/
+            contracts/build/reports/tests/jsBrowserTest/
             shared/build/reports/tests/jsBrowserTest/
             shared/build/test-results/jsBrowserTest/

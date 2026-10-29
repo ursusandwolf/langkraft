@@ -24,8 +24,8 @@ data class PlayerState(
     val isAnalyzing: Boolean = false,
     val sentenceTranslations: Map<String, String> = emptyMap(), // subtitle line id -> translation
     val lemmatizedSentences: Map<String, Map<String, String>> = emptyMap(), // id -> (original -> lemma)
-    val analyzingSentenceId: String? = null,
-    val lemmatizingSentenceId: String? = null,
+    val translatingSentenceIds: Set<String> = emptySet(),
+    val lemmatizingSentenceIds: Set<String> = emptySet(),
     val memorizationText: String? = null,
     val isUserScrolling: Boolean = false,
     val lastUserInteractionTime: Long = 0,

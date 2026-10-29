@@ -12,11 +12,6 @@ import io.ktor.serialization.kotlinx.json.json
 import org.koin.dsl.module
 
 import com.langkraft.backend.db.*
-import org.jetbrains.exposed.sql.Database
-import org.jetbrains.exposed.sql.SchemaUtils
-import org.jetbrains.exposed.sql.update
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
-import org.jetbrains.exposed.sql.transactions.transaction
 import java.io.File
 
 val backendModule = module {
@@ -24,18 +19,7 @@ val backendModule = module {
         val config = get<io.ktor.server.config.ApplicationConfig>()
         val directory = File(config.propertyOrNull("storage.data_dir")?.getString() ?: "data").apply { mkdirs() }
         val file = File(directory, "langkraft.db")
-        Class.forName("org.sqlite.JDBC")
-        if (file.isFile && !File(file.path + ".before-sync-v2.bak").exists()) {
-            java.sql.DriverManager.getConnection("jdbc:sqlite:${file.absolutePath}").use { connection ->
-                connection.createStatement().use { it.execute("VACUUM INTO '${(file.path + ".before-sync-v2.bak").replace("'", "''")}'") }
-            }
-        }
-        Database.connect("jdbc:sqlite:${file.absolutePath}", "org.sqlite.JDBC").also {
-            transaction(it) {
-                SchemaUtils.createMissingTablesAndColumns(Users, VocabularySync, IngestionJobs)
-                VocabularySync.update({ VocabularySync.serverUpdated eq 0L }) { row -> row[serverUpdated] = System.currentTimeMillis() }
-            }
-        }
+        BackendDatabase.open(file)
     }
     
     single { BackendUserRepository(get()) }

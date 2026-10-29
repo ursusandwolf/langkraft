@@ -38,6 +38,9 @@ fun Application.module() {
         modules(backendModule, org.koin.dsl.module { single { environment.config } })
     }
 
+    // Finish database preflight/migrations before allocating HTTP clients or background workers.
+    get<org.jetbrains.exposed.sql.Database>()
+
     // Validate optional provider settings before accepting any requests.
     get<com.langkraft.domain.ai.LinguisticAssistant>()
     val aiHttpClient = get<io.ktor.client.HttpClient>()

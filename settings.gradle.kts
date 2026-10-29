@@ -33,6 +33,7 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "langkraft"
+include(":contracts")
 include(":shared")
 include(":backend")
 include(":webApp")
