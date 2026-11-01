@@ -11,3 +11,6 @@ class IngestionBusyException : LangkraftException("Import capacity reached; try 
 class MediaCapacityException : LangkraftException("Media storage capacity reached; try again later")
 
 class MediaLimitException(message: String = "Import exceeds configured media byte limit") : LangkraftException(message)
+
+/** Auth/JWT failures mapped to HTTP 401 by StatusPages. */
+class UnauthorizedException(message: String = "Invalid credentials") : LangkraftException(message)

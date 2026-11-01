@@ -21,11 +21,6 @@ interface AudioDownloader {
     suspend fun downloadAudio(content: ImmersionContent): String // Returns local path
 }
 
-// For backward compatibility during migration, we can keep ContentRepository 
-// but it should probably inherit or be phased out.
-// Given this is a refactoring, let's see where it's used.
-// Most ViewModels probably only need LocalContentRepository.
-
 data class ImmersionStats(
     val totalContent: Long,
     val totalDurationSeconds: Long

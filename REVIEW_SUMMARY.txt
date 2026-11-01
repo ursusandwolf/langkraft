@@ -1,0 +1,38 @@
+Langkraft — підсумок синхронізації, кодрев’ю та тестів
+=======================================================
+Дата: 2026-11-01
+Git: pull origin/main → 1bf1a09 (fast-forward), working tree + локальні правки рев’ю
+
+СТАДІЯ СПРИНТІВ
+- INT-S1…S4 і REL-S1…S7: DONE
+- Відкрито: streaming Web recovery, client media quotas, profile/tab policy, Android, live Gemini
+
+АРХІТЕКТУРА
+- Адекватна: KMP modular monolith + Ktor backend, Ports & Adapters
+- Патерни: Repository, Strategy (SRS/AI), Decorator (cache/journal), Adapter (HTTP/process/SQL WASM),
+  MVVM+Delegate, Observer (Flow/BroadcastChannel), Producer–Consumer (ingestion), expect/actual
+- Вердикт рев’ю: ⚠️ baseline main OK; для нових змін — Major: товстий :shared для backend; hot zones audio/leases
+
+ДОКУМЕНТИ В КОРЕНІ
+- AI_MAP.md              — карта для ШІ / полиці оновлення
+- ARCHITECTURE_REVIEW.md — кодрев’ю + ASCII UML
+- LEARNING_GUIDE.md      — навчальний маршрут по коду
+- TEST_RESULTS.txt       — повний лог Gradle
+- REVIEW_SUMMARY.txt     — цей файл
+
+ЧИСТКА (без вигаданої логіки)
+- UnauthorizedException → Exceptions.kt (єдина ієрархія)
+- прибрано мертві коментарі DI / ContentRepository
+- прибрано невикористану змінну targetOs у shared/build.gradle.kts
+- androidMain/androidApp НЕ видалялись (дрімаючий backlog)
+
+ТЕСТИ (локально, JDK 21 Corretto)
+- Команда: gradlew :shared:desktopTest :backend:test
+- Результат: BUILD SUCCESSFUL in 11m 48s, EXIT=0
+- Детальний лог: TEST_RESULTS.txt
+- Web/Chromium і live YouTube у цьому прогоні НЕ запускались
+
+НАСТУПНІ КРОКИ (рекомендація)
+1. Окремий спринт :domain без Compose
+2. Не чіпати recovery/lease без регресійних тестів
+3. Android — лише цільовим спринтом

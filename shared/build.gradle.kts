@@ -62,13 +62,6 @@ kotlin {
         */
         val desktopMain by getting {
             kotlin.srcDir("src/jvmMain/kotlin")
-            val osName = System.getProperty("os.name").lowercase()
-            val targetOs = when {
-                osName.contains("mac") -> "mac"
-                osName.contains("win") -> "win"
-                else -> "linux"
-            }
-            
             dependencies {
                 implementation(compose.desktop.currentOs)
                 implementation("app.cash.sqldelight:sqlite-driver:2.0.0")
