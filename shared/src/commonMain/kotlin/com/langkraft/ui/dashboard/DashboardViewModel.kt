@@ -1,14 +1,11 @@
 package com.langkraft.ui.dashboard
 
 import com.langkraft.data.sync.ISyncManager
-import com.langkraft.ui.BaseViewModel
 import com.langkraft.ui.StateViewModel
 import com.langkraft.domain.model.WordStatus
 import com.langkraft.domain.repository.LocalContentRepository
 import com.langkraft.domain.repository.VocabularyRepository
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
@@ -30,24 +27,24 @@ class DashboardViewModel(
     private val contentRepository: LocalContentRepository,
     private val vocabularyRepository: VocabularyRepository,
     private val syncManager: ISyncManager,
+    private val authToken: StateFlow<String?>,
     baseContext: kotlin.coroutines.CoroutineContext = kotlinx.coroutines.Dispatchers.Main
 ) : StateViewModel<DashboardState>(DashboardState(), baseContext) {
 
     init {
         loadStats()
+        // Cloud sync is optional; local library and SRS work without an account.
         scope.launch {
-            syncManager.sync()
+            if (authToken.value != null) syncManager.sync()
         }
-        
-        // Observe sync errors
         syncManager.syncError.onEach { error ->
-            updateState { it.copy(syncError = error) }
+            if (authToken.value == null) updateState { it.copy(syncError = null) }
+            else updateState { it.copy(syncError = error) }
         }.launchIn(scope)
     }
 
     private fun loadStats() {
         val oneWeekAgo = Clock.System.now().toEpochMilliseconds() - (7 * 24 * 60 * 60 * 1000L)
-        
         combine(
             contentRepository.getImmersionStats(),
             vocabularyRepository.getWordCountsByStatus(),

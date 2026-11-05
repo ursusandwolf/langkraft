@@ -80,10 +80,20 @@ fun ContentSelectionView(
 
             // Library Section
             Text("Your Library", style = MaterialTheme.typography.h5)
+            Text(
+                "Works offline on this device — account is only needed later for cloud sync.",
+                style = MaterialTheme.typography.caption,
+                color = MaterialTheme.colors.onSurface.copy(alpha = 0.7f)
+            )
             Spacer(modifier = Modifier.height(16.dp))
 
             if (state.isLoading) {
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+            } else if (state.library.isEmpty()) {
+                Text(
+                    "Paste a YouTube URL above and tap IMPORT to start. Saved words stay in the local dictionary.",
+                    style = MaterialTheme.typography.body2
+                )
             } else {
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
                     items(state.library) { content ->

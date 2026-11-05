@@ -92,5 +92,5 @@ val commonModule = module {
     factory { PlayerViewModel(get(), get(), get(), get(), get(), get(), get()) }
     factory { SrsTrainingViewModel(get(), get()) }
     factory { WritingViewModel(get()) }
-    factory { DashboardViewModel(get(), get(), get()) }
+    factory { DashboardViewModel(get(), get(), get(), get<UserSession>().token) }
 }

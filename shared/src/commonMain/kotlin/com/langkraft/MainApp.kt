@@ -42,7 +42,8 @@ fun MainApp() {
     val koin = org.koin.mp.KoinPlatform.getKoin()
     val session = remember { koin.get<com.langkraft.data.sync.UserSession>() }
     LaunchedEffect(session) { session.restore() }
-    var currentScreen by remember { mutableStateOf<Screen>(Screen.Dashboard) }
+    // Local-first: open Learn so a guest can import and save words without an account.
+    var currentScreen by remember { mutableStateOf<Screen>(Screen.ContentSelection) }
 
     val scaffoldState = rememberScaffoldState()
 
@@ -50,14 +51,6 @@ fun MainApp() {
         scaffoldState = scaffoldState,
         bottomBar = {
             BottomNavigation(backgroundColor = MaterialTheme.colors.surface) {
-                BottomNavigationItem(icon={Icon(Icons.Default.Person, null)}, label={Text("Account")},
-                    selected=currentScreen is Screen.Account, onClick={currentScreen=Screen.Account})
-                BottomNavigationItem(
-                    icon = { Icon(Icons.Default.Home, null) },
-                    label = { Text("Stats") },
-                    selected = currentScreen is Screen.Dashboard,
-                    onClick = { currentScreen = Screen.Dashboard }
-                )
                 BottomNavigationItem(
                     icon = { Icon(Icons.Default.PlayArrow, null) },
                     label = { Text("Learn") },
@@ -71,11 +64,19 @@ fun MainApp() {
                     onClick = { currentScreen = Screen.SrsTraining }
                 )
                 BottomNavigationItem(
+                    icon = { Icon(Icons.Default.Home, null) },
+                    label = { Text("Stats") },
+                    selected = currentScreen is Screen.Dashboard,
+                    onClick = { currentScreen = Screen.Dashboard }
+                )
+                BottomNavigationItem(
                     icon = { Icon(Icons.Default.Edit, null) },
                     label = { Text("Write") },
                     selected = currentScreen is Screen.Writing,
                     onClick = { currentScreen = Screen.Writing }
                 )
+                BottomNavigationItem(icon={Icon(Icons.Default.Person, null)}, label={Text("Account")},
+                    selected=currentScreen is Screen.Account, onClick={currentScreen=Screen.Account})
             }
         }
     ) { padding ->

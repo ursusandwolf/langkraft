@@ -29,6 +29,10 @@ fun AccountView(session: UserSession, sync: ISyncManager) {
     } }
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement=Arrangement.spacedBy(12.dp)) {
         Text("Account & sync", style=MaterialTheme.typography.h5)
+        Text(
+            "Library, player, SRS and writing work without an account. Sign in only to sync vocabulary across devices.",
+            style = MaterialTheme.typography.body2
+        )
         if (token == null) {
             OutlinedTextField(email, { email=it }, label={Text("Email")})
             OutlinedTextField(password, { password=it }, label={Text("Password")}, visualTransformation=PasswordVisualTransformation())
