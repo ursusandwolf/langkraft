@@ -1,9 +1,9 @@
 ﻿# Human review packet — Langkraft
 
-Snapshot: [ursusandwolf/langkraft](https://github.com/ursusandwolf/langkraft) · branch `main` · SHA [`91038b5`](https://github.com/ursusandwolf/langkraft/commit/91038b5) · date 2026-11-05  
+Snapshot: [ursusandwolf/langkraft](https://github.com/ursusandwolf/langkraft) · branch `main` · SHA [`8bf59ec`](https://github.com/ursusandwolf/langkraft/commit/8bf59ec) · date 2026-11-05  
 Review goal: **готовність baseline до ручного рев’ю / наступного спринту** (не production certification)  
 Primary requirements: [README](../README.md), [docs/todo.md](todo.md), [docs/PROJECT_CONTEXT.md](PROJECT_CONTEXT.md), ADR у `docs/`  
-Default branch versus this snapshot: рев’юер бачить **той самий** `origin/main` @ `91038b5` (немає відкритого unmerged PR для цього пакету)
+Default branch versus this snapshot: рев’юер бачить **той самий** `origin/main` @ `8bf59ec` (немає відкритого unmerged PR для цього пакету)
 
 Skill: глобально встановлено `~/.cursor/skills/human-code-review-handoff/` (з архіву `human-code-review-handoff-cursor.zip`).
 
@@ -23,12 +23,12 @@ Skill: глобально встановлено `~/.cursor/skills/human-code-re
 
 | Source requirement / model | Actual package and class | Important differences | Evidence / remaining gap |
 |---|---|---|---|
-| Immersion content + cues + waveform | [`ImmersionContent`](https://github.com/ursusandwolf/langkraft/blob/91038b5/domain/src/commonMain/kotlin/com/langkraft/domain/model/Models.kt), `SubtitleLine` | Playback URL винесено в shared extension (не Ktor у domain) | [`ImmersionPlayback.kt`](https://github.com/ursusandwolf/langkraft/blob/91038b5/shared/src/commonMain/kotlin/com/langkraft/data/ImmersionPlayback.kt) |
-| Vocabulary + SRS fields | [`VocabularyWord`](https://github.com/ursusandwolf/langkraft/blob/91038b5/domain/src/commonMain/kotlin/com/langkraft/domain/model/Models.kt), `ReviewQuality`, `WordStatus` | Anki-style 4 кнопки → SM-2 quality | [`Sm2Algorithm`](https://github.com/ursusandwolf/langkraft/blob/91038b5/domain/src/commonMain/kotlin/com/langkraft/domain/srs/SrsEngine.kt) |
-| Auth / sync DTO | [`AuthModels.kt`](https://github.com/ursusandwolf/langkraft/blob/91038b5/domain/src/commonMain/kotlin/com/langkraft/domain/model/AuthModels.kt) | Sync лише словника, не медіа-бібліотеки | ADR/DEVELOPER_GUIDE |
-| Ingest job | [`IngestionJob`](https://github.com/ursusandwolf/langkraft/blob/91038b5/domain/src/commonMain/kotlin/com/langkraft/domain/model/Models.kt) | Accept POST ≠ cancel on disconnect | PROJECT_CONTEXT |
-| Linguistic AI | [`LinguisticAssistant`](https://github.com/ursusandwolf/langkraft/blob/91038b5/domain/src/commonMain/kotlin/com/langkraft/domain/ai/LinguisticAssistant.kt) | Client = Remote; Server = Gemini\|Mock + Cache | Ключ лише на backend |
-| Client ports | [`Repositories.kt`](https://github.com/ursusandwolf/langkraft/blob/91038b5/domain/src/commonMain/kotlin/com/langkraft/domain/repository/Repositories.kt) | Реалізації в `shared/.../data` | — |
+| Immersion content + cues + waveform | [`ImmersionContent`](https://github.com/ursusandwolf/langkraft/blob/8bf59ec/domain/src/commonMain/kotlin/com/langkraft/domain/model/Models.kt), `SubtitleLine` | Playback URL винесено в shared extension (не Ktor у domain) | [`ImmersionPlayback.kt`](https://github.com/ursusandwolf/langkraft/blob/8bf59ec/shared/src/commonMain/kotlin/com/langkraft/data/ImmersionPlayback.kt) |
+| Vocabulary + SRS fields | [`VocabularyWord`](https://github.com/ursusandwolf/langkraft/blob/8bf59ec/domain/src/commonMain/kotlin/com/langkraft/domain/model/Models.kt), `ReviewQuality`, `WordStatus` | Anki-style 4 кнопки → SM-2 quality | [`Sm2Algorithm`](https://github.com/ursusandwolf/langkraft/blob/8bf59ec/domain/src/commonMain/kotlin/com/langkraft/domain/srs/SrsEngine.kt) |
+| Auth / sync DTO | [`AuthModels.kt`](https://github.com/ursusandwolf/langkraft/blob/8bf59ec/domain/src/commonMain/kotlin/com/langkraft/domain/model/AuthModels.kt) | Sync лише словника, не медіа-бібліотеки | ADR/DEVELOPER_GUIDE |
+| Ingest job | [`IngestionJob`](https://github.com/ursusandwolf/langkraft/blob/8bf59ec/domain/src/commonMain/kotlin/com/langkraft/domain/model/Models.kt) | Accept POST ≠ cancel on disconnect | PROJECT_CONTEXT |
+| Linguistic AI | [`LinguisticAssistant`](https://github.com/ursusandwolf/langkraft/blob/8bf59ec/domain/src/commonMain/kotlin/com/langkraft/domain/ai/LinguisticAssistant.kt) | Client = Remote; Server = Gemini\|Mock + Cache | Ключ лише на backend |
+| Client ports | [`Repositories.kt`](https://github.com/ursusandwolf/langkraft/blob/8bf59ec/domain/src/commonMain/kotlin/com/langkraft/domain/repository/Repositories.kt) | Реалізації в `shared/.../data` | — |
 | SQLDelight schema v3 | `shared/.../sqldelight` | Міграції з історичних гілок | desktopTest міграцій |
 | Offline ownership LK-02/03 | `AudioDownloaderImpl`, `*Recovery`, platform `AudioStorage` | Три власники: storage→downloader→SQL | [ADR_AUDIO_DOWNLOAD_RECOVERY.md](ADR_AUDIO_DOWNLOAD_RECOVERY.md) |
 
@@ -36,14 +36,14 @@ Skill: глобально встановлено `~/.cursor/skills/human-code-re
 
 | Required operation | Actual entry | Method / path / command | Contract notes |
 |---|---|---|---|
-| Register / login | [`Routing.kt` authRoutes](https://github.com/ursusandwolf/langkraft/blob/91038b5/backend/src/main/kotlin/com/langkraft/backend/Routing.kt) | `POST /api/auth/register`, `POST /api/auth/login` | BCrypt + JWT; IO dispatcher |
-| Start ingest | same + [`YouTubeIngestionService`](https://github.com/ursusandwolf/langkraft/blob/91038b5/backend/src/main/kotlin/com/langkraft/backend/YouTubeIngestionService.kt) | `POST /api/ingest` → jobId | 503 якщо черга повна; disconnect не скасовує accepted job |
+| Register / login | [`Routing.kt` authRoutes](https://github.com/ursusandwolf/langkraft/blob/8bf59ec/backend/src/main/kotlin/com/langkraft/backend/Routing.kt) | `POST /api/auth/register`, `POST /api/auth/login` | BCrypt + JWT; IO dispatcher |
+| Start ingest | same + [`YouTubeIngestionService`](https://github.com/ursusandwolf/langkraft/blob/8bf59ec/backend/src/main/kotlin/com/langkraft/backend/YouTubeIngestionService.kt) | `POST /api/ingest` → jobId | 503 якщо черга повна; disconnect не скасовує accepted job |
 | Poll ingest | Routing | `GET /api/ingest/{jobId}` | Client poll timeout 900s |
-| Media stream | [`MediaRoutes.kt`](https://github.com/ursusandwolf/langkraft/blob/91038b5/backend/src/main/kotlin/com/langkraft/backend/MediaRoutes.kt) | GET/HEAD/Range `/api/media/...` | Lease + optional retention/budget |
+| Media stream | [`MediaRoutes.kt`](https://github.com/ursusandwolf/langkraft/blob/8bf59ec/backend/src/main/kotlin/com/langkraft/backend/MediaRoutes.kt) | GET/HEAD/Range `/api/media/...` | Lease + optional retention/budget |
 | Vocabulary sync | Routing (JWT) | `POST /api/sync` | Cursor + pending ack |
 | AI ops (JWT) | Routing | `POST /api/ai/translate-word\|translate-sentence\|analyze-sentence\|correct-text` | Без ключа → mock на сервері |
-| Client UI | [`MainApp.kt`](https://github.com/ursusandwolf/langkraft/blob/91038b5/shared/src/commonMain/kotlin/com/langkraft/MainApp.kt) | Compose screens + Koin | Web/Desktop/TUI |
-| Web bootstrap | [`webApp/.../Main.kt`](https://github.com/ursusandwolf/langkraft/blob/91038b5/webApp/src/jsMain/kotlin/Main.kt) | browser | proxy `/api` |
+| Client UI | [`MainApp.kt`](https://github.com/ursusandwolf/langkraft/blob/8bf59ec/shared/src/commonMain/kotlin/com/langkraft/MainApp.kt) | Compose screens + Koin | Web/Desktop/TUI |
+| Web bootstrap | [`webApp/.../Main.kt`](https://github.com/ursusandwolf/langkraft/blob/8bf59ec/webApp/src/jsMain/kotlin/Main.kt) | browser | proxy `/api` |
 | Desktop / TUI | `shared/desktopMain` `main.kt` / `CliMain.kt` | `gradlew :shared:run` / `runTui` | `--smoke` без вікон |
 | Web recovery UI | `recovery.html` + js storage | `/recovery.html` | окремо від Compose; ліміт архіву 64 МіБ |
 
@@ -93,21 +93,22 @@ Skill: глобально встановлено `~/.cursor/skills/human-code-re
 
 | Command / CI | Exact SHA and environment | Result | Limits / skips / fakes |
 |---|---|---|---|
-| `:domain:jvmTest :shared:desktopTest :backend:test` | `91038b5`, JDK Corretto 21.0.12.1, Windows | BUILD SUCCESSFUL; domain 8 / shared desktop 91 / backend 69 (1 skipped) | Web/Chromium Playwright **не** переганялись у цій сесії handoff |
+| `:domain:jvmTest :shared:desktopTest :backend:test` | `8bf59ec`, JDK Corretto 21.0.12.1, Windows | BUILD SUCCESSFUL; domain 8 / shared desktop 91 / backend 69 (1 skipped) | Web/Chromium Playwright **не** переганялись у цій сесії handoff |
 | Prior focused suites | `e6ac19d` / `abe9416` | Sync/SRS/Poll/Auth/Coordinator/Repo OK | — |
-| CI workflow | [`.github/workflows/ci.yml`](https://github.com/ursusandwolf/langkraft/blob/91038b5/.github/workflows/ci.yml) | включає `:domain:jvmTest` + desktop + backend; JS job окремо | Старий зелений CI на іншому SHA — історичний |
+| CI workflow | [`.github/workflows/ci.yml`](https://github.com/ursusandwolf/langkraft/blob/8bf59ec/.github/workflows/ci.yml) | включає `:domain:jvmTest` + desktop + backend; JS job окремо | Старий зелений CI на іншому SHA — історичний |
 | Live YouTube / Gemini / VLC | — | не запускалось у handoff | потребує інструментів і ключів користувача |
 
 **Implemented:** core product + REL-S1…S7 + `:domain` на `main`.  
 **Tested (this machine):** JVM domain/shared/backend як вище.  
-**Integrated/released:** код на `origin/main` @ `91038b5`; **не** заява production release.  
+**Integrated/released:** код на `origin/main` @ `8bf59ec`; **не** заява production release.  
 **Remaining:** F10–F14; опційно F15.
 
 ## Questions for the human
 
 1. **Мета цього рев’ю:** acceptance baseline для наступного спринту, чи претензія на release readiness? (від цього залежить глибина Web/Chromium і live Gemini перевірок.)  
 2. **Наступний спринт:** потоковий Web recovery **чи** квоти клієнтських медіа — що пріоритетніше?  
-3. Чи оновлювати публічний README «стан проекту» під `91038b5` / `:domain` у рамках цього рев’ю?
+3. Чи оновлювати публічний README «стан проекту» під `8bf59ec` / `:domain` у рамках цього рев’ю?
 
-**Очікуваний outcome рев’ю:** підтвердити/відхилити baseline `main@91038b5` як точку старту наступної роботи; зафіксувати пріоритет backlog без зміни lease/recovery семантики без регресійних тестів.
+**Очікуваний outcome рев’ю:** підтвердити/відхилити baseline `main@8bf59ec` як точку старту наступної роботи; зафіксувати пріоритет backlog без зміни lease/recovery семантики без регресійних тестів.
+
 
