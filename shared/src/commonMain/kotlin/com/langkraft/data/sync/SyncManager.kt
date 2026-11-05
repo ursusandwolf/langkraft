@@ -37,12 +37,11 @@ class SyncManager(
     override suspend fun sync(force: Boolean) {
         val now = Clock.System.now().toEpochMilliseconds()
         if (!force && now - lastAttemptTimestamp < MIN_SYNC_INTERVAL_MS) return
-        
-        lastAttemptTimestamp = now
-        
-        if (mutex.isLocked) return
+        // Do not burn the throttle window when another sync already holds the lock.
+        if (!mutex.tryLock()) return
 
-        mutex.withLock {
+        try {
+            lastAttemptTimestamp = now
             _isSyncing.value = true
             _syncError.value = null
 
@@ -61,6 +60,8 @@ class SyncManager(
             } finally {
                 _isSyncing.value = false
             }
+        } finally {
+            mutex.unlock()
         }
     }
 }

@@ -76,6 +76,18 @@
 2. Прибрано мертвий коментар DI і застарілий коментар про ContentRepository.
 3. Додано `AI_MAP.md`, `LEARNING_GUIDE.md`, цей звіт.
 
+### Правки рев’ю 2026-11-05 (Bugbot + fix)
+
+1. `BackendRemoteSource`: timeout poll імпорту (900s) + тест.
+2. `SyncManager`: throttle не спалюється, якщо mutex зайнятий (`tryLock`).
+3. `SqlDelightVocabularyRepository.sync`: перевірка HTTP status перед body.
+4. Backend `HttpClient`: `HttpTimeout` для Gemini.
+5. `AuthService` / `SyncService`: DB/BCrypt на `Dispatchers.IO`.
+6. `SrsTrainingViewModel`: advance черги лише після успішного `saveWord`.
+7. Deprecated icons → AutoMirrored / Clear; OptIn у VM-тестах.
+
+Не чіпалось у цьому циклі (окремий ризик/спринт): витяг `:domain`, recovery ownership edge-cases, повний IO для всіх Exposed-викликів у ingestion routes.
+
 Методи з майже однаковим тілом (`asFlowList`/`asFlowOne`, Logger.d/i/w) **не зливались** — різні контракти API.
 
 ## Локальний прогін тестів (2026-11-01)

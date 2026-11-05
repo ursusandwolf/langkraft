@@ -7,8 +7,8 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -160,7 +160,7 @@ fun SrsCard(dueCount: Int) {
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    if (dueCount > 0) Icons.Default.List else Icons.Default.Star,
+                    if (dueCount > 0) Icons.AutoMirrored.Filled.List else Icons.Default.Star,
                     contentDescription = null,
                     tint = Color.White,
                     modifier = Modifier.size(20.dp)

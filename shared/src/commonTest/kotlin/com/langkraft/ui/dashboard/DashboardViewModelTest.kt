@@ -5,6 +5,7 @@ import com.langkraft.domain.repository.ImmersionStats
 import com.langkraft.domain.model.*
 import com.langkraft.domain.repository.LocalContentRepository
 import com.langkraft.domain.repository.VocabularyRepository
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
@@ -14,6 +15,7 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class DashboardViewModelTest {
 
     @Test

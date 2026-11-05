@@ -9,6 +9,7 @@ import com.langkraft.domain.ai.LinguisticAssistant
 import com.langkraft.domain.ai.MockLinguisticAssistant
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
+import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.serialization.kotlinx.json.json
 import org.koin.dsl.module
@@ -58,6 +59,11 @@ val backendModule = module {
     
     single {
         HttpClient(CIO) {
+            install(HttpTimeout) {
+                requestTimeoutMillis = 60_000
+                connectTimeoutMillis = 10_000
+                socketTimeoutMillis = 60_000
+            }
             install(ContentNegotiation) {
                 json()
             }

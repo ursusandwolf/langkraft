@@ -71,32 +71,37 @@ class SrsTrainingViewModel(
     private fun handleSubmitResult(quality: ReviewQuality) {
         val word = currentState.currentWord ?: return
         val updatedWord = srsAlgorithm.calculateNextReview(word, quality)
-        
+
         scope.launch {
-            vocabularyRepository.saveWord(updatedWord)
-        }
-
-        updateState { state ->
-            val newQueue = state.queue.toMutableList()
-            
-            // Remove current word from the front
-            if (newQueue.isNotEmpty()) {
-                newQueue.removeAt(0)
+            try {
+                vocabularyRepository.saveWord(updatedWord)
+            } catch (_: Exception) {
+                // Keep the current card so the learner can retry after a persistence failure.
+                return@launch
             }
 
-            // If quality is poor (AGAIN), add to the end of the queue for re-learning
-            if (quality.sm2Value < 3) { // 3 is SUCCESS_THRESHOLD in Sm2Algorithm
-                newQueue.add(updatedWord)
-            }
+            updateState { state ->
+                val newQueue = state.queue.toMutableList()
 
-            val nextWord = newQueue.firstOrNull()
-            state.copy(
-                queue = newQueue,
-                currentWord = nextWord,
-                remainingCount = newQueue.size,
-                isAnswerVisible = false,
-                isFinished = nextWord == null
-            )
+                // Remove current word from the front
+                if (newQueue.isNotEmpty()) {
+                    newQueue.removeAt(0)
+                }
+
+                // If quality is poor (AGAIN), add to the end of the queue for re-learning
+                if (quality.sm2Value < 3) { // 3 is SUCCESS_THRESHOLD in Sm2Algorithm
+                    newQueue.add(updatedWord)
+                }
+
+                val nextWord = newQueue.firstOrNull()
+                state.copy(
+                    queue = newQueue,
+                    currentWord = nextWord,
+                    remainingCount = newQueue.size,
+                    isAnswerVisible = false,
+                    isFinished = nextWord == null
+                )
+            }
         }
     }
 }

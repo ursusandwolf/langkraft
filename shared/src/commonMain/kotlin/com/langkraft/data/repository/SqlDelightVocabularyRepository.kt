@@ -137,11 +137,19 @@ class SqlDelightVocabularyRepository(
         processedIds: List<com.langkraft.db.PendingSyncChange>
     ): Long {
         return try {
-            val response: SyncResponse = httpClient.post(baseUrl) {
+            val httpResponse = httpClient.post(baseUrl) {
                 url { appendEncodedPathSegments("api", "sync") }
                 contentType(ContentType.Application.Json)
                 setBody(SyncRequest(lastSyncTimestamp, clientChanges))
-            }.body()
+            }
+            check(httpResponse.status.isSuccess()) {
+                when (httpResponse.status) {
+                    HttpStatusCode.Unauthorized -> "Please sign in through Account to sync (HTTP 401)."
+                    HttpStatusCode.Forbidden -> "Sync was denied (HTTP 403)."
+                    else -> "Sync service returned HTTP ${httpResponse.status.value}."
+                }
+            }
+            val response = httpResponse.body<SyncResponse>()
 
             access.run(dispatcher) { db.transaction {
                 response.serverChanges.forEach { entry ->

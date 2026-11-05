@@ -7,8 +7,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.runtime.Composable
@@ -43,7 +44,7 @@ fun WritingView(
                 title = { Text("Active Writing", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 backgroundColor = MaterialTheme.colors.surface,
@@ -129,7 +130,7 @@ fun WritingInputView(
             trailingIcon = if (text.isNotEmpty()) {
                 {
                     IconButton(onClick = { onTextChanged("") }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Clear", modifier = Modifier.size(18.dp)) // Using Back as placeholder for clear
+                        Icon(Icons.Default.Clear, contentDescription = "Clear", modifier = Modifier.size(18.dp))
                     }
                 }
             } else null
