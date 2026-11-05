@@ -27,6 +27,7 @@ kotlin {
     sourceSets {
         val commonMain by getting {
             dependencies {
+                api(project(":domain"))
                 implementation(compose.runtime)
                 implementation(compose.foundation)
                 implementation(compose.material)

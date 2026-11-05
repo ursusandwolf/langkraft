@@ -9,7 +9,9 @@ application {
 }
 
 dependencies {
-    implementation(project(":shared")) // Access shared models
+    implementation(project(":domain"))
+    // Integration tests exercise client SQLDelight/sync against the running API.
+    testImplementation(project(":shared"))
     implementation("io.ktor:ktor-server-core:2.3.5")
     implementation("io.ktor:ktor-server-netty:2.3.5")
     implementation("io.ktor:ktor-server-content-negotiation:2.3.5")

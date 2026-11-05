@@ -71,6 +71,7 @@
 
 ## Backlog после интеграции
 
+- [x] Выделить `:domain` (модели/порты/SRS/AI/use case без Compose); backend prod → `:domain`, shared → `:domain`.
 - [x] REL-S4: удалённый AI в UI; PR #8 → dev и выпуск PR #9 → main, обе ветки на `0f14ff0`, JVM/Web CI успешны.
 - [x] REL-S5 / REL-13: opt-in backend retention новых managed job-каталогов, защита queued/active импортов и HTTP-потоков, GET/HEAD/Range, сохранение legacy. [ADR и ограничения](ADR_BACKEND_MEDIA_RETENTION.md). Общая квота остаётся отдельной задачей.
 

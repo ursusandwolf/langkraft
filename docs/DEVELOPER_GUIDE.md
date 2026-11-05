@@ -4,26 +4,28 @@
 
 ## Модули и точки входа
 
-В [settings.gradle.kts](../settings.gradle.kts) подключены три Gradle-модуля:
+В [settings.gradle.kts](../settings.gradle.kts) подключены четыре Gradle-модуля:
 
 | Модуль | Ответственность | Точки входа / конфигурация |
 | --- | --- | --- |
-| `:shared` | Модели, SRS, UI, use case, repository, sync, платформенные адаптеры; JVM Desktop/TUI и JS target | [Koin.kt](../shared/src/commonMain/kotlin/com/langkraft/di/Koin.kt), [main.kt](../shared/src/desktopMain/kotlin/com/langkraft/main.kt), [CliMain.kt](../shared/src/desktopMain/kotlin/com/langkraft/CliMain.kt) |
-| `:backend` | Ktor HTTP API, auth/JWT, Exposed/SQLite, задания импорта, yt-dlp/ffmpeg, AI API | [Application.kt](../backend/src/main/kotlin/com/langkraft/backend/Application.kt), [Routing.kt](../backend/src/main/kotlin/com/langkraft/backend/Routing.kt), [BackendModule.kt](../backend/src/main/kotlin/com/langkraft/backend/di/BackendModule.kt) |
+| `:domain` | Модели, порты repository/AI, SRS, IngestContentUseCase; без Compose | [domain/src/commonMain](../domain/src/commonMain/kotlin/com/langkraft/domain) |
+| `:shared` | Data/UI Compose, sync, платформенные адаптеры; JVM Desktop/TUI и JS; зависит от `:domain` | [Koin.kt](../shared/src/commonMain/kotlin/com/langkraft/di/Koin.kt), [main.kt](../shared/src/desktopMain/kotlin/com/langkraft/main.kt), [CliMain.kt](../shared/src/desktopMain/kotlin/com/langkraft/CliMain.kt) |
+| `:backend` | Ktor HTTP API, auth/JWT, Exposed/SQLite, задания импорта, yt-dlp/ffmpeg, AI API; prod зависит от `:domain` | [Application.kt](../backend/src/main/kotlin/com/langkraft/backend/Application.kt), [Routing.kt](../backend/src/main/kotlin/com/langkraft/backend/Routing.kt), [BackendModule.kt](../backend/src/main/kotlin/com/langkraft/backend/di/BackendModule.kt) |
 | `:webApp` | Browser bootstrap, CanvasBasedWindow, HTML, ресурсы, dev proxy; использует общий UI | [Main.kt](../webApp/src/jsMain/kotlin/Main.kt), [index.html](../webApp/src/jsMain/resources/index.html), [dev-server.js](../webApp/webpack.config.d/dev-server.js) |
 
 ```mermaid
 flowchart LR
-    Desktop["Desktop entry · shared/desktopMain"] --> Common["shared/commonMain · UI/domain/data"]
+    Desktop["Desktop entry · shared/desktopMain"] --> Common["shared/commonMain · UI/data"]
     TUI["TUI entry · shared/desktopMain"] --> Common
     Web[":webApp · browser bootstrap"] --> Common
-    Backend[":backend · Ktor"] --> Shared[":shared · общие модели и контракты"]
+    Common --> Domain[":domain · модели и порты"]
+    Backend[":backend · Ktor"] --> Domain
     Common --> Platform["JVM / JS адаптеры"]
     Common -->|HTTP| Backend
     Backend --> Media["yt-dlp / ffmpeg / SQLite"]
 ```
 
-Зависимость Gradle backend → shared не создаёт HTTP-цикл: runtime-клиенты обращаются к backend по сети, backend использует общие типы. Сейчас shared также содержит UI, поэтому backend получает больше зависимостей, чем чистый отдельный domain-модуль.
+Backend зависит от `:domain`, не от Compose/`shared`. Интеграционные backend-тесты могут подключать `:shared` через `testImplementation`.
 
 Desktop и TUI — два main в `shared`, а не отдельные Gradle-модули. `androidApp` и `shared/src/androidMain` сохранены как исходники, но Android target отключён и androidApp не включён в settings. Флаги из исторических документов не включают Android автоматически.
 

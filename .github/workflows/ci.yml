@@ -28,7 +28,7 @@ jobs:
           cache-read-only: ${{ github.ref != 'refs/heads/main' }}
       - name: Legacy profile recovery tests
         run: python3 -W error::ResourceWarning -m unittest discover -s tools/recovery/tests -v
-      - run: bash ./gradlew --no-daemon :shared:desktopTest :backend:test
+      - run: bash ./gradlew --no-daemon :domain:jvmTest :shared:desktopTest :backend:test
       - name: Desktop and TUI wiring
         env:
           LANGKRAFT_DATA_DIR: ${{ runner.temp }}/langkraft-smoke

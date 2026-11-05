@@ -35,11 +35,10 @@
 
 Немає підтверджених блокерів у зібраному після sync коді (без профілю повного Web CI на цій машині).
 
-### 🟠 Major: backend залежить від «товстого» shared
+### 🟠 Major: backend залежить від «товстого» shared — ✅ закрито 2026-11-05
 
-**Де:** `settings.gradle.kts`, `backend/build.gradle.kts` → `:shared`  
-**Проблема:** shared містить UI Compose; backend отримує зайвий граф залежностей. Ускладнює оновлення і межі шарів.  
-**Пропозиція:** окремий спринт `:domain` (моделі + порти + SRS + AI contracts) без Compose; shared/ui і backend залежать від нього.
+**Було:** `backend` → `:shared` (Compose).  
+**Стало:** `backend` → `:domain`; `shared` → `:domain` (`api`); playback URL — extension у shared.
 
 ### 🟠 Major: критична логіка потребує JVM+Web регресії при змінах
 

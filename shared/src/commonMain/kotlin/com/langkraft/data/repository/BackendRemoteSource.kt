@@ -48,8 +48,9 @@ class BackendRemoteSource(
                     check(jobResponse.status.isSuccess()) { "Import status returned HTTP ${jobResponse.status.value}" }
 
                     val job = jobResponse.body<IngestionJob>()
-                    if (job.status == ContentProcessingStatus.READY && job.content != null) {
-                        return@withTimeout job.content
+                    val readyContent = job.content
+                    if (job.status == ContentProcessingStatus.READY && readyContent != null) {
+                        return@withTimeout readyContent
                     } else if (job.status == ContentProcessingStatus.ERROR) {
                         throw Exception("Ingestion failed: ${job.error}")
                     }

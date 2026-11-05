@@ -73,9 +73,10 @@ fun WordDetailsSheet(
             CircularProgressIndicator(modifier = Modifier.size(24.dp))
         } else if (result != null) {
             Text(text = result.translation, style = MaterialTheme.typography.h6)
-            if (result.explanation != null) {
+            val explanation = result.explanation
+            if (explanation != null) {
                 Spacer(modifier = Modifier.height(8.dp))
-                Text(text = result.explanation, style = MaterialTheme.typography.body2)
+                Text(text = explanation, style = MaterialTheme.typography.body2)
             }
         }
         

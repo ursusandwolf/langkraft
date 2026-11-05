@@ -1,6 +1,6 @@
 # AI_MAP — карта для ШІ та підтримки Langkraft
 
-Оновлено: 2026-11-01 · база `main` / `1bf1a09` (+ локальні дрібні правки рев’ю).
+Оновлено: 2026-11-05 · спринт `:domain` (моделі/порти без Compose).
 
 ## Призначення
 
@@ -20,8 +20,9 @@
 
 ```
 langkraft
-├── :shared     # domain + data + UI Compose + Desktop/TUI/JS adapters
-├── :backend    # Ktor API, Exposed SQLite, yt-dlp/ffmpeg, Gemini
+├── :domain     # моделі, порти, SRS, AI contracts, use cases (без Compose/Ktor UI)
+├── :shared     # data + UI Compose + Desktop/TUI/JS adapters → залежить від :domain
+├── :backend    # Ktor API → :domain (prod); testImplementation :shared для інтеграцій
 └── :webApp     # browser bootstrap + webpack; UI з :shared
 ```
 
@@ -37,9 +38,10 @@ ui  →  domain (ports/usecase/srs/ai)  ←  data (adapters)
 
 | Полиця | Шлях | Що міняти тут |
 | --- | --- | --- |
-| Моделі | `shared/.../domain/model` | DTO/домен; serialization |
-| Порти | `domain/repository`, `domain/ai` | інтерфейси без HTTP/SQL |
-| Use case / SRS | `domain/usecase`, `domain/srs` | бізнес без UI |
+| Моделі | `domain/.../model` | DTO/домен; serialization |
+| Порти | `domain/.../repository`, `domain/.../ai` | інтерфейси без HTTP/SQL |
+| Use case / SRS | `domain/.../usecase`, `domain/.../srs` | бізнес без UI |
+| Playback helper | `shared/.../data/ImmersionPlayback.kt` | Ktor URL → extension (не в :domain) |
 | SQLDelight | `shared/.../sqldelight` | схема/міграції; не правити generated |
 | Репозиторії | `data/repository` | SQLDelight/HTTP реалізації |
 | Аудіо offline | `data/audio` | storage, lease, recovery |

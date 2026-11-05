@@ -15,21 +15,7 @@ data class ImmersionContent(
     val downloadStatus: DownloadStatus = DownloadStatus.IDLE,
     val contentLanguage: Language = Language.DE,
     val translationLanguage: Language = Language.EN
-) {
-    fun getPlaybackUrl(baseUrl: io.ktor.http.Url): String {
-        return if (downloadStatus == DownloadStatus.COMPLETED && localAudioPath != null) {
-            localAudioPath
-        } else {
-            if (audioUrl.startsWith("http")) {
-                audioUrl
-            } else {
-                io.ktor.http.URLBuilder(baseUrl).apply {
-                    pathSegments = audioUrl.split("/").filter { it.isNotEmpty() }
-                }.buildString()
-            }
-        }
-    }
-}
+)
 
 @Serializable
 enum class Language { DE, EN, ES, RU, FR }
