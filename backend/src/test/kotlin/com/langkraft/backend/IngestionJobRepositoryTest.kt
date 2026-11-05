@@ -2,6 +2,7 @@ package com.langkraft.backend
 
 import com.langkraft.backend.db.IngestionJobs
 import com.langkraft.domain.model.ContentProcessingStatus
+import com.langkraft.domain.model.ImmersionContent
 import com.langkraft.domain.model.IngestionJob
 import org.jetbrains.exposed.sql.Database
 import org.jetbrains.exposed.sql.SchemaUtils
@@ -59,6 +60,27 @@ class IngestionJobRepositoryTest {
         val updated = repository.get("1")
         assertEquals(ContentProcessingStatus.READY, updated?.status)
         assertTrue(requireNotNull(updated).lastUpdatedAt in now..System.currentTimeMillis())
+    }
+
+    @Test
+    fun errorStatusClearsStaleContentJson() {
+        val content = ImmersionContent(
+            id = "video",
+            title = "Title",
+            audioUrl = "/api/media/1/video.mp3",
+            localAudioPath = null,
+            sourceUrl = "url",
+            durationSeconds = 10
+        )
+        repository.save(IngestionJob("1", ContentProcessingStatus.IDLE, "url"))
+        repository.update("1") { it.copy(status = ContentProcessingStatus.READY, content = content) }
+        assertEquals(content.id, repository.get("1")?.content?.id)
+
+        repository.update("1") { it.copy(status = ContentProcessingStatus.ERROR, error = "failed", content = content) }
+        val failed = repository.get("1")
+        assertEquals(ContentProcessingStatus.ERROR, failed?.status)
+        assertEquals("failed", failed?.error)
+        assertNull(failed?.content)
     }
 
     @Test

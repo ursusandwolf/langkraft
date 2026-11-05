@@ -61,7 +61,10 @@ class FileAudioDownloadCoordinator(
                                 catch (cleanup: Throwable) {
                                     if (failure == null) failure = cleanup else failure.addSuppressed(cleanup)
                                 } finally {
-                                    if (!opened.isOpen) { owned.remove(contentId); claimed.remove(key) }
+                                    // Always drop in-process claim so a failed close cannot wedge retries
+                                    // until JVM exit; native lock may still linger if close failed.
+                                    owned.remove(contentId)
+                                    claimed.remove(key)
                                 }
                                 failure?.let { throw it }
                             }

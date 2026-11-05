@@ -20,6 +20,7 @@ class IngestionJobRepository(private val db: Database) {
         IngestionJobs.update({ IngestionJobs.status notInList listOf("READY", "ERROR") }) {
             it[status] = "ERROR"
             it[error] = "Backend restarted; retry import"
+            it[contentJson] = null
             it[lastUpdatedAt] = System.currentTimeMillis()
         }
     }
@@ -74,8 +75,9 @@ class IngestionJobRepository(private val db: Database) {
             IngestionJobs.update({ IngestionJobs.jobId eq id }) {
                 it[status] = updatedJob.status.name
                 it[error] = updatedJob.error
-                updatedJob.content?.let { content ->
-                    it[contentJson] = json.encodeToString(content)
+                when {
+                    updatedJob.status == ContentProcessingStatus.ERROR -> it[contentJson] = null
+                    updatedJob.content != null -> it[contentJson] = json.encodeToString(updatedJob.content)
                 }
                 it[lastUpdatedAt] = System.currentTimeMillis()
             }

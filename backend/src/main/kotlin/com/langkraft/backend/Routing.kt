@@ -26,6 +26,8 @@ import java.util.*
 
 import com.langkraft.backend.db.*
 import at.favre.lib.crypto.bcrypt.BCrypt
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 fun Route.authRoutes() {
     val authService by inject<AuthService>()
@@ -63,7 +65,7 @@ fun Route.apiRoutes() {
     route("/api") {
         post("/ingest") {
             val request = call.receive<IngestRequest>()
-            val jobId = ingestionService.startIngestion(request.url)
+            val jobId = withContext(Dispatchers.IO) { ingestionService.startIngestion(request.url) }
             call.respond(IngestResponse(jobId))
         }
         
@@ -73,7 +75,7 @@ fun Route.apiRoutes() {
                 call.respond(HttpStatusCode.BadRequest, "Missing jobId")
                 return@get
             }
-            val job = ingestionService.getJobStatus(jobId)
+            val job = withContext(Dispatchers.IO) { ingestionService.getJobStatus(jobId) }
             if (job == null) {
                 call.respond(HttpStatusCode.NotFound, "Job not found")
                 return@get
