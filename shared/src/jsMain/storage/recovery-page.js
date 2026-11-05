@@ -94,7 +94,7 @@ document.getElementById("export").onclick = () => run(async () => {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = "langkraft-recovery.json";
+  link.download = "langkraft-recovery.jsonl";
   document.body.append(link);
   link.click();
   link.remove();

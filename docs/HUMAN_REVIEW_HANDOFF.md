@@ -82,7 +82,7 @@ Skill: глобально встановлено `~/.cursor/skills/human-code-re
 | F7 Fixed | ERROR job лишав contentJson | stale content при poll | IngestionJobRepository @ `abe9416` |
 | F8 Fixed | lease claim після failed close | wedge до рестарту JVM | FileAudioDownloadCoordinator @ `abe9416` |
 | F9 Fixed | backend→Compose shared | зайві залежності | `:domain` @ `65334a2` |
-| F10 Open policy | Streaming Web recovery | великі бібліотеки | backlog sprint |
+| F10 Partial | Streaming Web recovery archive v2 | NDJSON export/import; clone >64 MiB raw ще відкритий | `ADR_WEB_RECOVERY_STREAM.md` |
 | F11 Open policy | Client media quotas / IDB cleanup | диск / сміття | backlog |
 | F12 Open policy | Account/profile multi-tab beyond LK-04 | координація | backlog |
 | F13 Open | Android target off | немає APK регресу | окремий спринт |

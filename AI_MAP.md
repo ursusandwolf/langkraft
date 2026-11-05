@@ -12,7 +12,8 @@
 | --- | --- |
 | Phase 1–5, INT-S1…S4 | Done |
 | REL-S1…S7 (offline audio, LK-04, remote AI, retention, budget, recovery limits) | Done → merged `dev`/`main` |
-| Відкритий backlog | Потоковий Web recovery великих бібліотек; квоти клієнтських копій; політика профілів/вкладок; Android target; Gemini з реальним ключем |
+| Відкритий backlog | Потоковий Web clone IDB→IDB (>64 МіБ raw); квоти клієнтських копій; політика профілів/вкладок; Android; Gemini live |
+| Зроблено поруч | Archive recovery v2 NDJSON (`docs/ADR_WEB_RECOVERY_STREAM.md`) |
 
 Джерело правди: `docs/todo.md`, `docs/PROJECT_CONTEXT.md`, `README.md`. Історичні «Phase Done» ≠ production certification.
 

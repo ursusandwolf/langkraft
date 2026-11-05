@@ -123,13 +123,19 @@ try {
   console.log("PASS: original session, SQL transaction and active download remain usable");
 
   const exported = await page.evaluate(async () => {
-    const { blob } = await window.recovery.exportWebProfile();
+    const { blob, format } = await window.recovery.exportWebProfile();
     window.archive = blob;
-    const archive = JSON.parse(await blob.text());
-    return { sqlite: archive.sqlite, size: blob.size, format: archive.format };
+    const text = await blob.text();
+    const header = JSON.parse(text.slice(0, text.indexOf("\n")));
+    const sqlite = [...text.matchAll(/"t":"sqlite","data":"([^"]+)"/g)]
+      .map(match => match[1])
+      .join("");
+    return { sqlite, size: blob.size, format, headerFormat: header.format, type: blob.type };
   });
   assert.ok(exported.size > 0);
-  assert.equal(exported.format, "langkraft-web-recovery-v1");
+  assert.equal(exported.format, "langkraft-web-recovery-v2");
+  assert.equal(exported.headerFormat, "langkraft-web-recovery-v2");
+  assert.equal(exported.type, "application/x-ndjson");
   assert.equal(Buffer.from(exported.sqlite, "base64").includes(Buffer.from("PRIVATE-RECOVERY-TOKEN")), false);
   const imported = await page.evaluate(async () => window.recovery.importWebProfile(window.archive));
   assert.notEqual(imported.profile, report.profile);
@@ -149,19 +155,36 @@ try {
 
   const rejected = await page.evaluate(async () => {
     const bad = [];
-    for (const blob of [new Blob(['{}']), new Blob(['{"format":"langkraft-web-recovery-v1","sqlite":"broken","audio":[],"chunks":[]}'])]) {
+    for (const blob of [
+      new Blob(["{}"]),
+      new Blob(['{"format":"langkraft-web-recovery-v1","sqlite":"broken","audio":[],"chunks":[]}']),
+      new Blob(['{"format":"langkraft-web-recovery-v2","audio":[]}\n{"t":"end"}\n'], { type: "application/x-ndjson" })
+    ]) {
       try { await window.recovery.importWebProfile(blob); bad.push(false); } catch { bad.push(true); }
     }
     try { await window.recovery.cloneWebProfile("../../default"); bad.push(false); } catch { bad.push(true); }
-    const archive = JSON.parse(await window.archive.text());
-    const sqlite = Uint8Array.from(atob(archive.sqlite), char => char.charCodeAt(0));
+    const text = await window.archive.text();
+    const sqlite = Uint8Array.from(
+      atob([...text.matchAll(/"t":"sqlite","data":"([^"]+)"/g)].map(match => match[1]).join("")),
+      char => char.charCodeAt(0)
+    );
     new DataView(sqlite.buffer).setUint32(60, 99); // user_version in SQLite header.
     let binary = ""; for (const byte of sqlite) binary += String.fromCharCode(byte);
-    archive.sqlite = btoa(binary);
-    try { await window.recovery.importWebProfile(new Blob([JSON.stringify(archive)])); bad.push(false); } catch { bad.push(true); }
+    const poisoned = text.replace(/"t":"sqlite","data":"[^"]+"/, `"t":"sqlite","data":"${btoa(binary)}"`);
+    try { await window.recovery.importWebProfile(new Blob([poisoned], { type: "application/x-ndjson" })); bad.push(false); }
+    catch { bad.push(true); }
+    // Legacy v1 JSON archives remain importable after streaming export became default.
+    const legacy = {
+      format: "langkraft-web-recovery-v1",
+      sqlite: btoa("not-sqlite"),
+      audio: [],
+      chunks: []
+    };
+    try { await window.recovery.importWebProfile(new Blob([JSON.stringify(legacy)])); bad.push(false); }
+    catch { bad.push(true); }
     return bad;
   });
-  assert.deepEqual(rejected, [true, true, true, true]);
+  assert.deepEqual(rejected, [true, true, true, true, true, true]);
   console.log("PASS: malformed archives, invalid profile identifiers and future schema are rejected");
   const collision = await page.evaluate(async profile => {
     const uuid = crypto.randomUUID;

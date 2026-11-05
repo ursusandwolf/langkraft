@@ -4,8 +4,11 @@ import { acquireProfileLease, withProfileLease, profileStates, PROFILE_REGISTRY 
 export { removeWebRecoveryProfile } from "./profile-lifecycle.js";
 
 const MAX_BYTES = 64 * 1024 * 1024;
+const MAX_STREAM_BYTES = 512 * 1024 * 1024;
+const SQLITE_FRAME = 256 * 1024;
 const MAX_RECORDS = 50000;
 const FORMAT = "langkraft-web-recovery-v1";
+const FORMAT_V2 = "langkraft-web-recovery-v2";
 
 // Never open profile databases or interpret presence as validity. Only registry is read.
 export async function listWebRecoveryProfiles() {
@@ -246,6 +249,30 @@ function decode(text) {
   return Uint8Array.from(atob(text), char => char.charCodeAt(0));
 }
 
+function sqliteBlocks(bytes) {
+  if (bytes.length < 100 || new TextDecoder().decode(bytes.subarray(0, 16)) !== "SQLite format 3\0") {
+    throw new Error("Invalid SQLite snapshot");
+  }
+  let pageSize = bytes[16] * 256 + bytes[17];
+  if (pageSize === 1) pageSize = 65536;
+  if (pageSize < 512 || pageSize > 65536 || pageSize & (pageSize - 1) || bytes.length % pageSize) {
+    throw new Error("Invalid SQLite page size");
+  }
+  const blocks = [];
+  for (let offset = 0; offset < bytes.length; offset += pageSize) {
+    const block = { path: "/langkraft.db", offset: -offset, version: 0, data: bytes.slice(offset, offset + pageSize) };
+    if (offset === 0) block.fileSize = bytes.length;
+    blocks.push(block);
+  }
+  return blocks;
+}
+
+function appendEncodedFrames(parts, type, bytes, fields = {}) {
+  for (let offset = 0; offset < bytes.length; offset += SQLITE_FRAME) {
+    parts.push(JSON.stringify({ t: type, ...fields, data: encode(bytes.subarray(offset, offset + SQLITE_FRAME)) }) + "\n");
+  }
+}
+
 export async function exportWebProfile(source = "") {
   // Always sanitize a NEW copy, even when exporting a previously recovered profile.
   const report = await cloneWebProfile(source);
@@ -255,30 +282,110 @@ export async function exportWebProfile(source = "") {
     try { sqlite = (await client.request("export_recovery"))[0][0]; await client.request("close"); }
     finally { client.close(); }
     const media = await snapshot(profileNames(report.profile).audio, 1, ["audio", "chunks"]);
-    const archive = { format: FORMAT, sqlite: encode(sqlite), audio: media.audio,
-      chunks: media.chunks.map(part => ({ ...part, bytes: encode(part.bytes) })), report };
-    const blob = new Blob([JSON.stringify(archive)], { type: "application/json" });
-    if (blob.size > MAX_BYTES) throw new Error("Export exceeds the 64 MiB archive limit");
-    return { blob, report };
+    checkBytes([sqlite, ...media.chunks.map(part => part.bytes)]);
+    if (sqlite.byteLength + media.chunks.reduce((sum, part) => sum + part.bytes.byteLength, 0) > MAX_STREAM_BYTES) {
+      throw new Error("Export exceeds the 512 MiB decoded recovery limit");
+    }
+    const parts = [
+      JSON.stringify({
+        format: FORMAT_V2,
+        audio: media.audio,
+        report
+      }) + "\n"
+    ];
+    appendEncodedFrames(parts, "sqlite", sqlite);
+    for (const part of media.chunks) {
+      appendEncodedFrames(parts, "chunk", part.bytes, { id: part.id, index: part.index });
+    }
+    parts.push(JSON.stringify({ t: "end" }) + "\n");
+    // Blob from line parts avoids one giant JSON.stringify of the whole archive.
+    return { blob: new Blob(parts, { type: "application/x-ndjson" }), report, format: FORMAT_V2 };
   });
 }
 
-export async function importWebProfile(blob) {
+async function importWebProfileV1(blob) {
   if (blob.size > MAX_BYTES) throw new Error("Archive exceeds the 64 MiB limit");
   const archive = JSON.parse(await blob.text());
   if (archive?.format !== FORMAT || !Array.isArray(archive.audio) || !Array.isArray(archive.chunks) ||
       archive.audio.length > MAX_RECORDS || archive.chunks.length > MAX_RECORDS) throw new Error("Unsupported recovery archive");
   const bytes = decode(archive.sqlite);
-  if (bytes.length < 100 || new TextDecoder().decode(bytes.subarray(0, 16)) !== "SQLite format 3\0") throw new Error("Invalid SQLite snapshot");
-  let pageSize = bytes[16] * 256 + bytes[17];
-  if (pageSize === 1) pageSize = 65536;
-  if (pageSize < 512 || pageSize > 65536 || pageSize & (pageSize - 1) || bytes.length % pageSize) throw new Error("Invalid SQLite page size");
-  const blocks = [];
-  for (let offset = 0; offset < bytes.length; offset += pageSize) {
-    const block = { path: "/langkraft.db", offset: -offset, version: 0, data: bytes.slice(offset, offset + pageSize) };
-    if (offset === 0) block.fileSize = bytes.length;
-    blocks.push(block);
-  }
   const chunks = archive.chunks.map(part => ({ id: part.id, index: part.index, bytes: decode(part.bytes) }));
-  return recover(blocks, { audio: archive.audio, chunks });
+  return recover(sqliteBlocks(bytes), { audio: archive.audio, chunks });
+}
+
+async function readNdjsonLines(blob, onLine) {
+  const reader = blob.stream().pipeThrough(new TextDecoderStream()).getReader();
+  let buffer = "";
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += value;
+    let newline;
+    while ((newline = buffer.indexOf("\n")) >= 0) {
+      const line = buffer.slice(0, newline).trim();
+      buffer = buffer.slice(newline + 1);
+      if (line) await onLine(JSON.parse(line));
+    }
+  }
+  const tail = buffer.trim();
+  if (tail) await onLine(JSON.parse(tail));
+}
+
+async function importWebProfileV2(blob) {
+  if (blob.size > MAX_STREAM_BYTES * 2) throw new Error("Archive exceeds the streaming recovery limit");
+  let meta;
+  const sqliteParts = [];
+  const chunks = [];
+  let finished = false;
+  let decoded = 0;
+  await readNdjsonLines(blob, async line => {
+    if (finished) throw new Error("Recovery archive data after end marker");
+    if (!meta) {
+      if (line.format !== FORMAT_V2 || !Array.isArray(line.audio) || line.audio.length > MAX_RECORDS) {
+        throw new Error("Unsupported recovery archive");
+      }
+      meta = line;
+      return;
+    }
+    if (line.t === "end") { finished = true; return; }
+    if (line.t === "sqlite") {
+      const bytes = decode(line.data);
+      decoded += bytes.byteLength;
+      if (decoded > MAX_STREAM_BYTES) throw new Error("Recovery exceeds the 512 MiB decoded limit");
+      sqliteParts.push(bytes);
+      return;
+    }
+    if (line.t === "chunk") {
+      if (typeof line.id !== "string" || !Number.isInteger(line.index) || line.index < 0) {
+        throw new Error("Invalid archive chunk");
+      }
+      if (chunks.length >= MAX_RECORDS) throw new Error("Recovery record limit exceeded");
+      const bytes = decode(line.data);
+      decoded += bytes.byteLength;
+      if (decoded > MAX_STREAM_BYTES) throw new Error("Recovery exceeds the 512 MiB decoded limit");
+      const previous = chunks[chunks.length - 1];
+      if (previous && previous.id === line.id && previous.index === line.index) {
+        const merged = new Uint8Array(previous.bytes.length + bytes.length);
+        merged.set(previous.bytes);
+        merged.set(bytes, previous.bytes.length);
+        previous.bytes = merged;
+      } else {
+        chunks.push({ id: line.id, index: line.index, bytes });
+      }
+      return;
+    }
+    throw new Error("Unsupported recovery archive record");
+  });
+  if (!meta || !finished) throw new Error("Incomplete recovery archive");
+  const total = sqliteParts.reduce((sum, part) => sum + part.byteLength, 0);
+  const sqlite = new Uint8Array(total);
+  let offset = 0;
+  for (const part of sqliteParts) { sqlite.set(part, offset); offset += part.byteLength; }
+  return recover(sqliteBlocks(sqlite), { audio: meta.audio, chunks });
+}
+
+export async function importWebProfile(blob) {
+  const prefix = await blob.slice(0, 96).text();
+  if (prefix.includes(FORMAT_V2)) return importWebProfileV2(blob);
+  return importWebProfileV1(blob);
 }
