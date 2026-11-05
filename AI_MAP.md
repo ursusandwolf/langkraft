@@ -100,13 +100,14 @@ Web/Chromium: `:shared:jsBrowserTest` + `tools/web-storage-tests` (потріб�
 | --- | --- |
 | `ARCHITECTURE_REVIEW.md` | вердикт рев’ю + UML ASCII |
 | `LEARNING_GUIDE.md` | навчальний розбір коду |
+| `docs/HUMAN_REVIEW_HANDOFF.md` | пакет для ручного рев’ю людиною |
 | `docs/DEVELOPER_GUIDE.md` | як влаштований runtime |
 | `docs/UML_CLASSES.md` | Mermaid class diagrams |
-| `TEST_RESULTS.txt` | останній локальний прогін |
+| Skill `human-code-review-handoff` | `~/.cursor/skills/human-code-review-handoff/` |
+| `TEST_RESULTS.txt` | локальний лог (не комітити) |
 
 ## Чого ШІ не робити без явного ТЗ
 
 - Увімкнення Android target / rewrite DI
 - Видалення `androidMain` / legacy recovery
 - Зміна семантики lease/pending/tombstone
-- Великий рефактор shared→окремий domain-модуль (бажано, але окремий спринт)
