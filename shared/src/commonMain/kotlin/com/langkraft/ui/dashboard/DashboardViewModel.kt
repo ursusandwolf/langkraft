@@ -38,8 +38,7 @@ class DashboardViewModel(
             if (authToken.value != null) syncManager.sync()
         }
         syncManager.syncError.onEach { error ->
-            if (authToken.value == null) updateState { it.copy(syncError = null) }
-            else updateState { it.copy(syncError = error) }
+            updateState { it.copy(syncError = error.takeIf { authToken.value != null }) }
         }.launchIn(scope)
     }
 

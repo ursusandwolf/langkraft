@@ -11,18 +11,18 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.runtime.*
-import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.langkraft.domain.ai.DeepAnalysisResult
 import com.langkraft.domain.model.DownloadStatus
 import com.langkraft.domain.model.SubtitleLine
-import com.langkraft.domain.ai.DeepAnalysisResult
 import com.langkraft.ui.components.WaveformVisualizer
 
 @Composable
@@ -34,14 +34,12 @@ fun ImmersionPlayerView(
     val listState = rememberLazyListState()
     val scaffoldState = rememberScaffoldState()
 
-    // Sync isUserScrolling state with listState
     LaunchedEffect(listState.isScrollInProgress) {
         if (listState.isScrollInProgress) {
             viewModel.onEvent(PlayerEvent.UserScrollStarted)
         }
     }
 
-    // Auto-scroll logic tied to index changes
     LaunchedEffect(state.content?.id, state.currentSubtitleIndex) {
         val index = state.currentSubtitleIndex
         if (index != -1 && !state.isUserScrolling) {
@@ -56,164 +54,169 @@ fun ImmersionPlayerView(
                 title = { Text(state.content?.title ?: "Langkraft") },
                 actions = {
                     IconButton(onClick = { viewModel.onEvent(PlayerEvent.ToggleOffline) }) {
-                        val status = state.content?.downloadStatus ?: DownloadStatus.IDLE
-                        when (status) {
-                            DownloadStatus.DOWNLOADING -> {
-                                CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
-                            }
-                            DownloadStatus.COMPLETED -> {
-                                Icon(
-                                    Icons.Default.CheckCircle,
-                                    contentDescription = "Downloaded",
-                                    tint = Color(0xFF4CAF50)
-                                )
-                            }
-                            DownloadStatus.ERROR -> {
-                                Icon(
-                                    Icons.Default.Warning,
-                                    contentDescription = "Error",
-                                    tint = Color.Red
-                                )
-                            }
-                            DownloadStatus.IDLE -> {
-                                Icon(
-                                    Icons.Default.KeyboardArrowDown,
-                                    contentDescription = "Download",
-                                    tint = Color.White
-                                )
-                            }
-                        }
+                        OfflineDownloadStatusIcon(
+                            status = state.content?.downloadStatus ?: DownloadStatus.IDLE
+                        )
                     }
                 }
             )
         },
         bottomBar = {
             PlayerControlBar(
-                viewModel = viewModel,
                 isPlaying = state.isPlaying,
                 isLooping = state.isLooping,
                 currentSpeed = state.playbackSpeed,
                 onPlayPause = { viewModel.onEvent(PlayerEvent.PlayPause) },
                 onToggleLoop = { viewModel.onEvent(PlayerEvent.ToggleLoop) },
+                onStepBack = { viewModel.onEvent(PlayerEvent.StepBack) },
                 onSpeedChange = { viewModel.onEvent(PlayerEvent.SetPlaybackSpeed(it)) }
             )
         }
     ) { padding ->
         Box(modifier = modifier.padding(padding)) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                if (state.canPlayOnline) {
-                    Button(onClick = { viewModel.onEvent(PlayerEvent.PlayOnline) }) { Text("Play online") }
-                }
-                // Waveform visualization at the top
-                state.content?.let { content ->
-                    val progress by remember {
-                        derivedStateOf {
-                            if (content.durationSeconds > 0) {
-                                state.currentTimeMs.toFloat() / (content.durationSeconds * 1000)
-                            } else 0f
-                        }
-                    }
+            PlayerMainContent(state = state, listState = listState, viewModel = viewModel)
+            PlayerOverlays(state = state, viewModel = viewModel)
+        }
+    }
+}
 
-                    WaveformVisualizer(
-                        amplitudes = content.waveform.ifEmpty { List(50) { 0.2f + (it % 5) * 0.1f } },
-                        progress = progress,
-                        modifier = Modifier.padding(16.dp)
+@Composable
+private fun OfflineDownloadStatusIcon(status: DownloadStatus) {
+    when (status) {
+        DownloadStatus.DOWNLOADING -> {
+            CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
+        }
+        DownloadStatus.COMPLETED -> {
+            Icon(
+                Icons.Default.CheckCircle,
+                contentDescription = "Downloaded",
+                tint = Color(0xFF4CAF50)
+            )
+        }
+        DownloadStatus.ERROR -> {
+            Icon(Icons.Default.Warning, contentDescription = "Error", tint = Color.Red)
+        }
+        DownloadStatus.IDLE -> {
+            Icon(
+                Icons.Default.KeyboardArrowDown,
+                contentDescription = "Download",
+                tint = Color.White
+            )
+        }
+    }
+}
+
+@Composable
+private fun PlayerMainContent(
+    state: PlayerState,
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    viewModel: PlayerViewModel
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        if (state.canPlayOnline) {
+            Button(onClick = { viewModel.onEvent(PlayerEvent.PlayOnline) }) { Text("Play online") }
+        }
+        state.content?.let { content ->
+            val progress by remember(content.durationSeconds, state.currentTimeMs) {
+                derivedStateOf {
+                    if (content.durationSeconds > 0) {
+                        state.currentTimeMs.toFloat() / (content.durationSeconds * 1000)
+                    } else {
+                        0f
+                    }
+                }
+            }
+            WaveformVisualizer(
+                amplitudes = content.waveform.ifEmpty { List(50) { 0.2f + (it % 5) * 0.1f } },
+                progress = progress,
+                modifier = Modifier.padding(16.dp)
+            )
+        }
+
+        if (state.isLoading) {
+            CircularProgressIndicator(modifier = Modifier.fillMaxSize().wrapContentSize())
+        } else {
+            LazyColumn(state = listState, modifier = Modifier.weight(1f)) {
+                state.content?.subtitles?.let { subtitles ->
+                    itemsIndexed(subtitles) { index, line ->
+                        SubtitleRow(
+                            line = line,
+                            isCurrent = index == state.currentSubtitleIndex,
+                            translation = state.sentenceTranslations[line.id],
+                            lemmas = state.lemmatizedSentences[line.id],
+                            isTranslating = state.analyzingSentenceId == line.id,
+                            isLemmatizing = state.lemmatizingSentenceId == line.id,
+                            onClick = { viewModel.onEvent(PlayerEvent.SeekTo(line.startMs)) },
+                            onWordClick = { viewModel.onEvent(PlayerEvent.WordClicked(it, line)) },
+                            onTranslateClick = { viewModel.onEvent(PlayerEvent.ToggleTranslation(line)) },
+                            onLemmatizeClick = { viewModel.onEvent(PlayerEvent.ToggleLemmatization(line)) },
+                            onAnalysisClick = { viewModel.onEvent(PlayerEvent.DeepAnalysisClicked(line)) },
+                            onMemorizationClick = {
+                                viewModel.onEvent(PlayerEvent.MemorizationClicked(line.originalText))
+                            }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BoxScope.PlayerOverlays(state: PlayerState, viewModel: PlayerViewModel) {
+    state.selectedWord?.let { word ->
+        Surface(modifier = Modifier.fillMaxSize(), color = Color.Black.copy(alpha = 0.5f)) {
+            Box(contentAlignment = Alignment.BottomCenter) {
+                Surface(
+                    shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+                    elevation = 16.dp
+                ) {
+                    WordDetailsSheet(
+                        word = word,
+                        contextLine = state.selectedWordContext,
+                        result = state.wordTranslation,
+                        isSaving = state.isSavingWord,
+                        isTranslating = state.isTranslatingWord,
+                        error = state.wordError,
+                        onRetry = viewModel::retryTranslation,
+                        onSave = { viewModel.saveWord(it) },
+                        onDismiss = { viewModel.onEvent(PlayerEvent.DismissWordDetails) }
                     )
                 }
+            }
+        }
+    }
 
-                if (state.isLoading) {
-                    CircularProgressIndicator(modifier = Modifier.fillMaxSize().wrapContentSize())
-                } else {
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        state.content?.subtitles?.let { subtitles ->
-                            itemsIndexed(subtitles) { index, line ->
-                                SubtitleRow(
-                                    line = line,
-                                    isCurrent = index == state.currentSubtitleIndex,
-                                    translation = state.sentenceTranslations[line.id],
-                                    lemmas = state.lemmatizedSentences[line.id],
-                                    isTranslating = state.analyzingSentenceId == line.id,
-                                    isLemmatizing = state.lemmatizingSentenceId == line.id,
-                                    onClick = { viewModel.onEvent(PlayerEvent.SeekTo(line.startMs)) },
-                                    onWordClick = { viewModel.onEvent(PlayerEvent.WordClicked(it, line)) },
-                                    onTranslateClick = { viewModel.onEvent(PlayerEvent.ToggleTranslation(line)) },
-                                    onLemmatizeClick = { viewModel.onEvent(PlayerEvent.ToggleLemmatization(line)) },
-                                    onAnalysisClick = { viewModel.onEvent(PlayerEvent.DeepAnalysisClicked(line)) },
-                                    onMemorizationClick = { viewModel.onEvent(PlayerEvent.MemorizationClicked(line.originalText)) }
-                                )
-                            }
-                        }
-                    }
+    state.deepAnalysis?.let { analysis ->
+        DeepAnalysisDialog(
+            analysis = analysis,
+            onDismiss = { viewModel.onEvent(PlayerEvent.DismissDeepAnalysis) }
+        )
+    }
+
+    state.memorizationText?.let { text ->
+        MemorizationDialog(
+            text = text,
+            onDismiss = { viewModel.onEvent(PlayerEvent.DismissMemorization) }
+        )
+    }
+
+    if (state.isAnalyzing) {
+        Surface(modifier = Modifier.fillMaxSize(), color = Color.Black.copy(alpha = 0.3f)) {
+            CircularProgressIndicator(modifier = Modifier.wrapContentSize())
+        }
+    }
+
+    state.error?.let { message ->
+        Snackbar(
+            modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
+            action = {
+                TextButton(onClick = { viewModel.onEvent(PlayerEvent.DismissError) }) {
+                    Text("OK", color = Color.Yellow)
                 }
             }
-
-            // Word Details Sheet
-            state.selectedWord?.let { word ->
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = Color.Black.copy(alpha = 0.5f)
-                ) {
-                    Box(contentAlignment = Alignment.BottomCenter) {
-                        Surface(
-                            shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
-                            elevation = 16.dp
-                        ) {
-                            WordDetailsSheet(
-                                word = word,
-                                contextLine = state.selectedWordContext,
-                                result = state.wordTranslation,
-                                isSaving = state.isSavingWord,
-                                isTranslating = state.isTranslatingWord,
-                                error = state.wordError,
-                                onRetry = viewModel::retryTranslation,
-                                onSave = { viewModel.saveWord(it) },
-                                onDismiss = { viewModel.onEvent(PlayerEvent.DismissWordDetails) }
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Deep Analysis Dialog
-            state.deepAnalysis?.let { analysis ->
-                DeepAnalysisDialog(
-                    analysis = analysis,
-                    onDismiss = { viewModel.onEvent(PlayerEvent.DismissDeepAnalysis) }
-                )
-            }
-
-            // Memorization Tool
-            state.memorizationText?.let { text ->
-                MemorizationDialog(
-                    text = text,
-                    onDismiss = { viewModel.onEvent(PlayerEvent.DismissMemorization) }
-                )
-            }
-            
-            if (state.isAnalyzing) {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = Color.Black.copy(alpha = 0.3f)
-                ) {
-                    CircularProgressIndicator(modifier = Modifier.wrapContentSize())
-                }
-            }
-
-            state.error?.let { message ->
-                Snackbar(
-                    modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
-                    action = {
-                        TextButton(onClick = { viewModel.onEvent(PlayerEvent.DismissError) }) {
-                            Text("OK", color = Color.Yellow)
-                        }
-                    }
-                ) {
-                    Text(message)
-                }
-            }
+        ) {
+            Text(message)
         }
     }
 }
@@ -387,12 +390,12 @@ fun DeepAnalysisDialog(
 
 @Composable
 fun PlayerControlBar(
-    viewModel: PlayerViewModel,
     isPlaying: Boolean,
     isLooping: Boolean,
     currentSpeed: Float,
     onPlayPause: () -> Unit,
     onToggleLoop: () -> Unit,
+    onStepBack: () -> Unit,
     onSpeedChange: (Float) -> Unit
 ) {
     Surface(elevation = 8.dp) {
@@ -403,23 +406,23 @@ fun PlayerControlBar(
         ) {
             IconButton(onClick = onToggleLoop) {
                 Text(
-                    text = "🔁", 
+                    text = "🔁",
                     style = MaterialTheme.typography.h6,
                     color = if (isLooping) MaterialTheme.colors.primary else Color.Gray
                 )
             }
-            
-            IconButton(onClick = { viewModel.onEvent(PlayerEvent.StepBack) }) {
+
+            IconButton(onClick = onStepBack) {
                 Text(text = "⏪", style = MaterialTheme.typography.h6)
             }
-            
+
             Button(onClick = onPlayPause) {
                 Text(if (isPlaying) "PAUSE" else "PLAY")
             }
-            
+
             val speeds = listOf(0.75f, 1.0f, 1.25f, 1.5f)
             val nextSpeed = speeds[(speeds.indexOf(currentSpeed) + 1) % speeds.size]
-            
+
             Button(onClick = { onSpeedChange(nextSpeed) }) {
                 Text("${currentSpeed}x", style = MaterialTheme.typography.body2)
             }

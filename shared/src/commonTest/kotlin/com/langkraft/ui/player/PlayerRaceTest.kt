@@ -5,7 +5,6 @@ import com.langkraft.di.AppConfig
 import com.langkraft.domain.ai.*
 import com.langkraft.domain.model.*
 import com.langkraft.domain.repository.*
-import com.langkraft.io.FileSystem
 import io.ktor.http.Url
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -121,15 +120,17 @@ class PlayerRaceTest {
         val assistant=object:LinguisticAssistant by MockLinguisticAssistant() {
             override suspend fun translateWord(word:String,context:String)=translate(word,context)
         }
-        val files=object:FileSystem {
-            override fun getAppDataDir()=""
-            override fun exists(path:String)=false
-            override fun delete(path:String) {}
-            override fun writeBytes(path:String,bytes:ByteArray) {}
-            override fun resolve(base:String,child:String)=child
-            override fun rename(from:String,to:String) {}
-        }
-        return PlayerViewModel(local,object:AudioDownloader { override suspend fun downloadAudio(content:ImmersionContent)="local" },vocabulary,assistant,audio,files,AppConfig(Url("http://localhost")),StandardTestDispatcher(testScheduler))
+        return PlayerViewModel(
+            local,
+            object : AudioDownloader {
+                override suspend fun downloadAudio(content: ImmersionContent) = "local"
+            },
+            vocabulary,
+            assistant,
+            audio,
+            AppConfig(Url("http://localhost")),
+            StandardTestDispatcher(testScheduler)
+        )
     }
 
     private class FakeAudio:AudioPlayer {
